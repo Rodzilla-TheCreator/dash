@@ -23,4 +23,7 @@ y cambiar `API_URL`.
 - El endpoint `/exec` es abierto (sin token) — limitación conocida del backend.
 - Los códigos de acceso de los roles viven en la Hoja (`auth-config`), hasheados
   SHA-256, no en este HTML.
-- El respaldo con datos reales (`respaldo-*.xlsx`) **no se versiona aquí** (repo público).
+- El respaldo con datos reales está en `data/respaldo-control-auditorias-2026-08-17.xlsx`
+  (incluido a pedido, aun sin capa de seguridad — el repo es público). Es un
+  **snapshot** exportado desde la app (una hoja por módulo), no la base viva.
+  La base viva sigue siendo la Google Sheet detrás de `API_URL`.
