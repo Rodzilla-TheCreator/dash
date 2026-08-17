@@ -387,11 +387,12 @@ function pintarMantenimientos(companyData){
   ).join("");
 }
 
-/* --- CAJA CHICA (Apps Script de Christian) -----------------------------
-   Solo aplica a Monhaco. El Dash lista los gastos en "Enviado a revision"
-   y al decidir llama de vuelta al mismo endpoint. Ver contrato compartido
-   con Christian. Si cambia algun nombre de accion/parametro, ajustar aqui. */
-const CC_ENDPOINT = "https://script.google.com/macros/s/AKfycbyvVTRRRA8LsO8Z_pRV8ym19tP_6SPqUDAo73lvSmYk_VxPK6f9U1mQbiSm1RzcZj_M/exec";
+/* --- CAJA CHICA (Firebase, base independiente) -------------------------
+   Lee/escribe /bitacora/data-cajachica en la misma Firebase RTDB que Flota
+   y Mantenimientos (y que la app Bitacora, en /bitacora/). Ya NO depende del
+   Apps Script de Christian. Lista los gastos en "Enviado a revision" y al
+   decidir reescribe el arreglo (aprobar/rechazar) directo en Firebase. */
+const CC_FB = "https://montasa-app-default-rtdb.firebaseio.com/bitacora";
 /* Que sede(s) de caja chica muestra cada pestaña:
    SPS = MT Rental (pestaña Montasa), Choloma = Monhaco.
    La sede "General" no está asignada; si quieres que aparezca en alguna,
@@ -401,23 +402,6 @@ const CC_SEDES = { montasa: ["SPS"], monhaco: ["Choloma"], monhagro: [] };
 function fmtL(monto){
   const n = aNumero(monto);
   return n == null ? monto : "L " + n.toLocaleString("es-HN",{minimumFractionDigits:2, maximumFractionDigits:2});
-}
-
-/* Apps Script (ContentService) no manda headers CORS, asi que fetch se
-   bloquea aunque responda 200. JSONP carga la respuesta como <script>, que
-   no esta sujeto a CORS. Requiere que el Apps Script envuelva su respuesta
-   en la funcion 'callback' cuando venga ese parametro (lado de Christian). */
-function jsonp(url){
-  return new Promise((resolve, reject)=>{
-    const cb = "__cc_cb_" + Date.now() + "_" + Math.floor(Math.random()*100000);
-    const s = document.createElement("script");
-    const timer = setTimeout(()=>{ cleanup(); reject(new Error("timeout")); }, 15000);
-    function cleanup(){ clearTimeout(timer); delete window[cb]; if(s.parentNode) s.remove(); }
-    window[cb] = (data)=>{ cleanup(); resolve(data); };
-    s.onerror = ()=>{ cleanup(); reject(new Error("error de red (JSONP)")); };
-    s.src = url + (url.includes("?") ? "&" : "?") + "callback=" + cb;
-    document.body.appendChild(s);
-  });
 }
 
 async function cargarCajaChica(){
@@ -431,10 +415,10 @@ async function cargarCajaChica(){
   }
   body.innerHTML = '<div class="nc-fill">Cargando…</div>';
   try{
-    // Lee la clave completa con el 'get' generico que ya existe y filtra aqui.
-    const data = await jsonp(CC_ENDPOINT + "?action=get&key=data-cajachica&_=" + Date.now());
-    let arr = [];
-    if(data && data.found && data.value) arr = JSON.parse(data.value);
+    // Lee el arreglo completo de Firebase y filtra aqui.
+    const res = await fetch(CC_FB + "/data-cajachica.json?_=" + Date.now(), { cache:"no-store" });
+    if(!res.ok) throw new Error("HTTP " + res.status);
+    const arr = await res.json();   // arreglo nativo o null
     const pend = (Array.isArray(arr) ? arr : [])
       .filter(x => x.estado === "Enviado a revisión" && sedes.includes(x.sede));
     console.log("[Dash] caja chica", activeCompany, "sedes", sedes.join(","),
@@ -474,10 +458,34 @@ function renderCajaChica(items){
 async function decidirCajaChica(id, decision, itemEl){
   itemEl.querySelectorAll(".stamp").forEach(b => b.disabled = true);
   try{
-    const url = CC_ENDPOINT + "?action=cajachica_decidir&id=" + encodeURIComponent(id)
-              + "&decision=" + decision + "&por=Omar&_=" + Date.now();
-    const res = await jsonp(url);
-    if(!res || !res.ok) throw new Error((res && res.error) || "respuesta no ok");
+    // Leer la version mas reciente, aplicar la decision y reescribir el arreglo.
+    const res = await fetch(CC_FB + "/data-cajachica.json?_=" + Date.now(), { cache:"no-store" });
+    if(!res.ok) throw new Error("HTTP " + res.status);
+    const arr = await res.json();
+    if(!Array.isArray(arr)) throw new Error("no hay datos de caja chica");
+    const i = arr.findIndex(x => x.id === id);
+    if(i === -1) throw new Error("id no encontrado");
+    // Idempotencia: no re-decidir algo ya decidido/liquidado.
+    if(["Aprobado por Gerencia","Rechazado","Liquidado"].includes(arr[i].estado))
+      throw new Error("ya fue decidido (estado: " + arr[i].estado + ")");
+    // Mismo texto exacto que reconoce la app Bitacora ("Aprobado por Gerencia").
+    arr[i].estado      = (decision === "aprobar") ? "Aprobado por Gerencia" : "Rechazado";
+    arr[i].decididoPor = "Omar";
+    arr[i].decididoEn  = new Date().toISOString();
+    const put = await fetch(CC_FB + "/data-cajachica.json", {
+      method:"PUT", headers:{"Content-Type":"application/json"}, body: JSON.stringify(arr)
+    });
+    if(!put.ok) throw new Error("no se pudo guardar (HTTP " + put.status + ")");
+    // Registrar en la bitacora (ultimas 500), igual que la app.
+    try{
+      const bRes = await fetch(CC_FB + "/data-bitacora.json?_=" + Date.now(), { cache:"no-store" });
+      let bit = bRes.ok ? await bRes.json() : null;
+      if(!Array.isArray(bit)) bit = [];
+      bit.unshift({ id:"dash_"+Date.now(), fecha:new Date().toISOString(), accion:"Cambió estado",
+        modulo:"Caja Chica", descripcion:"Gasto "+id+" → "+arr[i].estado+" (desde Dash de Omar)", usuario:"Omar" });
+      await fetch(CC_FB + "/data-bitacora.json", { method:"PUT",
+        headers:{"Content-Type":"application/json"}, body: JSON.stringify(bit.slice(0,500)) });
+    }catch(bErr){ console.warn("[Dash] no se pudo registrar en bitácora:", bErr.message); }
     // exito: quitar el item y actualizar el contador
     itemEl.remove();
     const num = document.getElementById("caja-num");
