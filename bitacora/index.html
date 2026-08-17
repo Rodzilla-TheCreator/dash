@@ -247,49 +247,46 @@ function cancelEdit(mod){
 }
 
 /* ============================================================
-   STORAGE HELPERS — vía Google Apps Script (funciona para cualquiera con el enlace)
+   STORAGE HELPERS — Firebase Realtime Database (REST)
+   Copia independiente: NO usa Google Sheets ni el Apps Script de Christian.
+   Cada "key" (data-cajachica, data-viajes, auth-config, etc.) se guarda como
+   JSON nativo en /bitacora/{key}. Firebase manda headers CORS, así que un
+   fetch normal (GET/PUT) funciona desde este sitio estático.
    ============================================================ */
-const API_URL = 'https://script.google.com/macros/s/AKfycbyvVTRRRA8LsO8Z_pRV8ym19tP_6SPqUDAo73lvSmYk_VxPK6f9U1mQbiSm1RzcZj_M/exec';
-function apiConfigured(){ return API_URL && API_URL.indexOf('http') === 0; }
+const FB_BASE = 'https://montasa-app-default-rtdb.firebaseio.com';
+const FB_NS   = 'bitacora';   // espacio propio dentro de la base (aislado de flota/mantenimientos)
+function apiConfigured(){ return true; }
+function _fbUrl(key){ return `${FB_BASE}/${FB_NS}/${encodeURIComponent(key)}.json`; }
 
 async function storageGet(key, shared){
-  if(!apiConfigured()) return null;
   try{
-    const res = await fetch(`${API_URL}?action=get&key=${encodeURIComponent(key)}`);
-    const data = await res.json();
-    if(!data.found) return null;
-    return JSON.parse(data.value);
+    const res = await fetch(_fbUrl(key) + '?_=' + Date.now(), { cache:'no-store' });
+    if(!res.ok) return null;
+    const data = await res.json();     // Firebase devuelve JSON nativo (array/obj) o null
+    return data == null ? null : data;
   }catch(e){ return null; }
 }
 async function storageGetSafe(key, shared){
-  // A diferencia de storageGet, aquí distinguimos "no hay datos todavía" de "falló la lectura",
+  // Distinguimos "no hay datos todavía" (ok:true, value:null) de "falló la lectura" (ok:false),
   // para nunca confundir un error pasajero de red con que el almacenamiento esté vacío.
-  if(!apiConfigured()) return { ok:false, value:null };
   try{
-    const res = await fetch(`${API_URL}?action=get&key=${encodeURIComponent(key)}`);
+    const res = await fetch(_fbUrl(key) + '?_=' + Date.now(), { cache:'no-store' });
+    if(!res.ok) return { ok:false, value:null };
     const data = await res.json();
-    if(!data.found) return { ok:true, value:null };
-    return { ok:true, value: JSON.parse(data.value) };
+    return { ok:true, value: (data == null ? null : data) };
   }catch(e){
     return { ok:false, value:null };
   }
 }
 async function storageSet(key, value, shared){
-  if(!apiConfigured()) return false;
   try{
-    const res = await fetch(API_URL, {
-      method:'POST',
-      headers:{'Content-Type':'text/plain;charset=utf-8'},
-      body: JSON.stringify({action:'set', key, value: JSON.stringify(value)})
+    const res = await fetch(_fbUrl(key), {
+      method:'PUT',                    // PUT reemplaza el nodo completo con el valor dado
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(value)
     });
-    let data;
-    try{ data = await res.json(); }
-    catch(parseErr){
-      console.error('storageSet: la respuesta del servidor no es JSON válido (posible redirección de Apps Script)', parseErr);
-      return false;
-    }
-    if(!data || data.ok !== true){
-      console.error('storageSet: el servidor NO confirmó el guardado', data);
+    if(!res.ok){
+      console.error('storageSet: Firebase NO confirmó el guardado (HTTP ' + res.status + ')');
       return false;
     }
     return true;
@@ -1106,13 +1103,9 @@ async function handleExcelImport(e){
    ÓRDENES DE COMPRA (SAP Business One — Fase 1, solo lectura)
    ============================================================ */
 async function fetchOrdenesCompraSAP(){
-  if(!apiConfigured()) return { ok:false, error:'La app todavía no está conectada a tu Hoja de Google (falta configurar API_URL).' };
-  try{
-    const res = await fetch(`${API_URL}?action=sap_purchase_orders`);
-    return await res.json();
-  }catch(e){
-    return { ok:false, error:'No se pudo contactar al puente (Apps Script). Revisa tu conexión.' };
-  }
+  // El puente a SAP (Órdenes de Compra) vive en el Apps Script de Christian.
+  // Esta copia es independiente (Firebase) y no incluye ese puente.
+  return { ok:false, error:'Órdenes de Compra (SAP) no está disponible en esta copia independiente. Esa integración vive en el backend original (Apps Script) de Christian.' };
 }
 function renderOrdenesCompra(main){
   main.innerHTML = `

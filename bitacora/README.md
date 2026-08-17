@@ -12,18 +12,30 @@ No Conformidades, Marketing y consumo de luz, con flujo de aprobación por roles
 
 ## Backend / datos
 
-`index.html` apunta (constante `API_URL`, ~línea 252) al mismo Apps Script `/exec`
-que ya usa Christian en producción. **Esta copia lee y escribe la Hoja de Google
-REAL de Christian** — no es una base aislada. Si se quiere una copia independiente,
-hay que levantar una Hoja + Apps Script nuevos (ver `docs/README-original-christian.md`)
-y cambiar `API_URL`.
+Esta copia es **independiente de Christian**. NO usa Google Sheets ni su Apps Script.
+La capa de almacenamiento (`storageGet/GetSafe/Set`, ~línea 252) apunta a
+**Firebase Realtime Database** — el mismo proyecto que ya usa el Dash de Omar:
+
+- Base: `https://montasa-app-default-rtdb.firebaseio.com`
+- Espacio propio: **`/bitacora/{key}`** (aislado de `montasa`/`monhaco`).
+- Cada clave (`data-cajachica`, `data-viajes`, `auth-config`, `cajachica-fondo-*`, …)
+  se guarda como JSON nativo. Firebase manda CORS, así que `fetch` GET/PUT funciona
+  desde este sitio estático — sin permisos de Google, sin depender de nadie.
+
+La base **arranca vacía**: al abrir por primera vez, la app pide crear los códigos
+de acceso de cada rol (se guardan en `/bitacora/auth-config`, hasheados SHA-256).
+
+El módulo **Órdenes de Compra (SAP)** queda deshabilitado en esta copia (ese puente
+vive en el Apps Script de Christian).
+
+## Datos / respaldo
+
+`data/respaldo-control-auditorias-2026-08-17.xlsx` es el respaldo que envió Christian,
+pero **está vacío** (las 10 hojas sin registros) — no había nada que importar. Si se
+consigue un respaldo CON datos, se puede sembrar en Firebase.
 
 ## Seguridad
 
-- El endpoint `/exec` es abierto (sin token) — limitación conocida del backend.
-- Los códigos de acceso de los roles viven en la Hoja (`auth-config`), hasheados
-  SHA-256, no en este HTML.
-- El respaldo con datos reales está en `data/respaldo-control-auditorias-2026-08-17.xlsx`
-  (incluido a pedido, aun sin capa de seguridad — el repo es público). Es un
-  **snapshot** exportado desde la app (una hoja por módulo), no la base viva.
-  La base viva sigue siendo la Google Sheet detrás de `API_URL`.
+- Firebase está con reglas **abiertas** (lectura y escritura sin auth) — igual que
+  hoy lo usa el Dash. Es una limitación conocida; sin capa de seguridad todavía.
+- Los códigos de acceso de los roles se guardan hasheados SHA-256, no en este HTML.
