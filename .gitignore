@@ -1,0 +1,5 @@
+# Datos reales de Montasa — nunca subir a un repo publico
+respaldo-*.xlsx
+*-respaldo-*.xlsx
+*.env
+.env*
