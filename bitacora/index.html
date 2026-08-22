@@ -322,7 +322,7 @@ function renderRoleGrid(){
 }
 async function hashCode(text){
   // Convierte el código en una "huella digital" (SHA-256) antes de guardarlo.
-  // Así, quien abra la Hoja de Google directamente ve un texto sin sentido,
+  // Así, quien abra la base de datos directamente ve un texto sin sentido,
   // no el código real de acceso.
   const enc = new TextEncoder().encode(text);
   const buf = await crypto.subtle.digest('SHA-256', enc);
@@ -522,7 +522,7 @@ async function addRecord(mod, record){
   DATA[mod] = arr;
   const ok = await saveModule(mod);
   if(!ok){
-    alert('⚠️ No se pudo confirmar el guardado en la Hoja de Google. Revisa tu conexión e inténtalo de nuevo — si sales sin que esto se resuelva, este registro se puede perder.');
+    alert('⚠️ No se pudo confirmar el guardado en la base de datos. Revisa tu conexión e inténtalo de nuevo — si sales sin que esto se resuelva, este registro se puede perder.');
     return false;
   }
   await logBitacora('Creó', mod, describirRegistro(mod, record));
@@ -534,7 +534,7 @@ async function deleteRecord(mod, id){
   DATA[mod] = arr.filter(r=>r.id!==id);
   const ok = await saveModule(mod);
   if(!ok){
-    alert('⚠️ No se pudo confirmar el borrado en la Hoja de Google. Revisa tu conexión e inténtalo de nuevo.');
+    alert('⚠️ No se pudo confirmar el borrado en la base de datos. Revisa tu conexión e inténtalo de nuevo.');
     return false;
   }
   if(registro) await logBitacora('Eliminó', mod, describirRegistro(mod, registro));
@@ -548,7 +548,7 @@ async function updateRecord(mod, id, patch){
   DATA[mod] = arr;
   const ok = await saveModule(mod);
   if(!ok){
-    alert('⚠️ No se pudo confirmar el cambio en la Hoja de Google. Revisa tu conexión e inténtalo de nuevo — si sales sin que esto se resuelva, este cambio se puede perder.');
+    alert('⚠️ No se pudo confirmar el cambio en la base de datos. Revisa tu conexión e inténtalo de nuevo — si sales sin que esto se resuelva, este cambio se puede perder.');
     return false;
   }
   const cambioEstado = patch.estado ? ` → estado: ${patch.estado}` : '';
@@ -2650,7 +2650,7 @@ function renderConfig(main){
     ${session.roleId==='admin' ? `
     <div class="panel"><div class="panel-body">
       <b style="font-size:13px">📦 Respaldo completo</b>
-      <p style="color:var(--muted);font-size:12px;margin:6px 0 10px">Descarga una copia de TODOS los datos de la app (todos los módulos) en un solo Excel. Recomendado: hazlo al menos una vez al mes, como respaldo aparte de tu Hoja de Google.</p>
+      <p style="color:var(--muted);font-size:12px;margin:6px 0 10px">Descarga una copia de TODOS los datos de la app (todos los módulos) en un solo Excel. Recomendado: hazlo al menos una vez al mes, como respaldo aparte de tu base de datos.</p>
       <button class="btn-add" id="btn-respaldo" style="margin-left:0">📦 Descargar respaldo completo (.xlsx)</button>
     </div></div>` : ''}
     <div class="panel"><div class="panel-body">
