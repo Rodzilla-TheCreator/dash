@@ -120,6 +120,44 @@
     .mant-grid{grid-template-columns:repeat(3,1fr);gap:8px;}
     .mant-cell .n{font-size:18px;} .mant-cell .l{font-size:8.5px;}
   }
+  /* ===== Panel de KPIs (catalogo con checkboxes + tiles) ===== */
+  .dash-layout{display:flex;gap:20px;align-items:flex-start;}
+  .kpi-catalog{width:262px;flex:0 0 262px;max-height:calc(100vh - 210px);overflow-y:auto;border:1px solid var(--panel-line);background:var(--panel);padding:12px 12px 16px;position:sticky;top:16px;}
+  .kpi-catalog .cat-head{display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid var(--panel-line);padding-bottom:8px;margin-bottom:8px;}
+  .kpi-catalog .cat-title{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:16px;letter-spacing:.5px;text-transform:uppercase;}
+  .kpi-catalog .cat-count{font-size:10px;color:var(--ink-faint);}
+  .kpi-group h3{font-family:'Barlow Condensed',sans-serif;font-size:12.5px;letter-spacing:1px;color:var(--amber);text-transform:uppercase;margin:12px 0 4px;}
+  .kpi-opt{display:flex;align-items:flex-start;gap:7px;padding:3px 2px;font-size:11px;color:var(--ink-dim);cursor:pointer;line-height:1.25;}
+  .kpi-opt:hover{color:var(--ink);}
+  .kpi-opt input{margin-top:2px;accent-color:var(--amber);flex-shrink:0;cursor:pointer;}
+  .kpi-opt .txt{flex:1;min-width:0;}
+  .kpi-opt .src{font-size:7px;letter-spacing:.5px;padding:1px 4px;border:1px solid var(--panel-line);border-radius:2px;flex-shrink:0;text-transform:uppercase;align-self:center;}
+  .src.fb{color:var(--green);border-color:rgba(62,207,126,.4);}
+  .src.radar{color:var(--blue);border-color:rgba(79,143,224,.4);}
+  .src.gap{color:var(--ink-faint);}
+  .kpi-main{flex:1;min-width:0;}
+  .kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:16px;}
+  .tile{position:relative;background:var(--panel);border:1px solid var(--panel-line);padding:14px 14px 12px;min-height:158px;display:flex;flex-direction:column;overflow:hidden;min-width:0;}
+  .tile::before{content:"";position:absolute;top:0;left:0;right:0;height:3px;background:var(--ink-faint);}
+  .tile.fb::before{background:var(--green);}
+  .tile.radar::before{background:var(--blue);}
+  .tile.nav{cursor:pointer;transition:transform .12s,border-color .12s,box-shadow .12s;}
+  .tile.nav:hover{border-color:var(--amber-dim);transform:translateY(-2px);box-shadow:0 10px 22px rgba(0,0,0,.35);}
+  .tile-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;border-bottom:1px solid var(--panel-line);padding-bottom:8px;margin-bottom:10px;}
+  .tile-title{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14.5px;letter-spacing:.4px;text-transform:uppercase;line-height:1.05;}
+  .tile-id{font-size:10px;color:var(--ink-faint);flex-shrink:0;}
+  .tile-body{flex:1;display:flex;flex-direction:column;min-height:0;}
+  .tile-pending{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:5px;color:var(--ink-faint);font-size:10.5px;padding:6px;}
+  .tile-pending .dash{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:38px;color:var(--ink-faint);line-height:.9;}
+  .big-num{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:46px;line-height:1;}
+  .big-sub{font-size:10px;color:var(--ink-dim);letter-spacing:.5px;margin-top:4px;}
+  .center-num{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;}
+  .kpi-empty{color:var(--ink-faint);font-size:13px;padding:60px 20px;text-align:center;grid-column:1/-1;border:1px dashed var(--panel-line);}
+  @media (max-width:760px){
+    .dash-layout{flex-direction:column;}
+    .kpi-catalog{width:100%;flex:none;position:static;max-height:340px;}
+    .kpi-grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));}
+  }
 </style>
 </head>
 <body>
@@ -143,71 +181,11 @@
   <button class="company-pill" data-company="monhagro" role="tab" aria-selected="false">Monhagro</button>
 </div>
 
-<div class="grid">
-
-  <!-- 1. FINANZAS — sin conectar -->
-  <div class="panel p-finanzas disconnected">
-    <div class="panel-head">
-      <span class="panel-title display">Finanzas</span>
-      <span class="nc-badge">Sin conectar</span>
-    </div>
-    <div class="panel-body"><div class="nc-fill">Pendiente de conectar<br>a la API de finanzas</div></div>
-  </div>
-
-  <!-- 2. FLOTA — CONECTADO (Firebase / equipos) -->
-  <div class="panel panel-compact live p-flota" data-href="flota" data-label="Flota">
-    <div class="panel-head">
-      <span class="panel-title display">Ver Flota</span>
-      <span class="panel-num">02</span>
-    </div>
-    <div class="panel-body">
-      <div class="flota-grid">
-        <div class="flota-cell c-disp"><span class="n" id="flota-disp">–</span><span class="l">Disponibles</span></div>
-        <div class="flota-cell c-renta"><span class="n" id="flota-renta">–</span><span class="l">Rentados</span></div>
-        <div class="flota-cell c-mant"><span class="n" id="flota-mant">–</span><span class="l">Mant.</span></div>
-        <div class="flota-cell c-uso"><span class="n" id="flota-uso">–</span><span class="l">Otros / interno</span></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- 4. MANTENIMIENTOS — CONECTADO (mas atrasado primero) -->
-  <div class="panel panel-compact live p-mantenimientos" data-href="mantenimientos" data-label="Mantenimientos">
-    <div class="panel-head">
-      <span class="panel-title display" title="Ordenado: mas tiempo sin mantenimiento primero">Mantenimientos</span>
-      <span class="panel-num">04</span>
-    </div>
-    <div class="panel-body">
-      <div class="mant-grid" id="mant-grid"><div class="nc-fill">Cargando…</div></div>
-    </div>
-  </div>
-
-  <!-- 3. MECANICOS — sin conectar -->
-  <div class="panel p-mecanicos disconnected">
-    <div class="panel-head">
-      <span class="panel-title display">Mecanicos</span>
-      <span class="nc-badge">Sin conectar</span>
-    </div>
-    <div class="panel-body"><div class="nc-fill">Pendiente de conectar</div></div>
-  </div>
-
-  <!-- 5. ALMACEN — sin conectar -->
-  <div class="panel p-almacen disconnected">
-    <div class="panel-head">
-      <span class="panel-title display">Almacen</span>
-      <span class="nc-badge">Sin conectar</span>
-    </div>
-    <div class="panel-body"><div class="nc-fill">Pendiente de conectar</div></div>
-  </div>
-
-  <!-- 6. CAJA CHICA — CONECTADO (Apps Script de Christian; Montasa=SPS, Monhaco=Choloma) -->
-  <div class="panel p-caja" id="panel-caja">
-    <div class="panel-head">
-      <span class="panel-title display">Caja Chica</span>
-      <span class="panel-num" id="caja-num">–</span>
-    </div>
-    <div class="panel-body"><div id="caja-body" class="caja-body"><div class="nc-fill">–</div></div></div>
-  </div>
-
+<div class="dash-layout">
+  <aside class="kpi-catalog" id="kpi-catalog"><!-- catalogo de KPIs (checkboxes) lo arma el JS --></aside>
+  <main class="kpi-main">
+    <div class="kpi-grid" id="kpi-grid"></div>
+  </main>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -336,139 +314,94 @@ function evaluarEquipo(eq, ultimoDeHistorial){
   return { codigo, urgencia, color, etiqueta };
 }
 
-function pintarFlota(equiposObj){
-  const c = {disp:0, renta:0, mant:0, uso:0};
-  Object.values(equiposObj||{}).forEach(eq => { c[bucketEstado(eq.estado)]++; });
-  document.getElementById("flota-disp").textContent  = c.disp;
-  document.getElementById("flota-renta").textContent = c.renta;
-  document.getElementById("flota-mant").textContent  = c.mant;
-  document.getElementById("flota-uso").textContent   = c.uso;
-}
+/* ===================== ESTADO GLOBAL ===================== */
+let activeCompany = "montasa";
+const state = {
+  equipos:{}, preventivos:{}, correctivos:{},   // Firebase flota/mant
+  cajaPend:null,     // arreglo de gastos "Enviado a revisión" | "error" | null
+  viajesPend:null,   // numero de viaticos "Enviado a revisión" | null
+  conn:false
+};
 
-function pintarMantenimientos(companyData){
-  const grid = document.getElementById("mant-grid");
-  const equipos = companyData.equipos || {};
-
-  // ultimo mant por codigo, sacado del historial (fecha mas reciente = el ultimo)
-  const ultimo = {};   // equipoId -> {fecha, horometro}
-  let huboHistorial = false;
-  NODOS_MANT.forEach(nodo => {
-    const registros = companyData[nodo];
-    if(!registros) return;
-    Object.values(registros).forEach(r => {
-      if(r.completado === false) return;            // mant abierto no reinicia el reloj
-      const eqid = primerCampo(r, CAMPOS_MANT_EQUIPOID);
-      const f    = aFecha(primerCampo(r, CAMPOS_FECHA));
-      if(!eqid || !f) return;
-      huboHistorial = true;
-      const snap = aNumero(primerCampo(r, CAMPOS_HOROMETRO_SNAP));
-      if(!ultimo[eqid] || f > ultimo[eqid].fecha) ultimo[eqid] = { fecha:f, horometro:snap };
-    });
-  });
-
-  const filas = Object.values(equipos).map(eq =>
-    evaluarEquipo(eq, ultimo[eq.id] || null)
-  );
-
-  const conDatos = filas.filter(x => x.urgencia != null);
-  const sinDatos = filas.filter(x => x.urgencia == null);
-
-  if(conDatos.length === 0){
-    grid.innerHTML = '<div class="nc-fill">Sin datos para calcular el semaforo.<br>'
-      + (huboHistorial ? 'Revisa CAMPOS_HOROMETRO_* y CAMPOS_FECHA.' : 'No se hallo historial de mant. (NODOS_MANT).')
-      + '</div>';
-    return;
-  }
-
-  conDatos.sort((a,b) => b.urgencia - a.urgencia);   // mas urgente a la izquierda
-  const top = conDatos.concat(sinDatos).slice(0,6);
-  grid.innerHTML = top.map(v =>
-    '<div class="mant-cell '+v.color+'"><div class="n">'+v.codigo+'</div><div class="l">'+v.etiqueta+'</div></div>'
-  ).join("");
-}
-
-/* --- CAJA CHICA (Firebase, base independiente) -------------------------
-   Lee/escribe /bitacora/data-cajachica en la misma Firebase RTDB que Flota
-   y Mantenimientos (y que la app Bitacora, en /bitacora/). Ya NO depende del
-   Apps Script de Christian. Lista los gastos en "Enviado a revision" y al
-   decidir reescribe el arreglo (aprobar/rechazar) directo en Firebase. */
+/* --- Caja chica / viaticos (Firebase, base independiente) --- */
 const CC_FB = "https://montasa-app-default-rtdb.firebaseio.com/bitacora";
-/* Que sede(s) de caja chica muestra cada pestaña:
-   SPS = MT Rental (pestaña Montasa), Choloma = Monhaco.
-   La sede "General" no está asignada; si quieres que aparezca en alguna,
-   agrégala a la lista correspondiente. */
 const CC_SEDES = { montasa: ["SPS"], monhaco: ["Choloma"], monhagro: [] };
-
 function fmtL(monto){
   const n = aNumero(monto);
   return n == null ? monto : "L " + n.toLocaleString("es-HN",{minimumFractionDigits:2, maximumFractionDigits:2});
 }
 
-async function cargarCajaChica(){
-  const body = document.getElementById("caja-body");
-  const num  = document.getElementById("caja-num");
-  const sedes = CC_SEDES[activeCompany] || [];
-  if(sedes.length === 0){
-    num.textContent = "–";
-    body.innerHTML = '<div class="nc-fill">Caja chica no aplica a esta empresa</div>';
-    return;
-  }
-  body.innerHTML = '<div class="nc-fill">Cargando…</div>';
-  try{
-    // Lee el arreglo completo de Firebase y filtra aqui.
-    const res = await fetch(CC_FB + "/data-cajachica.json?_=" + Date.now(), { cache:"no-store" });
-    if(!res.ok) throw new Error("HTTP " + res.status);
-    const arr = await res.json();   // arreglo nativo o null
-    const pend = (Array.isArray(arr) ? arr : [])
-      .filter(x => x.estado === "Enviado a revisión" && sedes.includes(x.sede));
-    console.log("[Dash] caja chica", activeCompany, "sedes", sedes.join(","),
-                "| total", (Array.isArray(arr)?arr.length:0), "| pendientes", pend.length);
-    renderCajaChica(pend);
-  }catch(e){
-    console.error("[Dash] ERROR caja chica:", e.message);
-    num.textContent = "!";
-    body.innerHTML = '<div class="nc-fill">No se pudo leer caja chica:<br>'+e.message+'</div>';
-  }
+/* ===================== COMPUTOS (Firebase) ===================== */
+function computeFlota(){
+  const c = {disp:0, renta:0, mant:0, uso:0};
+  Object.values(state.equipos||{}).forEach(eq => { c[bucketEstado(eq.estado)]++; });
+  c.total = c.disp + c.renta + c.mant + c.uso;
+  c.utilPct = c.total ? Math.round(c.renta / c.total * 100) : 0;
+  return c;
 }
-
-function renderCajaChica(items){
-  const body = document.getElementById("caja-body");
-  const num  = document.getElementById("caja-num");
-  num.textContent = items.length ? items.length : "0";
-  if(!items.length){ body.innerHTML = '<div class="nc-fill">Sin pendientes por aprobar</div>'; return; }
-  body.innerHTML = items.map(it => {
-    const meta = [it.sede, it.concepto].filter(Boolean).join(" · ");
-    return '<div class="cc-item" data-id="'+it.id+'">'
-      + '<div class="cc-top"><span class="cc-monto">'+fmtL(it.monto)+'</span><span class="cc-sede">'+(it.sede||"")+'</span></div>'
-      + '<div class="cc-meta">'+meta+(it.responsable ? ' — '+it.responsable : '')+'</div>'
-      + '<div class="cc-acts">'
-      +   '<button class="stamp ok" data-dec="aprobar">✓ Aprobar</button>'
-      +   '<button class="stamp no" data-dec="rechazar">✕ Rechazar</button>'
-      + '</div></div>';
-  }).join("");
-  body.querySelectorAll(".cc-item .stamp").forEach(btn=>{
-    btn.addEventListener("click", (e)=>{
-      e.stopPropagation();
-      const item = btn.closest(".cc-item");
-      decidirCajaChica(item.dataset.id, btn.dataset.dec, item);
+function computeMant(){
+  const equipos = state.equipos || {};
+  const ultimo = {};
+  NODOS_MANT.forEach(nodo => {
+    const registros = state[nodo];
+    if(!registros) return;
+    Object.values(registros).forEach(r => {
+      if(r.completado === false) return;
+      const eqid = primerCampo(r, CAMPOS_MANT_EQUIPOID);
+      const f    = aFecha(primerCampo(r, CAMPOS_FECHA));
+      if(!eqid || !f) return;
+      const snap = aNumero(primerCampo(r, CAMPOS_HOROMETRO_SNAP));
+      if(!ultimo[eqid] || f > ultimo[eqid].fecha) ultimo[eqid] = { fecha:f, horometro:snap };
     });
   });
+  const filas = Object.values(equipos).map(eq => evaluarEquipo(eq, ultimo[eq.id] || null));
+  const conDatos = filas.filter(x => x.urgencia != null).sort((a,b)=> b.urgencia - a.urgencia);
+  const sinDatos = filas.filter(x => x.urgencia == null);
+  return {
+    lista: conDatos.concat(sinDatos),
+    hay: conDatos.length,
+    crit: conDatos.filter(x=>x.color==="crit").length,
+    warn: conDatos.filter(x=>x.color==="warn").length
+  };
 }
 
-async function decidirCajaChica(id, decision, itemEl){
-  itemEl.querySelectorAll(".stamp").forEach(b => b.disabled = true);
+/* --- CAJA CHICA / VIATICOS (Firebase) — solo cargan estado; el tile lo dibuja renderTiles --- */
+async function cargarCajaChica(){
+  const sedes = CC_SEDES[activeCompany] || [];
+  if(sedes.length === 0){ state.cajaPend = "n/a"; return; }
   try{
-    // Leer la version mas reciente, aplicar la decision y reescribir el arreglo.
+    const res = await fetch(CC_FB + "/data-cajachica.json?_=" + Date.now(), { cache:"no-store" });
+    if(!res.ok) throw new Error("HTTP " + res.status);
+    const arr = await res.json();
+    state.cajaPend = (Array.isArray(arr) ? arr : [])
+      .filter(x => x.estado === "Enviado a revisión" && sedes.includes(x.sede));
+    console.log("[Dash] caja chica", activeCompany, "| pendientes", state.cajaPend.length);
+  }catch(e){
+    console.error("[Dash] ERROR caja chica:", e.message);
+    state.cajaPend = "error";
+  }
+}
+async function cargarViajes(){
+  try{
+    const res = await fetch(CC_FB + "/data-viajes.json?_=" + Date.now(), { cache:"no-store" });
+    if(!res.ok) throw new Error("HTTP " + res.status);
+    const arr = await res.json();
+    state.viajesPend = (Array.isArray(arr) ? arr : [])
+      .filter(x => x.estado === "Enviado a revisión").length;
+  }catch(e){ state.viajesPend = null; }
+}
+
+async function decidirCajaChica(id, decision, btns){
+  btns.forEach(b => b.disabled = true);
+  try{
     const res = await fetch(CC_FB + "/data-cajachica.json?_=" + Date.now(), { cache:"no-store" });
     if(!res.ok) throw new Error("HTTP " + res.status);
     const arr = await res.json();
     if(!Array.isArray(arr)) throw new Error("no hay datos de caja chica");
     const i = arr.findIndex(x => x.id === id);
     if(i === -1) throw new Error("id no encontrado");
-    // Idempotencia: no re-decidir algo ya decidido/liquidado.
     if(["Aprobado por Gerencia","Rechazado","Liquidado"].includes(arr[i].estado))
       throw new Error("ya fue decidido (estado: " + arr[i].estado + ")");
-    // Mismo texto exacto que reconoce la app Bitacora ("Aprobado por Gerencia").
     arr[i].estado      = (decision === "aprobar") ? "Aprobado por Gerencia" : "Rechazado";
     arr[i].decididoPor = "Omar";
     arr[i].decididoEn  = new Date().toISOString();
@@ -476,7 +409,6 @@ async function decidirCajaChica(id, decision, itemEl){
       method:"PUT", headers:{"Content-Type":"application/json"}, body: JSON.stringify(arr)
     });
     if(!put.ok) throw new Error("no se pudo guardar (HTTP " + put.status + ")");
-    // Registrar en la bitacora (ultimas 500), igual que la app.
     try{
       const bRes = await fetch(CC_FB + "/data-bitacora.json?_=" + Date.now(), { cache:"no-store" });
       let bit = bRes.ok ? await bRes.json() : null;
@@ -486,17 +418,12 @@ async function decidirCajaChica(id, decision, itemEl){
       await fetch(CC_FB + "/data-bitacora.json", { method:"PUT",
         headers:{"Content-Type":"application/json"}, body: JSON.stringify(bit.slice(0,500)) });
     }catch(bErr){ console.warn("[Dash] no se pudo registrar en bitácora:", bErr.message); }
-    // exito: quitar el item y actualizar el contador
-    itemEl.remove();
-    const num = document.getElementById("caja-num");
-    const quedan = document.querySelectorAll("#caja-body .cc-item").length;
-    num.textContent = quedan;
-    if(quedan === 0) document.getElementById("caja-body").innerHTML =
-      '<div class="nc-fill">Sin pendientes por aprobar</div>';
     showToast((decision === "aprobar" ? "Aprobado" : "Rechazado") + " · " + id);
+    await cargarCajaChica();
+    renderTiles();
   }catch(e){
     console.error("[Dash] ERROR al decidir:", e.message);
-    itemEl.querySelectorAll(".stamp").forEach(b => b.disabled = false);
+    btns.forEach(b => b.disabled = false);
     showToast("No se pudo guardar: " + e.message);
   }
 }
@@ -506,90 +433,199 @@ function setConn(ok){
   document.getElementById("conn-txt").textContent = ok ? "EN LINEA" : "SIN CONEXION";
 }
 
-let _timer = null;
-
-async function cargarEmpresa(key){
-  activeCompany = key;
-  document.querySelectorAll(".company-pill").forEach(p=>{
-    const on = p.dataset.company === key;
-    p.classList.toggle("active", on);
-    p.setAttribute("aria-selected", on ? "true":"false");
-  });
-  if(_timer){ clearInterval(_timer); _timer = null; }
-
-  const nodo = NODO_EMPRESA[key];
-  if(!nodo){ // monhagro: aun no existe en la base
-    ["flota-disp","flota-renta","flota-mant","flota-uso"].forEach(id=>document.getElementById(id).textContent="–");
-    document.getElementById("mant-grid").innerHTML = '<div class="nc-fill">Monhagro aun no esta en la base.</div>';
-    cargarCajaChica();
-    return;
-  }
-
-  async function refrescar(){
-    try{
-      // Flota primero (nodo chico) para que pinte rapido
-      const equipos = (await getJSON(nodo + "/equipos")) || {};
-      setConn(true);
-      console.log("[Dash]", nodo + "/equipos ->", Object.keys(equipos).length, "equipos");
-      pintarFlota(equipos);
-
-      // Mantenimientos: preventivos + correctivos (si alguno falla, sigue con el otro)
-      const [preventivos, correctivos] = await Promise.all([
-        getJSON(nodo + "/preventivos").catch(()=>({})),
-        getJSON(nodo + "/correctivos").catch(()=>({}))
-      ]);
-      console.log("[Dash] preventivos:", Object.keys(preventivos||{}).length,
-                  "| correctivos:", Object.keys(correctivos||{}).length);
-      pintarMantenimientos({ equipos, preventivos: preventivos||{}, correctivos: correctivos||{} });
-    }catch(e){
-      setConn(false);
-      console.error("[Dash] ERROR:", e.message);
-      document.getElementById("mant-grid").innerHTML =
-        '<div class="nc-fill">No se pudo leer la base:<br>'+e.message+'<br>(abre F12 &gt; Console)</div>';
-    }
-  }
-
-  refrescar();
-  cargarCajaChica();
-  _timer = setInterval(()=>{ refrescar(); cargarCajaChica(); }, 60000);   // refresca cada 60s (sin conexion viva)
-}
-
-document.querySelectorAll(".company-pill").forEach(p=>{
-  p.addEventListener("click", ()=> cargarEmpresa(p.dataset.company));
-});
-
-/* reloj */
-const clockEl = document.getElementById("clock");
-(function tick(){ clockEl.textContent = new Date().toLocaleTimeString("es-HN",{hour12:false}); setTimeout(tick,1000); })();
-
-/* paneles clickeables -> por ahora solo avisan. Cuando existan las paginas
-   de detalle (o las de Miguel), pon la ruta real en data-href y descomenta
-   el window.location de abajo. */
 function showToast(msg){
   const t = document.getElementById("toast");
   t.textContent = msg; t.classList.add("show");
   clearTimeout(showToast._t); showToast._t = setTimeout(()=>t.classList.remove("show"),1800);
 }
-document.querySelectorAll(".panel[data-href]").forEach(panel=>{
-  panel.setAttribute("tabindex","0"); panel.setAttribute("role","link");
-  panel.setAttribute("aria-label","Abrir "+panel.dataset.label);
-  const go = ()=>{
-    // El widget de Flota navega a la pagina de gerencia de la empresa activa
-    if(panel.classList.contains("p-flota")){
-      const url = PAG_FLOTA[activeCompany];
-      if(url){ window.location.href = url; }
-      else { showToast("Aun no hay pagina de flota para " + activeCompany); }
-      return;
-    }
-    showToast("Abrir "+panel.dataset.label+" → "+panel.dataset.href);
-    // window.location.href = panel.dataset.href;  // <- activar cuando exista la pagina
-  };
-  panel.addEventListener("click", e=>{ if(!e.target.closest("button,input,a,label")) go(); });
-  panel.addEventListener("keydown", e=>{
-    if((e.key==="Enter"||e.key===" ") && !e.target.closest("button,input,a,label")){ e.preventDefault(); go(); }
+
+/* ===================== CATALOGO DE KPIs =====================
+   src: "fb"   = lo calculamos YA con lo que hay en Firebase
+        "radar"= viene de RADAR (leemos su data cruda y calculamos aqui)
+        "gap"  = ni RADAR lo tiene todavia (ej. cuentas por pagar) */
+const KPI_GROUPS = [
+  { n:"1", title:"Ventas y facturación", items:[
+    ["1.1","Facturado hoy / semana / mes","radar"],["1.2","Ventas vs meta del mes (%)","radar"],
+    ["1.3","Ranking de vendedores","radar"],["1.4","Ventas por categoría","radar"],
+    ["1.5","Ticket promedio","radar"],["1.6","Acumulado del año vs anterior","radar"],
+    ["1.7","Proyección de cierre de mes","radar"] ]},
+  { n:"2", title:"Pipeline / CRM", items:[
+    ["2.1","Oportunidades abiertas","radar"],["2.2","Embudo por etapa","radar"],
+    ["2.3","Valor ponderado del pipeline","radar"],["2.4","Nuevos prospectos día/semana","radar"],
+    ["2.5","Conversión y win rate","radar"],["2.6","Razones de pérdida top","radar"],
+    ["2.7","Oportunidades estancadas","radar"],["2.8","Cotizaciones emitidas","radar"],
+    ["2.9","Ciclo de venta promedio","radar"] ]},
+  { n:"3", title:"Cobros / cartera", items:[
+    ["3.1","Cobrado hoy / semana / mes","radar"],["3.2","Cuentas por cobrar (cartera)","radar"],
+    ["3.3","Cartera vencida por antigüedad","radar"],["3.4","% de morosidad","radar"],
+    ["3.5","Top deudores","radar"],["3.6","DSO (días de cobro)","radar"],
+    ["3.7","Notas de crédito","radar"] ]},
+  { n:"4", title:"Cashflow", items:[
+    ["4.1","Facturado vs cobrado","radar"],["4.2","Cuentas por pagar","gap"],
+    ["4.3","Cashflow neto proyectado","gap"],["4.4","Caja chica pendiente","fb"],
+    ["4.5","Viáticos pendientes","fb"] ]},
+  { n:"5", title:"Rentas y flota", items:[
+    ["5.1","Flota: rentados / disp. / mant.","fb"],["5.2","Utilización de flota (%)","fb"],
+    ["5.3","Ingresos por rentas del mes","radar"],["5.4","Contratos por vencer","radar"],
+    ["5.5","Equipos ociosos","radar"] ]},
+  { n:"6", title:"Taller y mantenimiento", items:[
+    ["6.1","Mantenimientos vencidos / próximos","fb"],["6.2","Órdenes de trabajo","radar"],
+    ["6.3","Equipos caídos en taller","radar"],["6.4","Tiempo prom. de reparación","radar"] ]},
+  { n:"7", title:"Equipo comercial", items:[
+    ["7.1","Visitas de campo (semana)","radar"],["7.2","Actividades vencidas","radar"],
+    ["7.3","Seguimientos urgentes","radar"],["7.4","Km / reembolsos (semana)","radar"] ]},
+  { n:"8", title:"Clientes", items:[
+    ["8.1","Activos vs inactivos","radar"],["8.2","Nuevos clientes del mes","radar"],
+    ["8.3","Satisfacción / NPS","radar"],["8.4","Tickets de soporte","radar"] ]},
+  { n:"9", title:"Marketing / leads", items:[
+    ["9.1","Leads por canal","radar"],["9.2","Inversión vs leads (costo/lead)","radar"],
+    ["9.3","Conversión de leads","radar"] ]},
+  { n:"10", title:"Multi-empresa y alertas", items:[
+    ["10.1","Corte Monhaco vs Montasa CR","radar"],["10.2","Tipo de cambio HNL/CRC","radar"],
+    ["10.3","Panel de semáforos","fb"] ]}
+];
+const DEFAULT_SEL = ["5.1","5.2","6.1","4.4","4.5","10.3"];
+let selected = (function(){ try{ const s=JSON.parse(localStorage.getItem("dash_kpis")); if(Array.isArray(s)) return new Set(s); }catch(e){} return new Set(DEFAULT_SEL); })();
+function saveSel(){ try{ localStorage.setItem("dash_kpis", JSON.stringify([...selected])); }catch(e){} }
+
+/* ===================== CUERPO DE CADA TILE ===================== */
+function pend(msg, big){ return '<div class="tile-pending"><div class="dash">'+(big||"—")+'</div><div>'+msg+'</div></div>'; }
+function tileBody(id, src){
+  if(src==="radar") return { nav:false, body: pend("Esperando RADAR — se llena leyendo la data de Fabri") };
+  if(src==="gap")   return { nav:false, body: pend("No disponible aún (falta la fuente de datos)") };
+  if(id==="5.1"){
+    const f=computeFlota();
+    return { nav:true, body:'<div class="flota-grid">'
+      +'<div class="flota-cell c-disp"><span class="n">'+f.disp+'</span><span class="l">Disponibles</span></div>'
+      +'<div class="flota-cell c-renta"><span class="n">'+f.renta+'</span><span class="l">Rentados</span></div>'
+      +'<div class="flota-cell c-mant"><span class="n">'+f.mant+'</span><span class="l">Mant.</span></div>'
+      +'<div class="flota-cell c-uso"><span class="n">'+f.uso+'</span><span class="l">Otros</span></div></div>' };
+  }
+  if(id==="5.2"){
+    const f=computeFlota();
+    return { nav:true, body:'<div class="center-num"><div class="big-num" style="color:var(--blue)">'+f.utilPct+'%</div><div class="big-sub">'+f.renta+' de '+f.total+' equipos rentados</div></div>' };
+  }
+  if(id==="6.1"){
+    const m=computeMant();
+    if(!m.hay) return { nav:true, body: pend("Sin datos de mantenimiento") };
+    return { nav:true, body:'<div class="mant-grid">'+ m.lista.slice(0,6).map(v=>'<div class="mant-cell '+v.color+'"><div class="n">'+v.codigo+'</div><div class="l">'+v.etiqueta+'</div></div>').join("") +'</div>'
+      +'<div class="big-sub" style="text-align:center;margin-top:8px">'+m.crit+' críticos · '+m.warn+' por vencer</div>' };
+  }
+  if(id==="4.4"){
+    const cp=state.cajaPend;
+    if(cp==="n/a") return { nav:false, body: pend("No aplica a esta empresa") };
+    if(cp==="error"||cp==null) return { nav:false, body: pend("No se pudo leer","!") };
+    if(cp.length===0) return { nav:false, body: pend("Sin pendientes por aprobar","0") };
+    const list = cp.map(it=>{
+      const meta=[it.sede,it.concepto].filter(Boolean).join(" · ");
+      return '<div class="cc-item" data-id="'+it.id+'"><div class="cc-top"><span class="cc-monto">'+fmtL(it.monto)+'</span><span class="cc-sede">'+(it.sede||"")+'</span></div>'
+        +'<div class="cc-meta">'+meta+(it.responsable?' — '+it.responsable:'')+'</div>'
+        +'<div class="cc-acts"><button class="stamp ok" data-dec="aprobar">✓ Aprobar</button><button class="stamp no" data-dec="rechazar">✕ Rechazar</button></div></div>';
+    }).join("");
+    return { nav:false, body:'<div class="big-sub" style="margin-bottom:6px">'+cp.length+' pendiente(s)</div><div class="caja-body">'+list+'</div>' };
+  }
+  if(id==="4.5"){
+    const v=state.viajesPend;
+    return { nav:false, body:'<div class="center-num"><div class="big-num" style="color:var(--amber)">'+(v==null?"!":v)+'</div><div class="big-sub">viáticos por revisar (Bitácora)</div></div>' };
+  }
+  if(id==="10.3"){
+    const f=computeFlota(), m=computeMant();
+    const cajaN=Array.isArray(state.cajaPend)?state.cajaPend.length:0;
+    const dot=(c)=>'<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:var('+c+');margin-right:8px;vertical-align:middle"></span>';
+    const utilCol=f.utilPct>=60?"--green":(f.utilPct>=40?"--amber":"--red");
+    const mantCol=m.crit>0?"--red":(m.warn>0?"--amber":"--green");
+    const cajaCol=cajaN>0?"--amber":"--green";
+    return { nav:false, body:'<div style="display:flex;flex-direction:column;gap:11px;font-size:12px;justify-content:center;flex:1">'
+      +'<div>'+dot(utilCol)+'Utilización flota: <b>'+f.utilPct+'%</b></div>'
+      +'<div>'+dot(mantCol)+'Mant. críticos: <b>'+m.crit+'</b> · por vencer: '+m.warn+'</div>'
+      +'<div>'+dot(cajaCol)+'Aprobaciones pendientes: <b>'+cajaN+'</b></div></div>' };
+  }
+  return { nav:false, body: pend("—") };
+}
+
+/* ===================== RENDER: catalogo (izq) + tiles (der) ===================== */
+function renderCatalog(){
+  const cat=document.getElementById("kpi-catalog");
+  const total=KPI_GROUPS.reduce((a,g)=>a+g.items.length,0);
+  cat.innerHTML='<div class="cat-head"><span class="cat-title">Indicadores</span><span class="cat-count">'+selected.size+'/'+total+' activos</span></div>'
+    + KPI_GROUPS.map(g=>'<div class="kpi-group"><h3>'+g.n+'. '+g.title+'</h3>'
+        + g.items.map(([id,label,src])=>'<label class="kpi-opt"><input type="checkbox" data-id="'+id+'"'+(selected.has(id)?' checked':'')+'>'
+            +'<span class="txt">'+id+' '+label+'</span><span class="src '+src+'">'+(src==="fb"?"live":src)+'</span></label>').join("")
+      +'</div>').join("");
+  cat.querySelectorAll('input[type=checkbox]').forEach(cb=>{
+    cb.addEventListener("change",()=>{
+      if(cb.checked) selected.add(cb.dataset.id); else selected.delete(cb.dataset.id);
+      saveSel(); renderCatalog(); renderTiles();
+    });
   });
+}
+function renderTiles(){
+  const grid=document.getElementById("kpi-grid");
+  const order=[];
+  KPI_GROUPS.forEach(g=>g.items.forEach(([id,label,src])=>{ if(selected.has(id)) order.push({id,label,src}); }));
+  if(order.length===0){ grid.innerHTML='<div class="kpi-empty">Elegí indicadores en la lista de la izquierda para que aparezcan aquí.</div>'; return; }
+  grid.innerHTML=order.map(k=>{
+    const t=tileBody(k.id,k.src);
+    return '<div class="tile '+k.src+(t.nav?' nav':'')+'" data-id="'+k.id+'" data-nav="'+(t.nav?1:0)+'">'
+      +'<div class="tile-head"><span class="tile-title">'+k.label+'</span><span class="tile-id">'+k.id+'</span></div>'
+      +'<div class="tile-body">'+t.body+'</div></div>';
+  }).join("");
+  // botones de caja chica
+  grid.querySelectorAll('.tile[data-id="4.4"] .cc-item .stamp').forEach(btn=>{
+    btn.addEventListener("click",(e)=>{ e.stopPropagation();
+      const item=btn.closest(".cc-item");
+      const btns=[...item.querySelectorAll(".stamp")];
+      decidirCajaChica(item.dataset.id, btn.dataset.dec, btns);
+    });
+  });
+  // tiles navegables (flota/mant) -> pagina de gerencia de la empresa activa
+  grid.querySelectorAll('.tile[data-nav="1"]').forEach(tile=>{
+    tile.style.cursor="pointer";
+    tile.addEventListener("click",e=>{ if(e.target.closest("button")) return;
+      const url=PAG_FLOTA[activeCompany];
+      if(url) window.location.href=url; else showToast("Aún no hay página para "+activeCompany);
+    });
+  });
+}
+
+/* ===================== REFRESCO Y EMPRESA ===================== */
+let _timer=null;
+async function refrescar(){
+  const nodo=NODO_EMPRESA[activeCompany];
+  if(nodo){
+    try{
+      const equipos=(await getJSON(nodo+"/equipos"))||{};
+      setConn(true);
+      state.equipos=equipos;
+      console.log("[Dash]",nodo+"/equipos ->",Object.keys(equipos).length,"equipos");
+      const [prev,corr]=await Promise.all([ getJSON(nodo+"/preventivos").catch(()=>({})), getJSON(nodo+"/correctivos").catch(()=>({})) ]);
+      state.preventivos=prev||{}; state.correctivos=corr||{};
+      console.log("[Dash] preventivos:",Object.keys(state.preventivos).length,"| correctivos:",Object.keys(state.correctivos).length);
+    }catch(e){ setConn(false); console.error("[Dash] ERROR:",e.message); state.equipos={}; state.preventivos={}; state.correctivos={}; }
+  } else {
+    setConn(true); state.equipos={}; state.preventivos={}; state.correctivos={};   // monhagro: sin nodo de flota
+  }
+  await cargarCajaChica();
+  await cargarViajes();
+  renderTiles();
+}
+async function cargarEmpresa(key){
+  activeCompany=key;
+  document.querySelectorAll(".company-pill").forEach(p=>{ const on=p.dataset.company===key; p.classList.toggle("active",on); p.setAttribute("aria-selected",on?"true":"false"); });
+  if(_timer){ clearInterval(_timer); _timer=null; }
+  await refrescar();
+  _timer=setInterval(refrescar, 60000);   // refresco cada 60s
+}
+document.querySelectorAll(".company-pill").forEach(p=>{
+  p.addEventListener("click", ()=> cargarEmpresa(p.dataset.company));
 });
 
+/* reloj */
+const clockEl=document.getElementById("clock");
+(function tick(){ clockEl.textContent=new Date().toLocaleTimeString("es-HN",{hour12:false}); setTimeout(tick,1000); })();
+
+/* arranque */
+renderCatalog();
 cargarEmpresa("montasa");
 </script>
 </body>
