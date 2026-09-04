@@ -397,11 +397,13 @@ async function cargarViajes(){
    navegador de Omar (boton "Conectar RADAR"). Mapea cada empresa del switch
    al empresa_id real de RADAR (OJO: honduras = Monhaco, nombre heredado). */
 const RADAR_API = "https://montasa-web.vercel.app/api/dashboard";
-const RADAR_EMPRESA = { montasa:"montasa", monhaco:"honduras", monhagro:"monhagro" };
+/* pill -> corte de RADAR. "Montasa" = grupo HN (empresa_id 'montasa' sola es la
+   empresa retirada oct-2025, daria ~0); Monhaco = honduras; Monhagro = monhagro. */
+const RADAR_EMPRESA = { montasa:"hn", monhaco:"honduras", monhagro:"monhagro" };
 /* Token de RADAR. El usuario decidio dejarlo publico en el repo (dato interno,
    sin capa de seguridad todavia). Si queda vacio, se usa el que Omar pegue con
    el boton "Conectar RADAR" (localStorage). Pegar el token real aqui: */
-const RADAR_TOKEN = "";
+const RADAR_TOKEN = "CjXHIPSe6iJVnDQiF_yweLr7rJ3sQPdi";
 function radarToken(){ if(RADAR_TOKEN) return RADAR_TOKEN; try{ return (localStorage.getItem("dash_radar_token")||"").trim(); }catch(e){ return ""; } }
 async function cargarRadar(){
   const tok = radarToken();
@@ -429,7 +431,7 @@ const RADAR_MAP = {
   "1.1": rd=>{ const f=rd.ventas&&rd.ventas.facturado; if(!f||f.mes==null) return null; return BN(usd(f.mes),"mes · hoy "+usd(f.hoy)+" · YTD "+usd(f.ytd)); },
   "1.2": rd=>{ const m=rd.ventas&&rd.ventas.meta; if(!m||m.cumplimiento_pct==null) return null; return BN(pct(m.cumplimiento_pct),"cumplimiento · meta "+usd(m.meta_cargada_usd)); },
   "1.3": rd=>{ const a=rd.ventas&&rd.ventas.por_vendedor; if(!a||!a.length) return null; return LST(a.slice().sort((x,y)=>(y.mes||0)-(x.mes||0)).slice(0,6).map(v=>[v.vendedor,usd(v.mes)])); },
-  "1.4": rd=>{ const a=rd.ventas&&rd.ventas.por_categoria; if(!a||!a.length) return null; return LST(a.slice().sort((x,y)=>(y.mes||0)-(x.mes||0)).map(c=>[c.categoria,usd(c.mes)])); },
+  "1.4": rd=>{ const a=rd.ventas&&rd.ventas.por_categoria; if(!a||!a.length) return null; return LST(a.slice().sort((x,y)=>(y.lineas_ytd||0)-(x.lineas_ytd||0)).map(c=>[c.categoria, num(c.lineas_ytd)+" ren."])); },
   "1.5": rd=>{ const t=rd.ventas&&rd.ventas.ticket_promedio; if(!t||t.mes==null) return null; return BN(usd(t.mes),"ticket promedio (mes)"); },
   "1.6": rd=>{ const f=rd.ventas&&rd.ventas.facturado; if(!f||f.ytd_yoy_pct==null) return null; return BN((f.ytd_yoy_pct>0?"+":"")+pct(f.ytd_yoy_pct),"YTD "+usd(f.ytd)+" vs "+usd(f.ytd_anio_anterior), f.ytd_yoy_pct>=0?"--green":"--red"); },
   "1.7": rd=>{ const f=rd.ventas&&rd.ventas.forecast; if(!f||f.estimado==null) return null; return ROWS([["Estimado",usd(f.estimado)],["Real",usd(f.real)],["Precisión",pct(f.precision_pct)]]); },
@@ -437,10 +439,10 @@ const RADAR_MAP = {
   "2.2": rd=>{ const a=rd.pipeline&&rd.pipeline.por_etapa; if(!a||!a.length) return null; return LST(a.map(e=>[e.etapa||e.nombre, num(e.n!=null?e.n:e.cantidad)])); },
   "2.3": rd=>{ const p=rd.pipeline&&rd.pipeline.abiertas; if(!p||p.valor_ponderado==null) return null; return BN(usd(p.valor_ponderado),"valor ponderado del pipeline"); },
   "2.4": rd=>{ const n=rd.pipeline&&rd.pipeline.nuevas; if(!n) return null; return ROWS([["Hoy",num(n.dia)],["Semana",num(n.semana)],["Mes",num(n.mes)]]); },
-  "2.5": rd=>{ const p=rd.pipeline; if(!p||p.win_rate_pct==null) return null; return BN(pct(p.win_rate_pct),"win rate · gan. "+num(p.ganadas_ytd)+" / perd. "+num(p.perdidas_ytd)); },
+  "2.5": rd=>{ const p=rd.pipeline; if(!p||p.win_rate_pct==null) return null; return BN(pct(p.win_rate_pct),"win rate · gan. "+num(p.ganadas_ytd&&p.ganadas_ytd.n)+" / perd. "+num(p.perdidas_ytd&&p.perdidas_ytd.n)); },
   "2.6": rd=>{ const a=rd.pipeline&&rd.pipeline.razones_perdida; if(!a||!a.length) return null; return LST(a.map(r=>[r.razon||r.motivo, num(r.n!=null?r.n:r.cantidad)])); },
   "2.7": rd=>{ const p=rd.pipeline; if(!p||p.estancadas_14d==null) return null; return BN(num(p.estancadas_14d),"estancadas +14d · bloqueadas "+num(p.bloqueadas),"--amber"); },
-  "2.8": rd=>{ const p=rd.pipeline; if(!p||p.cotizaciones_con_numero_sap==null) return null; return BN(num(p.cotizaciones_con_numero_sap),"cotizaciones con # SAP"); },
+  "2.8": rd=>{ const p=rd.pipeline, c=p&&p.cotizaciones_con_numero_sap; if(!c) return null; return BN(num(c.n),"cotizaciones con # SAP · "+usd(c.valor)); },
   "2.9": rd=>{ const p=rd.pipeline; if(!p||p.ciclo_venta_dias==null) return null; return BN(num(p.ciclo_venta_dias),"días de ciclo de venta"); },
   "3.1": rd=>{ const c=rd.cobros&&rd.cobros.cobrado; if(!c||c.mes==null) return null; return BN(usd(c.mes),"cobrado mes · recup. "+usd(c.recuperacion_mes)); },
   "3.2": rd=>{ const c=rd.cobros&&rd.cobros.cartera; if(!c||c.total==null) return null; return BN(usd(c.total),"cartera · vencida "+usd(c.vencida)); },
@@ -448,7 +450,7 @@ const RADAR_MAP = {
   "3.4": rd=>{ const c=rd.cobros&&rd.cobros.cartera; if(!c||c.morosidad_pct==null) return null; return BN(pct(c.morosidad_pct),"morosidad", c.morosidad_pct>=20?"--red":(c.morosidad_pct>=10?"--amber":"--green")); },
   "3.5": rd=>{ const a=rd.cobros&&rd.cobros.top_deudores; if(!a||!a.length) return null; return LST(a.slice(0,8).map(d=>[d.cliente||d.nombre||d.cliente_id, usd(d.saldo_usd!=null?d.saldo_usd:d.saldo)])); },
   "3.6": rd=>{ const c=rd.cobros; if(!c||c.dso_dias==null) return null; return BN(num(c.dso_dias),"DSO (días de cobro)"); },
-  "3.7": rd=>{ const c=rd.cobros; if(!c||c.notas_credito==null) return null; const v=(typeof c.notas_credito==='object')?(c.notas_credito.saldo_usd!=null?c.notas_credito.saldo_usd:c.notas_credito.total_usd):c.notas_credito; return BN(usd(v),"notas de crédito"); },
+  "3.7": rd=>{ const nc=rd.cobros&&rd.cobros.notas_credito; if(!nc||nc.saldo==null) return null; return BN(usd(nc.saldo),(nc.n!=null?nc.n+" ":"")+"notas de crédito (saldo)"); },
   "4.1": rd=>{ const c=rd.cashflow; if(!c||c.facturado_mes==null) return null; return ROWS([["Facturado mes",usd(c.facturado_mes)],["Cobrado mes",usd(c.cobrado_mes)],["Brecha",usd(c.brecha_mes)]]); },
   "5.3": rd=>{ const f=rd.flota; if(!f||f.ingresos_renta_mes==null) return null; return BN(usd(f.ingresos_renta_mes),"ingresos por renta (mes)"); },
   "6.3": rd=>{ const t=rd.taller; if(!t||t.equipos_en_reparacion==null) return null; return BN(num(t.equipos_en_reparacion),"equipos en reparación","--red"); },
@@ -458,12 +460,13 @@ const RADAR_MAP = {
   "7.4": rd=>{ const g=rd.actividad&&rd.actividad.giras_mes; if(!g) return null; return ROWS([["Giras",num(g.n)],["Km",num(g.km)],["Costo",usd(g.costo)]]); },
   "8.1": rd=>{ const c=rd.clientes; if(!c||c.activos_6m==null) return null; return ROWS([["Activos 6m",num(c.activos_6m)],["Inactivos 6m",num(c.inactivos_6m)],["Con facturación",num(c.con_facturacion)]]); },
   "8.2": rd=>{ const c=rd.clientes; if(!c||c.nuevos_mes==null) return null; return BN(num(c.nuevos_mes),"nuevos clientes (1a factura, mes)"); },
-  "8.4": rd=>{ const t=rd.clientes&&rd.clientes.tickets; if(!t) return null; return ROWS([["Abiertos",num(t.abiertos)],["Resueltos",num(t.resueltos)]]); },
+  "8.4": rd=>{ const t=rd.clientes&&rd.clientes.tickets; if(!t) return null; return ROWS([["Abiertos",num(t.abiertos)],["Resueltos (mes)",num(t.resueltos_mes)],["Horas resp.",t.horas_respuesta_prom==null?"—":num(t.horas_respuesta_prom)]]); },
   "9.1": rd=>{ const a=rd.leads&&rd.leads.por_canal; if(!a||!a.length) return null; return LST(a.map(c=>[c.canal, num(c.n!=null?c.n:c.cantidad)])); },
   "9.3": rd=>{ const l=rd.leads; if(!l||l.conversion_pct==null) return null; return BN(pct(l.conversion_pct),"conversión leads→oport. · "+num(l.convertidos_ytd)+" YTD"); },
   "10.1": rd=>{ const a=rd.ventas&&rd.ventas.por_empresa; if(!a||!a.length) return null; return LST(a.map(e=>[e.nombre||e.empresa_id, usd(e.mes)])); },
-  "10.2": rd=>{ const t=rd.tipo_cambio; if(!t) return null; const arr=Array.isArray(t)?t:Object.values(t); if(!arr.length) return null; return LST(arr.map(x=>[(x.empresa_id||x.pais||"tasa"), (x.tasa!=null?x.tasa:"—")])); }
+  "10.2": rd=>{ const t=rd.tipo_cambio; if(!t) return null; const e=Object.entries(t); if(!e.length) return null; return LST(e.map(kv=>[kv[0], (kv[1]&&kv[1].tasa!=null?kv[1].tasa:"—")])); }
 };
+const NO_DISP = { "4.2":"cuentas_por_pagar","4.3":"cashflow_neto_proyectado","5.4":"contratos_renta_activos","5.5":"equipos_ociosos_dias","6.2":"ordenes_trabajo","6.4":"tiempo_promedio_reparacion","8.3":"nps","9.2":"costo_por_lead" };
 
 async function decidirCajaChica(id, decision, btns){
   btns.forEach(b => b.disabled = true);
@@ -571,7 +574,7 @@ function tileBody(id, src){
     if(rd==="bad-token") return { nav:false, body: pend("Token RADAR inválido o expirado","!") };
     if(rd==="error"||rd==null) return { nav:false, body: pend("No se pudo leer RADAR","—") };
     const fn=RADAR_MAP[id];
-    if(!fn) return { nav:false, body: pend("RADAR aún no lo calcula") };
+    if(!fn){ const nd=rd.no_disponible, key=NO_DISP[id]; return { nav:false, body: pend((nd&&key&&nd[key])||"RADAR aún no lo calcula") }; }
     let out=null; try{ out=fn(rd); }catch(e){ out=null; }
     if(out==null) return { nav:false, body: pend("Sin dato (no calculable)") };
     return { nav:false, body: out };
