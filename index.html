@@ -422,15 +422,25 @@ async function cargarRadar(){
   }catch(e){ console.error("[Dash] RADAR:", e.message); state.radar = "error"; }
 }
 
+/* Conversion live: HNL por USD desde una API publica. Si falla, fixUsd cae al
+   tipo_cambio (oficial, diario) que ya trae el JSON de RADAR. */
+async function cargarFx(){
+  try{
+    const r=await fetch("https://open.er-api.com/v6/latest/USD",{cache:"no-store"});
+    if(r.ok){ const j=await r.json(); if(j&&j.rates&&j.rates.HNL){ state.fxHNL=j.rates.HNL; return; } }
+  }catch(e){}
+  state.fxHNL=null;
+}
+
 /* helpers de formato (null = "no calculable", NO cero) */
-function usd(v){ return v==null ? null : "$"+Math.round(v).toLocaleString("en-US"); }
+function usd(v){ return v==null ? null : "$"+Math.round(v).toLocaleString("en-US")+" USD"; }
 function num(v){ return v==null ? null : Number(v).toLocaleString("es-HN"); }
 function pct(v){ return v==null ? null : (Math.round(v*10)/10)+"%"; }
 /* FIX del dolar en el Dash: RADAR devuelve los montos de factura_lineas_sap
    (categorias, ingresos de renta) en LEMPIRAS sin convertir (aviso factor ~23x).
    Los corregimos aca dividiendo por el tipo de cambio del propio JSON, sin
    tocar la app de Fabri. Solo aplica a esos campos; facturado/cobros ya son USD. */
-function fixUsd(v, rd){ if(v==null) return null; const t=rd&&rd.tipo_cambio&&rd.tipo_cambio.honduras&&rd.tipo_cambio.honduras.tasa; return t ? v/t : null; }
+function fixUsd(v, rd){ if(v==null) return null; const t = state.fxHNL || (rd&&rd.tipo_cambio&&rd.tipo_cambio.honduras&&rd.tipo_cambio.honduras.tasa); return t ? v/t : null; }
 function BN(big, sub, color){ return '<div class="center-num"><div class="big-num"'+(color?' style="color:var('+color+')"':'')+'>'+(big==null?'—':big)+'</div><div class="big-sub">'+(sub||'')+'</div></div>'; }
 function ROWS(pairs){ return '<div style="display:flex;flex-direction:column;gap:9px;font-size:12px;justify-content:center;flex:1">'+pairs.map(p=>'<div style="display:flex;justify-content:space-between;gap:10px"><span style="color:var(--ink-dim)">'+p[0]+'</span><b>'+(p[1]==null?'—':p[1])+'</b></div>').join('')+'</div>'; }
 function LST(items){ return '<div style="display:flex;flex-direction:column;gap:6px;font-size:11px;overflow-y:auto;flex:1">'+items.map(it=>'<div style="display:flex;justify-content:space-between;gap:8px"><span style="color:var(--ink-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+it[0]+'</span><b style="white-space:nowrap">'+(it[1]==null?'—':it[1])+'</b></div>').join('')+'</div>'; }
@@ -461,7 +471,7 @@ const RADAR_MAP = {
   "3.6": rd=>{ const c=rd.cobros; if(!c||c.dso_dias==null) return null; return BN(num(c.dso_dias),"DSO (días de cobro)"); },
   "3.7": rd=>{ const nc=rd.cobros&&rd.cobros.notas_credito; if(!nc||nc.saldo==null) return null; return BN(usd(nc.saldo),(nc.n!=null?nc.n+" ":"")+"notas de crédito (saldo)"); },
   "4.1": rd=>{ const c=rd.cashflow; if(!c||c.facturado_mes==null) return null; return ROWS([["Facturado mes",usd(c.facturado_mes)],["Cobrado mes",usd(c.cobrado_mes)],["Brecha",usd(c.brecha_mes)]]); },
-  "5.3": rd=>{ const f=rd.flota; if(!f) return null; const v=fixUsd(f.ingresos_renta_mes,rd); if(v==null) return null; return BN(usd(v),"ingresos por renta (mes, USD)"); },
+  "5.3": rd=>{ const f=rd.flota; if(!f) return null; const v=fixUsd(f.ingresos_renta_mes,rd); if(v==null) return null; return BN(usd(v),"ingresos por renta (mes)"); },
   "6.3": rd=>{ const t=rd.taller; if(!t||t.equipos_en_reparacion==null) return null; return BN(num(t.equipos_en_reparacion),"equipos en reparación","--red"); },
   "7.1": rd=>{ const v=rd.actividad&&rd.actividad.visitas; if(!v) return null; return ROWS([["Hoy",num(v.dia)],["Semana",num(v.semana)]]); },
   "7.2": rd=>{ const a=rd.actividad&&rd.actividad.actividades; if(!a) return null; return ROWS([["Pendientes",num(a.pendientes)],["Vencidas",num(a.vencidas)]]); },
@@ -662,13 +672,8 @@ function renderTiles(){
   const grid=document.getElementById("kpi-grid");
   const order=[];
   KPI_GROUPS.forEach(g=>g.items.forEach(([id,label,src])=>{ if(selected.has(id)) order.push({id,label,src}); }));
-  let aviso="";
-  const rd=state.radar;
-  if(rd && typeof rd==="object" && Array.isArray(rd.avisos) && rd.avisos.length){
-    aviso='<div class="kpi-aviso">⚠ '+rd.avisos.map(a=> typeof a==="string"?a:(a.mensaje||a.texto||a.aviso||"")).filter(Boolean).join(" · ")+'</div>';
-  }
-  if(order.length===0){ grid.innerHTML=aviso+'<div class="kpi-empty">Elegí indicadores en la lista de la izquierda para que aparezcan aquí.</div>'; return; }
-  grid.innerHTML=aviso+order.map(k=>{
+  if(order.length===0){ grid.innerHTML='<div class="kpi-empty">Elegí indicadores en la lista de la izquierda para que aparezcan aquí.</div>'; return; }
+  grid.innerHTML=order.map(k=>{
     const t=tileBody(k.id,k.src);
     return '<div class="tile '+(FIX_IDS.has(k.id)?"fix":"live")+(t.nav?' nav':'')+'" data-id="'+k.id+'" data-nav="'+(t.nav?1:0)+'">'
       +'<div class="tile-head"><span class="tile-title">'+k.label+'</span><span class="tile-id">'+k.id+'</span></div>'
@@ -712,6 +717,7 @@ async function refrescar(){
   await cargarCajaChica();
   await cargarViajes();
   await cargarRadar();
+  await cargarFx();
   renderTiles();
 }
 async function cargarEmpresa(key){
