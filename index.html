@@ -153,6 +153,7 @@
   .big-sub{font-size:10px;color:var(--ink-dim);letter-spacing:.5px;margin-top:4px;}
   .center-num{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;}
   .kpi-empty{color:var(--ink-faint);font-size:13px;padding:60px 20px;text-align:center;grid-column:1/-1;border:1px dashed var(--panel-line);}
+  .kpi-aviso{grid-column:1/-1;background:rgba(245,165,36,0.08);border:1px solid var(--amber-dim);color:var(--amber);font-size:11px;line-height:1.4;padding:8px 12px;}
   @media (max-width:760px){
     .dash-layout{flex-direction:column;}
     .kpi-catalog{width:100%;flex:none;position:static;max-height:340px;}
@@ -391,6 +392,79 @@ async function cargarViajes(){
   }catch(e){ state.viajesPend = null; }
 }
 
+/* --- RADAR (endpoint de Fabri, GET /api/dashboard) ---------------------
+   Solo lectura. El token NO se guarda en el repo: vive en localStorage del
+   navegador de Omar (boton "Conectar RADAR"). Mapea cada empresa del switch
+   al empresa_id real de RADAR (OJO: honduras = Monhaco, nombre heredado). */
+const RADAR_API = "https://montasa-web.vercel.app/api/dashboard";
+const RADAR_EMPRESA = { montasa:"montasa", monhaco:"honduras", monhagro:"monhagro" };
+/* Token de RADAR. El usuario decidio dejarlo publico en el repo (dato interno,
+   sin capa de seguridad todavia). Si queda vacio, se usa el que Omar pegue con
+   el boton "Conectar RADAR" (localStorage). Pegar el token real aqui: */
+const RADAR_TOKEN = "";
+function radarToken(){ if(RADAR_TOKEN) return RADAR_TOKEN; try{ return (localStorage.getItem("dash_radar_token")||"").trim(); }catch(e){ return ""; } }
+async function cargarRadar(){
+  const tok = radarToken();
+  if(!tok){ state.radar = "no-token"; return; }
+  try{
+    const emp = RADAR_EMPRESA[activeCompany] || "hn";
+    const r = await fetch(RADAR_API + "?empresa=" + emp, { headers:{ Authorization:"Bearer "+tok }, cache:"no-store" });
+    if(r.status===401 || r.status===403){ state.radar = "bad-token"; return; }
+    if(!r.ok) throw new Error("HTTP " + r.status);
+    state.radar = await r.json();
+    console.log("[Dash] RADAR ok, empresa", emp, "| edad", state.radar.cache_edad_seg);
+  }catch(e){ console.error("[Dash] RADAR:", e.message); state.radar = "error"; }
+}
+
+/* helpers de formato (null = "no calculable", NO cero) */
+function usd(v){ return v==null ? null : "$"+Math.round(v).toLocaleString("en-US"); }
+function num(v){ return v==null ? null : Number(v).toLocaleString("es-HN"); }
+function pct(v){ return v==null ? null : (Math.round(v*10)/10)+"%"; }
+function BN(big, sub, color){ return '<div class="center-num"><div class="big-num"'+(color?' style="color:var('+color+')"':'')+'>'+(big==null?'—':big)+'</div><div class="big-sub">'+(sub||'')+'</div></div>'; }
+function ROWS(pairs){ return '<div style="display:flex;flex-direction:column;gap:9px;font-size:12px;justify-content:center;flex:1">'+pairs.map(p=>'<div style="display:flex;justify-content:space-between;gap:10px"><span style="color:var(--ink-dim)">'+p[0]+'</span><b>'+(p[1]==null?'—':p[1])+'</b></div>').join('')+'</div>'; }
+function LST(items){ return '<div style="display:flex;flex-direction:column;gap:6px;font-size:11px;overflow-y:auto;flex:1">'+items.map(it=>'<div style="display:flex;justify-content:space-between;gap:8px"><span style="color:var(--ink-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+it[0]+'</span><b style="white-space:nowrap">'+(it[1]==null?'—':it[1])+'</b></div>').join('')+'</div>'; }
+
+/* mapeo KPI -> JSON del contrato. Devuelve HTML del cuerpo, o null = sin dato. */
+const RADAR_MAP = {
+  "1.1": rd=>{ const f=rd.ventas&&rd.ventas.facturado; if(!f||f.mes==null) return null; return BN(usd(f.mes),"mes · hoy "+usd(f.hoy)+" · YTD "+usd(f.ytd)); },
+  "1.2": rd=>{ const m=rd.ventas&&rd.ventas.meta; if(!m||m.cumplimiento_pct==null) return null; return BN(pct(m.cumplimiento_pct),"cumplimiento · meta "+usd(m.meta_cargada_usd)); },
+  "1.3": rd=>{ const a=rd.ventas&&rd.ventas.por_vendedor; if(!a||!a.length) return null; return LST(a.slice().sort((x,y)=>(y.mes||0)-(x.mes||0)).slice(0,6).map(v=>[v.vendedor,usd(v.mes)])); },
+  "1.4": rd=>{ const a=rd.ventas&&rd.ventas.por_categoria; if(!a||!a.length) return null; return LST(a.slice().sort((x,y)=>(y.mes||0)-(x.mes||0)).map(c=>[c.categoria,usd(c.mes)])); },
+  "1.5": rd=>{ const t=rd.ventas&&rd.ventas.ticket_promedio; if(!t||t.mes==null) return null; return BN(usd(t.mes),"ticket promedio (mes)"); },
+  "1.6": rd=>{ const f=rd.ventas&&rd.ventas.facturado; if(!f||f.ytd_yoy_pct==null) return null; return BN((f.ytd_yoy_pct>0?"+":"")+pct(f.ytd_yoy_pct),"YTD "+usd(f.ytd)+" vs "+usd(f.ytd_anio_anterior), f.ytd_yoy_pct>=0?"--green":"--red"); },
+  "1.7": rd=>{ const f=rd.ventas&&rd.ventas.forecast; if(!f||f.estimado==null) return null; return ROWS([["Estimado",usd(f.estimado)],["Real",usd(f.real)],["Precisión",pct(f.precision_pct)]]); },
+  "2.1": rd=>{ const p=rd.pipeline&&rd.pipeline.abiertas; if(!p) return null; return BN(num(p.n),"abiertas · "+usd(p.valor)+" en pipeline"); },
+  "2.2": rd=>{ const a=rd.pipeline&&rd.pipeline.por_etapa; if(!a||!a.length) return null; return LST(a.map(e=>[e.etapa||e.nombre, num(e.n!=null?e.n:e.cantidad)])); },
+  "2.3": rd=>{ const p=rd.pipeline&&rd.pipeline.abiertas; if(!p||p.valor_ponderado==null) return null; return BN(usd(p.valor_ponderado),"valor ponderado del pipeline"); },
+  "2.4": rd=>{ const n=rd.pipeline&&rd.pipeline.nuevas; if(!n) return null; return ROWS([["Hoy",num(n.dia)],["Semana",num(n.semana)],["Mes",num(n.mes)]]); },
+  "2.5": rd=>{ const p=rd.pipeline; if(!p||p.win_rate_pct==null) return null; return BN(pct(p.win_rate_pct),"win rate · gan. "+num(p.ganadas_ytd)+" / perd. "+num(p.perdidas_ytd)); },
+  "2.6": rd=>{ const a=rd.pipeline&&rd.pipeline.razones_perdida; if(!a||!a.length) return null; return LST(a.map(r=>[r.razon||r.motivo, num(r.n!=null?r.n:r.cantidad)])); },
+  "2.7": rd=>{ const p=rd.pipeline; if(!p||p.estancadas_14d==null) return null; return BN(num(p.estancadas_14d),"estancadas +14d · bloqueadas "+num(p.bloqueadas),"--amber"); },
+  "2.8": rd=>{ const p=rd.pipeline; if(!p||p.cotizaciones_con_numero_sap==null) return null; return BN(num(p.cotizaciones_con_numero_sap),"cotizaciones con # SAP"); },
+  "2.9": rd=>{ const p=rd.pipeline; if(!p||p.ciclo_venta_dias==null) return null; return BN(num(p.ciclo_venta_dias),"días de ciclo de venta"); },
+  "3.1": rd=>{ const c=rd.cobros&&rd.cobros.cobrado; if(!c||c.mes==null) return null; return BN(usd(c.mes),"cobrado mes · recup. "+usd(c.recuperacion_mes)); },
+  "3.2": rd=>{ const c=rd.cobros&&rd.cobros.cartera; if(!c||c.total==null) return null; return BN(usd(c.total),"cartera · vencida "+usd(c.vencida)); },
+  "3.3": rd=>{ const a=rd.cobros&&rd.cobros.cartera&&rd.cobros.cartera.antiguedad; if(!a) return null; return ROWS([["1-30",usd(a.d1_30)],["31-60",usd(a.d31_60)],["61-90",usd(a.d61_90)],["90+",usd(a.d90_mas)]]); },
+  "3.4": rd=>{ const c=rd.cobros&&rd.cobros.cartera; if(!c||c.morosidad_pct==null) return null; return BN(pct(c.morosidad_pct),"morosidad", c.morosidad_pct>=20?"--red":(c.morosidad_pct>=10?"--amber":"--green")); },
+  "3.5": rd=>{ const a=rd.cobros&&rd.cobros.top_deudores; if(!a||!a.length) return null; return LST(a.slice(0,8).map(d=>[d.cliente||d.nombre||d.cliente_id, usd(d.saldo_usd!=null?d.saldo_usd:d.saldo)])); },
+  "3.6": rd=>{ const c=rd.cobros; if(!c||c.dso_dias==null) return null; return BN(num(c.dso_dias),"DSO (días de cobro)"); },
+  "3.7": rd=>{ const c=rd.cobros; if(!c||c.notas_credito==null) return null; const v=(typeof c.notas_credito==='object')?(c.notas_credito.saldo_usd!=null?c.notas_credito.saldo_usd:c.notas_credito.total_usd):c.notas_credito; return BN(usd(v),"notas de crédito"); },
+  "4.1": rd=>{ const c=rd.cashflow; if(!c||c.facturado_mes==null) return null; return ROWS([["Facturado mes",usd(c.facturado_mes)],["Cobrado mes",usd(c.cobrado_mes)],["Brecha",usd(c.brecha_mes)]]); },
+  "5.3": rd=>{ const f=rd.flota; if(!f||f.ingresos_renta_mes==null) return null; return BN(usd(f.ingresos_renta_mes),"ingresos por renta (mes)"); },
+  "6.3": rd=>{ const t=rd.taller; if(!t||t.equipos_en_reparacion==null) return null; return BN(num(t.equipos_en_reparacion),"equipos en reparación","--red"); },
+  "7.1": rd=>{ const v=rd.actividad&&rd.actividad.visitas; if(!v) return null; return ROWS([["Hoy",num(v.dia)],["Semana",num(v.semana)]]); },
+  "7.2": rd=>{ const a=rd.actividad&&rd.actividad.actividades; if(!a) return null; return ROWS([["Pendientes",num(a.pendientes)],["Vencidas",num(a.vencidas)]]); },
+  "7.3": rd=>{ const a=rd.actividad&&rd.actividad.alertas_abiertas; if(!a||a.total==null) return null; return BN(num(a.total),"alertas / seguimientos abiertos","--amber"); },
+  "7.4": rd=>{ const g=rd.actividad&&rd.actividad.giras_mes; if(!g) return null; return ROWS([["Giras",num(g.n)],["Km",num(g.km)],["Costo",usd(g.costo)]]); },
+  "8.1": rd=>{ const c=rd.clientes; if(!c||c.activos_6m==null) return null; return ROWS([["Activos 6m",num(c.activos_6m)],["Inactivos 6m",num(c.inactivos_6m)],["Con facturación",num(c.con_facturacion)]]); },
+  "8.2": rd=>{ const c=rd.clientes; if(!c||c.nuevos_mes==null) return null; return BN(num(c.nuevos_mes),"nuevos clientes (1a factura, mes)"); },
+  "8.4": rd=>{ const t=rd.clientes&&rd.clientes.tickets; if(!t) return null; return ROWS([["Abiertos",num(t.abiertos)],["Resueltos",num(t.resueltos)]]); },
+  "9.1": rd=>{ const a=rd.leads&&rd.leads.por_canal; if(!a||!a.length) return null; return LST(a.map(c=>[c.canal, num(c.n!=null?c.n:c.cantidad)])); },
+  "9.3": rd=>{ const l=rd.leads; if(!l||l.conversion_pct==null) return null; return BN(pct(l.conversion_pct),"conversión leads→oport. · "+num(l.convertidos_ytd)+" YTD"); },
+  "10.1": rd=>{ const a=rd.ventas&&rd.ventas.por_empresa; if(!a||!a.length) return null; return LST(a.map(e=>[e.nombre||e.empresa_id, usd(e.mes)])); },
+  "10.2": rd=>{ const t=rd.tipo_cambio; if(!t) return null; const arr=Array.isArray(t)?t:Object.values(t); if(!arr.length) return null; return LST(arr.map(x=>[(x.empresa_id||x.pais||"tasa"), (x.tasa!=null?x.tasa:"—")])); }
+};
+
 async function decidirCajaChica(id, decision, btns){
   btns.forEach(b => b.disabled = true);
   try{
@@ -491,7 +565,17 @@ function saveSel(){ try{ localStorage.setItem("dash_kpis", JSON.stringify([...se
 /* ===================== CUERPO DE CADA TILE ===================== */
 function pend(msg, big){ return '<div class="tile-pending"><div class="dash">'+(big||"—")+'</div><div>'+msg+'</div></div>'; }
 function tileBody(id, src){
-  if(src==="radar") return { nav:false, body: pend("Esperando RADAR — se llena leyendo la data de Fabri") };
+  if(src==="radar"){
+    const rd=state.radar;
+    if(rd==="no-token")  return { nav:false, body: pend("Sin conectar — usá 'Conectar RADAR' arriba","—") };
+    if(rd==="bad-token") return { nav:false, body: pend("Token RADAR inválido o expirado","!") };
+    if(rd==="error"||rd==null) return { nav:false, body: pend("No se pudo leer RADAR","—") };
+    const fn=RADAR_MAP[id];
+    if(!fn) return { nav:false, body: pend("RADAR aún no lo calcula") };
+    let out=null; try{ out=fn(rd); }catch(e){ out=null; }
+    if(out==null) return { nav:false, body: pend("Sin dato (no calculable)") };
+    return { nav:false, body: out };
+  }
   if(src==="gap")   return { nav:false, body: pend("No disponible aún (falta la fuente de datos)") };
   if(id==="5.1"){
     const f=computeFlota();
@@ -560,11 +644,17 @@ function renderCatalog(){
   });
 }
 function renderTiles(){
+  updateRadarBtn();
   const grid=document.getElementById("kpi-grid");
   const order=[];
   KPI_GROUPS.forEach(g=>g.items.forEach(([id,label,src])=>{ if(selected.has(id)) order.push({id,label,src}); }));
-  if(order.length===0){ grid.innerHTML='<div class="kpi-empty">Elegí indicadores en la lista de la izquierda para que aparezcan aquí.</div>'; return; }
-  grid.innerHTML=order.map(k=>{
+  let aviso="";
+  const rd=state.radar;
+  if(rd && typeof rd==="object" && Array.isArray(rd.avisos) && rd.avisos.length){
+    aviso='<div class="kpi-aviso">⚠ '+rd.avisos.map(a=> typeof a==="string"?a:(a.mensaje||a.texto||a.aviso||"")).filter(Boolean).join(" · ")+'</div>';
+  }
+  if(order.length===0){ grid.innerHTML=aviso+'<div class="kpi-empty">Elegí indicadores en la lista de la izquierda para que aparezcan aquí.</div>'; return; }
+  grid.innerHTML=aviso+order.map(k=>{
     const t=tileBody(k.id,k.src);
     return '<div class="tile '+k.src+(t.nav?' nav':'')+'" data-id="'+k.id+'" data-nav="'+(t.nav?1:0)+'">'
       +'<div class="tile-head"><span class="tile-title">'+k.label+'</span><span class="tile-id">'+k.id+'</span></div>'
@@ -607,6 +697,7 @@ async function refrescar(){
   }
   await cargarCajaChica();
   await cargarViajes();
+  await cargarRadar();
   renderTiles();
 }
 async function cargarEmpresa(key){
@@ -624,8 +715,33 @@ document.querySelectorAll(".company-pill").forEach(p=>{
 const clockEl=document.getElementById("clock");
 (function tick(){ clockEl.textContent=new Date().toLocaleTimeString("es-HN",{hour12:false}); setTimeout(tick,1000); })();
 
+/* boton "Conectar RADAR" (respaldo si RADAR_TOKEN queda vacio) */
+function setupRadarBtn(){
+  const line=document.querySelector(".status-line");
+  if(!line || document.getElementById("radar-btn")) return;
+  const b=document.createElement("button");
+  b.id="radar-btn"; b.textContent="Conectar RADAR";
+  b.style.cssText="background:transparent;border:1px solid var(--panel-line);color:var(--ink-dim);font:inherit;font-size:11px;letter-spacing:1px;padding:3px 10px;cursor:pointer;margin-left:12px";
+  b.addEventListener("click",()=>{
+    const t=prompt("Pegá el token de RADAR (Bearer). Se guarda solo en este navegador.", radarToken()||"");
+    if(t===null) return;
+    try{ localStorage.setItem("dash_radar_token", t.trim()); }catch(e){}
+    refrescar();
+  });
+  line.appendChild(b);
+}
+function updateRadarBtn(){
+  const b=document.getElementById("radar-btn"); if(!b) return;
+  const rd=state.radar;
+  if(rd==="no-token" || !radarToken()){ b.textContent="Conectar RADAR"; b.style.color="var(--ink-dim)"; b.style.borderColor="var(--panel-line)"; }
+  else if(rd==="bad-token"){ b.textContent="RADAR: token inválido"; b.style.color="var(--red)"; b.style.borderColor="var(--red)"; }
+  else if(rd==="error"||rd==null){ b.textContent="RADAR: error"; b.style.color="var(--red)"; b.style.borderColor="var(--red)"; }
+  else { b.textContent="RADAR ✓"+(rd.cache_edad_seg!=null?(" "+rd.cache_edad_seg+"s"):"")+(rd.degradado?" (degradado)":""); b.style.color="var(--green)"; b.style.borderColor="rgba(62,207,126,.4)"; }
+}
+
 /* arranque */
 renderCatalog();
+setupRadarBtn();
 cargarEmpresa("montasa");
 </script>
 </body>
