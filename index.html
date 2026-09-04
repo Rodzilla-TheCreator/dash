@@ -135,12 +135,16 @@
   .src.fb{color:var(--green);border-color:rgba(62,207,126,.4);}
   .src.radar{color:var(--blue);border-color:rgba(79,143,224,.4);}
   .src.gap{color:var(--ink-faint);}
+  .src.live{color:var(--green);border-color:rgba(62,207,126,.4);}
+  .src.fix{color:var(--red);border-color:var(--red);}
   .kpi-main{flex:1;min-width:0;}
   .kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:16px;}
   .tile{position:relative;background:var(--panel);border:1px solid var(--panel-line);padding:14px 14px 12px;min-height:158px;display:flex;flex-direction:column;overflow:hidden;min-width:0;}
   .tile::before{content:"";position:absolute;top:0;left:0;right:0;height:3px;background:var(--ink-faint);}
   .tile.fb::before{background:var(--green);}
   .tile.radar::before{background:var(--blue);}
+  .tile.live::before{background:var(--green);}
+  .tile.fix::before{background:var(--red);}
   .tile.nav{cursor:pointer;transition:transform .12s,border-color .12s,box-shadow .12s;}
   .tile.nav:hover{border-color:var(--amber-dim);transform:translateY(-2px);box-shadow:0 10px 22px rgba(0,0,0,.35);}
   .tile-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;border-bottom:1px solid var(--panel-line);padding-bottom:8px;margin-bottom:10px;}
@@ -422,6 +426,11 @@ async function cargarRadar(){
 function usd(v){ return v==null ? null : "$"+Math.round(v).toLocaleString("en-US"); }
 function num(v){ return v==null ? null : Number(v).toLocaleString("es-HN"); }
 function pct(v){ return v==null ? null : (Math.round(v*10)/10)+"%"; }
+/* FIX del dolar en el Dash: RADAR devuelve los montos de factura_lineas_sap
+   (categorias, ingresos de renta) en LEMPIRAS sin convertir (aviso factor ~23x).
+   Los corregimos aca dividiendo por el tipo de cambio del propio JSON, sin
+   tocar la app de Fabri. Solo aplica a esos campos; facturado/cobros ya son USD. */
+function fixUsd(v, rd){ if(v==null) return null; const t=rd&&rd.tipo_cambio&&rd.tipo_cambio.honduras&&rd.tipo_cambio.honduras.tasa; return t ? v/t : null; }
 function BN(big, sub, color){ return '<div class="center-num"><div class="big-num"'+(color?' style="color:var('+color+')"':'')+'>'+(big==null?'—':big)+'</div><div class="big-sub">'+(sub||'')+'</div></div>'; }
 function ROWS(pairs){ return '<div style="display:flex;flex-direction:column;gap:9px;font-size:12px;justify-content:center;flex:1">'+pairs.map(p=>'<div style="display:flex;justify-content:space-between;gap:10px"><span style="color:var(--ink-dim)">'+p[0]+'</span><b>'+(p[1]==null?'—':p[1])+'</b></div>').join('')+'</div>'; }
 function LST(items){ return '<div style="display:flex;flex-direction:column;gap:6px;font-size:11px;overflow-y:auto;flex:1">'+items.map(it=>'<div style="display:flex;justify-content:space-between;gap:8px"><span style="color:var(--ink-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+it[0]+'</span><b style="white-space:nowrap">'+(it[1]==null?'—':it[1])+'</b></div>').join('')+'</div>'; }
@@ -431,7 +440,7 @@ const RADAR_MAP = {
   "1.1": rd=>{ const f=rd.ventas&&rd.ventas.facturado; if(!f||f.mes==null) return null; return BN(usd(f.mes),"mes · hoy "+usd(f.hoy)+" · YTD "+usd(f.ytd)); },
   "1.2": rd=>{ const m=rd.ventas&&rd.ventas.meta; if(!m||m.cumplimiento_pct==null) return null; return BN(pct(m.cumplimiento_pct),"cumplimiento · meta "+usd(m.meta_cargada_usd)); },
   "1.3": rd=>{ const a=rd.ventas&&rd.ventas.por_vendedor; if(!a||!a.length) return null; return LST(a.slice().sort((x,y)=>(y.mes||0)-(x.mes||0)).slice(0,6).map(v=>[v.vendedor,usd(v.mes)])); },
-  "1.4": rd=>{ const a=rd.ventas&&rd.ventas.por_categoria; if(!a||!a.length) return null; return LST(a.slice().sort((x,y)=>(y.lineas_ytd||0)-(x.lineas_ytd||0)).map(c=>[c.categoria, num(c.lineas_ytd)+" ren."])); },
+  "1.4": rd=>{ const a=rd.ventas&&rd.ventas.por_categoria; if(!a||!a.length) return null; return LST(a.slice().sort((x,y)=>(y.lineas_ytd||0)-(x.lineas_ytd||0)).map(c=>{ const v=fixUsd(c.ytd,rd); return [c.categoria, v!=null ? usd(v) : (num(c.lineas_ytd)+" ren.")]; })); },
   "1.5": rd=>{ const t=rd.ventas&&rd.ventas.ticket_promedio; if(!t||t.mes==null) return null; return BN(usd(t.mes),"ticket promedio (mes)"); },
   "1.6": rd=>{ const f=rd.ventas&&rd.ventas.facturado; if(!f||f.ytd_yoy_pct==null) return null; return BN((f.ytd_yoy_pct>0?"+":"")+pct(f.ytd_yoy_pct),"YTD "+usd(f.ytd)+" vs "+usd(f.ytd_anio_anterior), f.ytd_yoy_pct>=0?"--green":"--red"); },
   "1.7": rd=>{ const f=rd.ventas&&rd.ventas.forecast; if(!f||f.estimado==null) return null; return ROWS([["Estimado",usd(f.estimado)],["Real",usd(f.real)],["Precisión",pct(f.precision_pct)]]); },
@@ -452,7 +461,7 @@ const RADAR_MAP = {
   "3.6": rd=>{ const c=rd.cobros; if(!c||c.dso_dias==null) return null; return BN(num(c.dso_dias),"DSO (días de cobro)"); },
   "3.7": rd=>{ const nc=rd.cobros&&rd.cobros.notas_credito; if(!nc||nc.saldo==null) return null; return BN(usd(nc.saldo),(nc.n!=null?nc.n+" ":"")+"notas de crédito (saldo)"); },
   "4.1": rd=>{ const c=rd.cashflow; if(!c||c.facturado_mes==null) return null; return ROWS([["Facturado mes",usd(c.facturado_mes)],["Cobrado mes",usd(c.cobrado_mes)],["Brecha",usd(c.brecha_mes)]]); },
-  "5.3": rd=>{ const f=rd.flota; if(!f||f.ingresos_renta_mes==null) return null; return BN(usd(f.ingresos_renta_mes),"ingresos por renta (mes)"); },
+  "5.3": rd=>{ const f=rd.flota; if(!f) return null; const v=fixUsd(f.ingresos_renta_mes,rd); if(v==null) return null; return BN(usd(v),"ingresos por renta (mes, USD)"); },
   "6.3": rd=>{ const t=rd.taller; if(!t||t.equipos_en_reparacion==null) return null; return BN(num(t.equipos_en_reparacion),"equipos en reparación","--red"); },
   "7.1": rd=>{ const v=rd.actividad&&rd.actividad.visitas; if(!v) return null; return ROWS([["Hoy",num(v.dia)],["Semana",num(v.semana)]]); },
   "7.2": rd=>{ const a=rd.actividad&&rd.actividad.actividades; if(!a) return null; return ROWS([["Pendientes",num(a.pendientes)],["Vencidas",num(a.vencidas)]]); },
@@ -467,6 +476,8 @@ const RADAR_MAP = {
   "10.2": rd=>{ const t=rd.tipo_cambio; if(!t) return null; const e=Object.entries(t); if(!e.length) return null; return LST(e.map(kv=>[kv[0], (kv[1]&&kv[1].tasa!=null?kv[1].tasa:"—")])); }
 };
 const NO_DISP = { "4.2":"cuentas_por_pagar","4.3":"cashflow_neto_proyectado","5.4":"contratos_renta_activos","5.5":"equipos_ociosos_dias","6.2":"ordenes_trabajo","6.4":"tiempo_promedio_reparacion","8.3":"nps","9.2":"costo_por_lead" };
+/* Los "fix" (rojo) son los que RADAR aun no puede calcular; el resto van "live". */
+const FIX_IDS = new Set(Object.keys(NO_DISP));
 
 async function decidirCajaChica(id, decision, btns){
   btns.forEach(b => b.disabled = true);
@@ -636,8 +647,8 @@ function renderCatalog(){
   const total=KPI_GROUPS.reduce((a,g)=>a+g.items.length,0);
   cat.innerHTML='<div class="cat-head"><span class="cat-title">Indicadores</span><span class="cat-count">'+selected.size+'/'+total+' activos</span></div>'
     + KPI_GROUPS.map(g=>'<div class="kpi-group"><h3>'+g.n+'. '+g.title+'</h3>'
-        + g.items.map(([id,label,src])=>'<label class="kpi-opt"><input type="checkbox" data-id="'+id+'"'+(selected.has(id)?' checked':'')+'>'
-            +'<span class="txt">'+id+' '+label+'</span><span class="src '+src+'">'+(src==="fb"?"live":src)+'</span></label>').join("")
+        + g.items.map(([id,label,src])=>{ const fix=FIX_IDS.has(id); return '<label class="kpi-opt"><input type="checkbox" data-id="'+id+'"'+(selected.has(id)?' checked':'')+'>'
+            +'<span class="txt">'+id+' '+label+'</span><span class="src '+(fix?"fix":"live")+'">'+(fix?"fix":"live")+'</span></label>'; }).join("")
       +'</div>').join("");
   cat.querySelectorAll('input[type=checkbox]').forEach(cb=>{
     cb.addEventListener("change",()=>{
@@ -659,7 +670,7 @@ function renderTiles(){
   if(order.length===0){ grid.innerHTML=aviso+'<div class="kpi-empty">Elegí indicadores en la lista de la izquierda para que aparezcan aquí.</div>'; return; }
   grid.innerHTML=aviso+order.map(k=>{
     const t=tileBody(k.id,k.src);
-    return '<div class="tile '+k.src+(t.nav?' nav':'')+'" data-id="'+k.id+'" data-nav="'+(t.nav?1:0)+'">'
+    return '<div class="tile '+(FIX_IDS.has(k.id)?"fix":"live")+(t.nav?' nav':'')+'" data-id="'+k.id+'" data-nav="'+(t.nav?1:0)+'">'
       +'<div class="tile-head"><span class="tile-title">'+k.label+'</span><span class="tile-id">'+k.id+'</span></div>'
       +'<div class="tile-body">'+t.body+'</div></div>';
   }).join("");
