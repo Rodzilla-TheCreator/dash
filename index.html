@@ -422,8 +422,9 @@ async function cargarRadar(){
   }catch(e){ console.error("[Dash] RADAR:", e.message); state.radar = "error"; }
 }
 
-/* Conversion live: HNL por USD desde una API publica. Si falla, fixUsd cae al
-   tipo_cambio (oficial, diario) que ya trae el JSON de RADAR. */
+/* Conversion live (SOLO respaldo): HNL por USD de una API publica. Normalmente
+   manda el tipo_cambio de RADAR (el mismo que usa Fabri); esto solo se usa si el
+   JSON no trae tipo_cambio, para no quedarnos sin conversion. */
 async function cargarFx(){
   try{
     const r=await fetch("https://open.er-api.com/v6/latest/USD",{cache:"no-store"});
@@ -438,9 +439,11 @@ function num(v){ return v==null ? null : Number(v).toLocaleString("es-HN"); }
 function pct(v){ return v==null ? null : (Math.round(v*10)/10)+"%"; }
 /* FIX del dolar en el Dash: RADAR devuelve los montos de factura_lineas_sap
    (categorias, ingresos de renta) en LEMPIRAS sin convertir (aviso factor ~23x).
-   Los corregimos aca dividiendo por el tipo de cambio del propio JSON, sin
-   tocar la app de Fabri. Solo aplica a esos campos; facturado/cobros ya son USD. */
-function fixUsd(v, rd){ if(v==null) return null; const t = state.fxHNL || (rd&&rd.tipo_cambio&&rd.tipo_cambio.honduras&&rd.tipo_cambio.honduras.tasa); return t ? v/t : null; }
+   Convertimos aca, SIN tocar la app de Fabri, usando el MISMO tipo de cambio que
+   usa Fabri (el que trae el JSON de RADAR, hoy 27) para no descuadrar numeros con
+   los de el; si por algo no viniera, caemos a la conversion live. Solo aplica a
+   esos campos; facturado/cobros ya son USD. */
+function fixUsd(v, rd){ if(v==null) return null; const t = (rd&&rd.tipo_cambio&&rd.tipo_cambio.honduras&&rd.tipo_cambio.honduras.tasa) || state.fxHNL; return t ? v/t : null; }
 function BN(big, sub, color){ return '<div class="center-num"><div class="big-num"'+(color?' style="color:var('+color+')"':'')+'>'+(big==null?'—':big)+'</div><div class="big-sub">'+(sub||'')+'</div></div>'; }
 function ROWS(pairs){ return '<div style="display:flex;flex-direction:column;gap:9px;font-size:12px;justify-content:center;flex:1">'+pairs.map(p=>'<div style="display:flex;justify-content:space-between;gap:10px"><span style="color:var(--ink-dim)">'+p[0]+'</span><b>'+(p[1]==null?'—':p[1])+'</b></div>').join('')+'</div>'; }
 function LST(items){ return '<div style="display:flex;flex-direction:column;gap:6px;font-size:11px;overflow-y:auto;flex:1">'+items.map(it=>'<div style="display:flex;justify-content:space-between;gap:8px"><span style="color:var(--ink-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+it[0]+'</span><b style="white-space:nowrap">'+(it[1]==null?'—':it[1])+'</b></div>').join('')+'</div>'; }
