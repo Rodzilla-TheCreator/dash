@@ -46,6 +46,11 @@
   .dot.off{background:var(--red);box-shadow:0 0 8px var(--red);animation:none;}
   @keyframes pulse{50%{opacity:0.35;}}
   #clock{color:var(--ink);font-weight:500;}
+  /* unico acceso al Mundo isometrico (/mundo). No cambia nada mas del dash. */
+  .mundo-link{background:transparent;border:1px solid var(--amber-dim);color:var(--amber);
+    font:inherit;font-size:11px;letter-spacing:1px;padding:3px 10px;margin-left:12px;
+    text-decoration:none;white-space:nowrap;}
+  .mundo-link:hover{background:var(--amber);color:#1a1a1a;border-color:var(--amber);}
   .company-switch{display:flex;width:max-content;margin:0 auto 26px;border:1px solid var(--panel-line);background:var(--panel);}
   .company-pill{background:transparent;border:0;border-right:1px solid var(--panel-line);color:var(--ink-dim);font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14px;letter-spacing:1.5px;text-transform:uppercase;padding:10px 26px;cursor:pointer;transition:background .15s,color .15s;}
   .company-pill:last-child{border-right:0;}
@@ -177,6 +182,7 @@
   </div>
   <div class="status-line">
     <span class="dot" id="conn-dot"></span> <span id="conn-txt">CONECTANDO…</span> &nbsp;·&nbsp; <span id="clock">--:--:--</span>
+    <a class="mundo-link" href="mundo/index.html" title="Ver la operación como un mundo isométrico">MUNDO ▸</a>
   </div>
 </header>
 

@@ -1,0 +1,1581 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Mundo Montasa</title>
+
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Mundo">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#17191a">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+  :root{
+    --bg:#17191a; --panel:#202325; --panel-line:#34383b;
+    --amber:#f5a524; --amber-dim:#a9741f; --green:#3ecf7e; --red:#e5534b; --blue:#4f8fe0;
+    --ink:#eae7e0; --ink-dim:#8b9096; --ink-faint:#565b5f;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{height:100%;overflow:hidden;}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:'IBM Plex Mono',monospace;
+    -webkit-font-smoothing:antialiased;
+    overscroll-behavior:none;
+  }
+  .display{font-family:'Barlow Condensed',sans-serif;}
+
+  /* ---------- canvas ---------- */
+  #world{position:fixed;inset:0;display:block;touch-action:none;cursor:grab;}
+  #world.drag{cursor:grabbing;}
+
+  /* ---------- barra superior ---------- */
+  #top{
+    position:fixed;left:0;right:0;top:0;z-index:5;
+    padding:calc(8px + env(safe-area-inset-top)) 10px 8px;
+    background:linear-gradient(180deg,rgba(23,25,26,0.94) 60%,rgba(23,25,26,0));
+    display:flex;flex-direction:column;gap:7px;pointer-events:none;
+  }
+  #top > *{pointer-events:auto;}
+  .toprow{display:flex;align-items:center;gap:8px;}
+  .back{
+    display:flex;align-items:center;justify-content:center;flex:0 0 auto;
+    width:30px;height:30px;border:1px solid var(--panel-line);background:var(--panel);
+    color:var(--ink-dim);text-decoration:none;font-size:15px;line-height:1;
+  }
+  .back:active{background:var(--amber);color:#1a1a1a;}
+  .title{font-weight:800;font-size:19px;letter-spacing:.6px;line-height:1;white-space:nowrap;}
+  .title small{display:block;font-family:'IBM Plex Mono',monospace;font-weight:400;
+    font-size:8.5px;letter-spacing:1.6px;color:var(--ink-dim);text-transform:uppercase;margin-top:3px;}
+  .status{margin-left:auto;display:flex;align-items:center;gap:6px;font-size:9.5px;
+    color:var(--ink-dim);letter-spacing:1px;white-space:nowrap;}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 7px var(--green);animation:pulse 2s ease-in-out infinite;}
+  .dot.off{background:var(--red);box-shadow:0 0 7px var(--red);animation:none;}
+  @keyframes pulse{50%{opacity:.35;}}
+
+  .pills{display:flex;border:1px solid var(--panel-line);background:var(--panel);width:max-content;}
+  .pill{background:transparent;border:0;border-right:1px solid var(--panel-line);color:var(--ink-dim);
+    font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:12px;letter-spacing:1.2px;
+    text-transform:uppercase;padding:6px 14px;cursor:pointer;}
+  .pill:last-child{border-right:0;}
+  .pill.active{background:var(--amber);color:#1a1a1a;}
+
+  /* ---------- navegador de zonas ---------- */
+  #zones{
+    position:fixed;left:0;right:0;bottom:0;z-index:5;
+    padding:8px 10px calc(8px + env(safe-area-inset-bottom));
+    background:linear-gradient(0deg,rgba(23,25,26,0.94) 55%,rgba(23,25,26,0));
+    display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;
+  }
+  #zones::-webkit-scrollbar{display:none;}
+  .zbtn{
+    flex:0 0 auto;background:var(--panel);border:1px solid var(--panel-line);color:var(--ink-dim);
+    font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:12px;letter-spacing:1.2px;
+    text-transform:uppercase;padding:7px 12px;cursor:pointer;display:flex;align-items:center;gap:6px;
+  }
+  .zbtn.active{border-color:var(--amber);color:var(--amber);}
+  .zbtn b{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:10px;color:var(--ink);}
+  .zbtn.alert b{color:var(--red);}
+
+  /* ---------- zoom ---------- */
+  #zoom{position:fixed;right:10px;bottom:calc(58px + env(safe-area-inset-bottom));z-index:5;
+    display:flex;flex-direction:column;gap:5px;}
+  #zoom button{width:32px;height:32px;background:var(--panel);border:1px solid var(--panel-line);
+    color:var(--ink-dim);font-size:16px;font-family:'Barlow Condensed',sans-serif;font-weight:700;cursor:pointer;}
+  #zoom button:active{border-color:var(--amber);color:var(--amber);}
+
+  /* ---------- ficha (bottom sheet) ---------- */
+  #sheet{
+    position:fixed;left:0;right:0;bottom:0;z-index:20;
+    background:var(--panel);border-top:2px solid var(--amber);
+    transform:translateY(105%);transition:transform .18s ease-out;
+    padding:14px 14px calc(14px + env(safe-area-inset-bottom));
+    max-height:62vh;overflow-y:auto;
+  }
+  #sheet.open{transform:translateY(0);}
+  #sheet h2{font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:800;
+    letter-spacing:.5px;line-height:1.05;padding-right:34px;}
+  #sheet .kicker{font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--amber);margin-bottom:4px;}
+  #sheet .close{position:absolute;top:10px;right:10px;width:28px;height:28px;background:transparent;
+    border:1px solid var(--panel-line);color:var(--ink-dim);font-size:14px;cursor:pointer;}
+  .rows{display:flex;flex-direction:column;gap:7px;margin-top:12px;font-size:12px;}
+  .rows > div{display:flex;justify-content:space-between;gap:12px;}
+  .rows span{color:var(--ink-dim);}
+  .rows b{text-align:right;word-break:break-word;}
+  .note{margin-top:12px;font-size:10.5px;line-height:1.5;color:var(--ink-dim);
+    border-left:2px solid var(--panel-line);padding-left:9px;}
+  .note.warn{border-color:var(--amber-dim);color:var(--amber);}
+  .acts{display:flex;gap:8px;margin-top:14px;}
+  .acts button{flex:1;padding:11px 8px;border:1px solid var(--panel-line);background:transparent;
+    color:var(--ink);font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14px;
+    letter-spacing:1.2px;text-transform:uppercase;cursor:pointer;}
+  .acts .ok{border-color:var(--green);color:var(--green);}
+  .acts .no{border-color:var(--red);color:var(--red);}
+  .acts button:disabled{opacity:.4;cursor:default;}
+  .lst{display:flex;flex-direction:column;gap:5px;margin-top:10px;font-size:11px;}
+  .lst > div{display:flex;justify-content:space-between;gap:10px;border-bottom:1px solid var(--panel-line);padding-bottom:4px;}
+  .lst i{font-style:normal;color:var(--ink-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+
+  /* ---------- toast ---------- */
+  #toast{position:fixed;left:50%;bottom:74px;transform:translate(-50%,14px);z-index:30;
+    background:var(--panel);border:1px solid var(--amber);color:var(--ink);
+    padding:9px 14px;font-size:11px;opacity:0;transition:opacity .2s,transform .2s;pointer-events:none;max-width:88vw;text-align:center;}
+  #toast.show{opacity:1;transform:translate(-50%,0);}
+
+  /* ---------- leyenda / arranque ---------- */
+  #hint{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:4;
+    color:var(--ink-faint);font-size:11px;letter-spacing:1.5px;text-transform:uppercase;text-align:center;}
+</style>
+</head>
+<body>
+
+<canvas id="world"></canvas>
+<div id="hint">Cargando el mundo…</div>
+
+<div id="top">
+  <div class="toprow">
+    <a class="back" href="../index.html" title="Volver al dash" aria-label="Volver al dash">&#8592;</a>
+    <div class="title display">MUNDO MONTASA<small id="zone-name">Cargando</small></div>
+    <div class="status"><span class="dot" id="conn-dot"></span><span id="conn-txt">CONECTANDO</span></div>
+  </div>
+  <div class="pills" role="tablist" aria-label="Seleccionar empresa">
+    <button class="pill active" data-company="montasa" role="tab" aria-selected="true">Montasa</button>
+    <button class="pill" data-company="monhaco" role="tab" aria-selected="false">Monhaco</button>
+    <button class="pill" data-company="monhagro" role="tab" aria-selected="false">Monhagro</button>
+  </div>
+</div>
+
+<div id="zoom">
+  <button id="zin" aria-label="Acercar">+</button>
+  <button id="zout" aria-label="Alejar">&#8722;</button>
+</div>
+
+<nav id="zones" aria-label="Zonas del mundo"></nav>
+
+<aside id="sheet" role="dialog" aria-modal="false" aria-live="polite">
+  <button class="close" id="sheet-close" aria-label="Cerrar">&#10005;</button>
+  <div id="sheet-body"></div>
+</aside>
+
+<div id="toast"></div>
+
+<script>
+"use strict";
+/* =====================================================================
+   1. CAPA DE DATOS
+   ---------------------------------------------------------------------
+   COPIA LITERAL de ../index.html (el dash). Cada pagina de este repo es
+   autocontenida (sin build, sin bundler, GitHub Pages), asi que la unica
+   forma de reusar estas reglas es duplicarlas. SI CAMBIAN EN ../index.html
+   HAY QUE CAMBIARLAS AQUI TAMBIEN — se actualizan juntas.
+   Bloques copiados: getJSON, NODO_EMPRESA, bucketEstado, primerCampo,
+   aFecha, aNumero, diasDesde, evaluarEquipo, CC_FB, CC_SEDES, fmtL,
+   RADAR_*, fixUsd, NO_DISP, KPI_GROUPS, decidirCajaChica.
+   ===================================================================== */
+
+const DB_BASE = "https://montasa-app-default-rtdb.firebaseio.com";
+async function getJSON(path){
+  const r = await fetch(DB_BASE + "/" + path + ".json", { cache: "no-store" });
+  if(!r.ok) throw new Error("HTTP " + r.status + " en " + path);
+  return await r.json();
+}
+
+/* Cada empresa es un nodo raiz distinto en la base. Monhagro aun no existe. */
+const NODO_EMPRESA = { montasa: "montasa", monhaco: "monhaco", monhagro: null };
+
+function bucketEstado(estadoRaw){
+  const e = (estadoRaw||"").toString().trim().toUpperCase();
+  if(e === "DISPONIBLE") return "disp";
+  if(e === "EN RENTA")   return "renta";
+  if(e === "MAL ESTADO") return "mant";
+  return "uso";
+}
+
+const INTERVALO_DIAS   = 90;
+const INTERVALO_HORAS  = 250;
+const UMBRAL_AMARILLO  = 0.75;   // 0.75 = amarillo ; 1.0+ = rojo
+
+const CAMPOS_HOROMETRO_ACT        = ["horometro","horometroActual","horas","horometer","hrs"];
+const CAMPOS_ULT_FECHA_EQUIPO     = ["ultimoMant","fechaUltimoMant","ultimoMantenimiento"];
+const CAMPOS_ULT_HOROMETRO_EQUIPO = ["horometroUltimoMant","horometroMant","hrsUltimoMant"];
+const NODOS_MANT           = ["preventivos","correctivos"];
+const CAMPOS_MANT_EQUIPOID = ["equipoId","equipoID","idEquipo"];
+const CAMPOS_FECHA         = ["fechaCompletado","fecha","fechaFin"];
+const CAMPOS_HOROMETRO_SNAP= ["horometro"];
+
+/* --- SONDEO DEL CLIENTE (zona CAMPO) ------------------------------------
+   El esquema de "equipos" NO esta confirmado en esta parte: no se pudo
+   abrir equipos.json desde el entorno donde se escribio este archivo.
+   Mismo patron que ya usa el dash con horometros y fechas: se prueban
+   varios nombres y gana el primero que traiga valor.
+   CUANDO SE CONFIRME EL CAMPO REAL, DEJAR SOLO ESE EN LA LISTA. */
+const CAMPOS_CLIENTE   = ["cliente","clienteNombre","clienteId","razonSocial","empresa"];
+const CAMPOS_UBICACION = ["ubicacion","sede","zona","proyecto","direccion"];
+
+function primerCampo(obj, posibles){
+  for(const k of posibles){ if(obj && obj[k] != null && obj[k] !== "") return obj[k]; }
+  return null;
+}
+function aFecha(v){
+  if(v == null) return null;
+  if(typeof v === "number") return new Date(v);
+  const d = new Date(v); return isNaN(d) ? null : d;
+}
+function aNumero(v){
+  if(v == null) return null;
+  const n = parseFloat(String(v).replace(/[^0-9.\-]/g,""));
+  return isNaN(n) ? null : n;
+}
+function diasDesde(fecha){ return (Date.now() - fecha.getTime()) / 86400000; }
+
+/* devuelve {codigo, urgencia, color, etiqueta} para un equipo */
+function evaluarEquipo(eq, ultimoDeHistorial){
+  const codigo = eq.codigo || eq.id || "?";
+  const horoAct = aNumero(primerCampo(eq, CAMPOS_HOROMETRO_ACT));
+  const fechaUlt = aFecha(primerCampo(eq, CAMPOS_ULT_FECHA_EQUIPO)) ||
+                   (ultimoDeHistorial ? ultimoDeHistorial.fecha : null);
+  const horoUlt  = aNumero(primerCampo(eq, CAMPOS_ULT_HOROMETRO_EQUIPO)) ??
+                   (ultimoDeHistorial ? ultimoDeHistorial.horometro : null);
+  let rT = null, etqT = null;
+  if(fechaUlt){
+    const d = diasDesde(fechaUlt);
+    rT = d / INTERVALO_DIAS;
+    etqT = (d >= INTERVALO_DIAS) ? ("+"+Math.round(d-INTERVALO_DIAS)+"d") : (Math.round(d)+"d");
+  }
+  let rH = null, etqH = null;
+  if(horoAct != null && horoUlt != null){
+    const h = horoAct - horoUlt;
+    rH = h / INTERVALO_HORAS;
+    etqH = (h >= INTERVALO_HORAS) ? ("+"+Math.round(h-INTERVALO_HORAS)+"h") : (Math.round(h)+"h");
+  }
+  let urgencia = null, etiqueta = "sin datos";
+  if(rT != null || rH != null){
+    if(rT == null){ urgencia = rH; etiqueta = etqH; }
+    else if(rH == null){ urgencia = rT; etiqueta = etqT; }
+    else if(rH >= rT){ urgencia = rH; etiqueta = etqH; }
+    else { urgencia = rT; etiqueta = etqT; }
+  }
+  let color = "nodata";
+  if(urgencia != null) color = urgencia >= 1 ? "crit" : (urgencia >= UMBRAL_AMARILLO ? "warn" : "ok");
+  return { codigo, urgencia, color, etiqueta };
+}
+
+/* --- Bitacora SGI (nodo aparte, sin empresa) --- */
+const CC_FB    = DB_BASE + "/bitacora";
+const CC_SEDES = { montasa: ["SPS"], monhaco: ["Choloma"], monhagro: [] };
+function fmtL(monto){
+  const n = aNumero(monto);
+  return n == null ? (monto==null?"—":String(monto))
+    : "L " + n.toLocaleString("es-HN",{minimumFractionDigits:2, maximumFractionDigits:2});
+}
+
+/* --- RADAR --- */
+const RADAR_API     = "https://montasa-web.vercel.app/api/dashboard";
+const RADAR_EMPRESA = { montasa:"hn", monhaco:"honduras", monhagro:"monhagro" };
+/* Token publico por decision del dueño (ver README y seccion 6 del spec). */
+const RADAR_TOKEN   = "CjXHIPSe6iJVnDQiF_yweLr7rJ3sQPdi";
+function radarToken(){ if(RADAR_TOKEN) return RADAR_TOKEN; try{ return (localStorage.getItem("dash_radar_token")||"").trim(); }catch(e){ return ""; } }
+function usd(v){ return v==null ? null : "$"+Math.round(v).toLocaleString("en-US")+" USD"; }
+function fixUsd(v, rd){
+  if(v==null) return null;
+  const t = (rd&&rd.tipo_cambio&&rd.tipo_cambio.honduras&&rd.tipo_cambio.honduras.tasa) || state.fxHNL;
+  return t ? v/t : null;
+}
+
+/* KPIs que RADAR todavia no calcula -> en la OFICINA se dibujan sin energia. */
+const NO_DISP = { "4.2":"cuentas_por_pagar","4.3":"cashflow_neto_proyectado","5.4":"contratos_renta_activos",
+                  "5.5":"equipos_ociosos_dias","6.2":"ordenes_trabajo","6.4":"tiempo_promedio_reparacion",
+                  "8.3":"nps","9.2":"costo_por_lead" };
+const FIX_IDS = new Set(Object.keys(NO_DISP));
+
+const KPI_GROUPS = [
+  { n:"1", title:"Ventas y facturación", items:[
+    ["1.1","Facturado hoy / semana / mes"],["1.2","Ventas vs meta del mes (%)"],
+    ["1.3","Ranking de vendedores"],["1.4","Ventas por categoría"],
+    ["1.5","Ticket promedio"],["1.6","Acumulado del año vs anterior"],
+    ["1.7","Proyección de cierre de mes"] ]},
+  { n:"2", title:"Pipeline / CRM", items:[
+    ["2.1","Oportunidades abiertas"],["2.2","Embudo por etapa"],
+    ["2.3","Valor ponderado del pipeline"],["2.4","Nuevos prospectos día/semana"],
+    ["2.5","Conversión y win rate"],["2.6","Razones de pérdida top"],
+    ["2.7","Oportunidades estancadas"],["2.8","Cotizaciones emitidas"],
+    ["2.9","Ciclo de venta promedio"] ]},
+  { n:"3", title:"Cobros / cartera", items:[
+    ["3.1","Cobrado hoy / semana / mes"],["3.2","Cuentas por cobrar (cartera)"],
+    ["3.3","Cartera vencida por antigüedad"],["3.4","% de morosidad"],
+    ["3.5","Top deudores"],["3.6","DSO (días de cobro)"],
+    ["3.7","Notas de crédito"] ]},
+  { n:"4", title:"Cashflow", items:[
+    ["4.1","Facturado vs cobrado"],["4.2","Cuentas por pagar"],
+    ["4.3","Cashflow neto proyectado"],["4.4","Caja chica pendiente"],
+    ["4.5","Viáticos pendientes"] ]},
+  { n:"5", title:"Rentas y flota", items:[
+    ["5.1","Flota: rentados / disp. / mant."],["5.2","Utilización de flota (%)"],
+    ["5.3","Ingresos por rentas del mes"],["5.4","Contratos por vencer"],
+    ["5.5","Equipos ociosos"] ]},
+  { n:"6", title:"Taller y mantenimiento", items:[
+    ["6.1","Mantenimientos vencidos / próximos"],["6.2","Órdenes de trabajo"],
+    ["6.3","Equipos caídos en taller"],["6.4","Tiempo prom. de reparación"] ]},
+  { n:"7", title:"Equipo comercial", items:[
+    ["7.1","Visitas de campo (semana)"],["7.2","Actividades vencidas"],
+    ["7.3","Seguimientos urgentes"],["7.4","Km / reembolsos (semana)"] ]},
+  { n:"8", title:"Clientes", items:[
+    ["8.1","Activos vs inactivos"],["8.2","Nuevos clientes del mes"],
+    ["8.3","Satisfacción / NPS"],["8.4","Tickets de soporte"] ]},
+  { n:"9", title:"Marketing / leads", items:[
+    ["9.1","Leads por canal"],["9.2","Inversión vs leads (costo/lead)"],
+    ["9.3","Conversión de leads"] ]},
+  { n:"10", title:"Multi-empresa y alertas", items:[
+    ["10.1","Corte Monhaco vs Montasa CR"],["10.2","Tipo de cambio HNL/CRC"],
+    ["10.3","Panel de semáforos"] ]}
+];
+const DEFAULT_SEL = ["5.1","5.2","6.1","4.4","4.5","10.3"];
+/* MISMA llave de localStorage que el dash: colgar/descolgar de la pared del
+   MUNDO cambia los tiles del DASH, y al reves. Es a proposito. */
+let selected = (function(){
+  try{ const s=JSON.parse(localStorage.getItem("dash_kpis")); if(Array.isArray(s)) return new Set(s); }catch(e){}
+  return new Set(DEFAULT_SEL);
+})();
+function saveSel(){ try{ localStorage.setItem("dash_kpis", JSON.stringify([...selected])); }catch(e){} }
+
+/* Como se dibuja cada grupo de KPIs en la OFICINA (spec 3.6). */
+const KPI_OBJETO = {
+  "1":{ kind:"cuadro",   zona:"pared" },   // Ventas          -> cuadros
+  "2":{ kind:"pizarra",  zona:"pared" },   // Pipeline        -> pizarras
+  "3":{ kind:"pizarra",  zona:"pared" },   // Cobros          -> pizarras
+  "4":{ kind:"carpeta",  zona:"escritorio" },
+  "5":{ kind:"cuadro",   zona:"pared" },
+  "6":{ kind:"cuadro",   zona:"pared" },
+  "7":{ kind:"corcho",   zona:"corcho" },  // Equipo comercial
+  "8":{ kind:"corcho",   zona:"corcho" },  // Clientes
+  "9":{ kind:"carpeta",  zona:"escritorio" },
+  "10":{ kind:"semaforo",zona:"techo" }
+};
+
+/* --- estados del flujo de aprobacion (spec 2 / 3.4) --- */
+const ESTACIONES = [
+  { id:"pend",  titulo:"ESCRITORIO",       sub:"Pendiente",       estados:["Pendiente de liquidar","Pendiente de rendir"] },
+  { id:"rev",   titulo:"BANDEJA REVISIÓN", sub:"Enviado a revisión", estados:["Enviado a revisión"] },
+  { id:"aprob", titulo:"GERENCIA",         sub:"Aprobado",        estados:["Aprobado por Gerencia"] },
+  { id:"liq",   titulo:"ARCHIVO",          sub:"Liquidado",       estados:["Liquidado"] },
+  { id:"rech",  titulo:"PAPELERA",         sub:"Rechazado",       estados:["Rechazado"] }
+];
+function estacionDe(estado){
+  const e = (estado||"").toString().trim();
+  for(const st of ESTACIONES) if(st.estados.includes(e)) return st.id;
+  return "pend";   // estado desconocido: se queda en el escritorio, no se inventa
+}
+
+/* ===================== ESTADO GLOBAL ===================== */
+let activeCompany = "montasa";
+const state = {
+  equipos:{}, preventivos:{}, correctivos:{},
+  caja:null, viajes:null, almacen:null,     // null = sin cargar, "error" = fallo
+  radar:null, fxHNL:null, conn:false,
+  stamp:0                                    // sube en cada refresco (invalida cache)
+};
+/* Cache de evaluarEquipo entre refrescos (spec 4: rendimiento). */
+const evalCache = new Map();
+function evalCached(eq, ultimo){
+  const k = state.stamp + "|" + (eq.id || eq.codigo);
+  let v = evalCache.get(k);
+  if(!v){ v = evaluarEquipo(eq, ultimo); evalCache.set(k, v); }
+  return v;
+}
+
+/* =====================================================================
+   2. CARGA (refresco cada 60 s, igual que el dash)
+   Degradacion honesta: si un nodo falla o viene vacio se marca "error" /
+   se deja vacio y el mundo lo dibuja apagado. NUNCA se inventa relleno.
+   ===================================================================== */
+async function cargarFlota(){
+  const nodo = NODO_EMPRESA[activeCompany];
+  state.equipos = {}; state.preventivos = {}; state.correctivos = {};
+  if(!nodo){ state.flotaErr = null; return; }        // monhagro: no existe el nodo
+  try{
+    const [eq, pv, cr] = await Promise.all([
+      getJSON(nodo + "/equipos"),
+      getJSON(nodo + "/preventivos").catch(()=>({})),
+      getJSON(nodo + "/correctivos").catch(()=>({}))
+    ]);
+    state.equipos     = eq || {};
+    state.preventivos = pv || {};
+    state.correctivos = cr || {};
+    state.flotaErr = null;
+  }catch(e){
+    console.error("[Mundo] flota:", e.message);
+    state.flotaErr = e.message;
+  }
+}
+async function cargarBitacora(key){
+  try{
+    const r = await fetch(CC_FB + "/" + key + ".json?_=" + Date.now(), { cache:"no-store" });
+    if(!r.ok) throw new Error("HTTP " + r.status);
+    const arr = await r.json();
+    return Array.isArray(arr) ? arr : [];
+  }catch(e){ console.error("[Mundo] " + key + ":", e.message); return "error"; }
+}
+async function cargarRadar(){
+  const tok = radarToken();
+  if(!tok){ state.radar = "no-token"; return; }
+  try{
+    const emp = RADAR_EMPRESA[activeCompany] || "hn";
+    const r = await fetch(RADAR_API + "?empresa=" + emp, { headers:{ Authorization:"Bearer "+tok }, cache:"no-store" });
+    if(r.status===401 || r.status===403){ state.radar = "bad-token"; return; }
+    if(!r.ok) throw new Error("HTTP " + r.status);
+    state.radar = await r.json();
+  }catch(e){ console.error("[Mundo] RADAR:", e.message); state.radar = "error"; }
+}
+async function cargarFx(){
+  try{
+    const r = await fetch("https://open.er-api.com/v6/latest/USD",{cache:"no-store"});
+    if(r.ok){ const j=await r.json(); if(j&&j.rates&&j.rates.HNL){ state.fxHNL=j.rates.HNL; return; } }
+  }catch(e){}
+  state.fxHNL = null;
+}
+
+/* =====================================================================
+   3. MOTOR ISOMETRICO (canvas 2D, pixel art, sin librerias)
+   Proyeccion 2:1 clasica: un tile mide 32 x 16 px a escala 1x.
+   Todo se dibuja en "unidades de mundo" (px a 1x) y el canvas se escala
+   por enteros con imageSmoothingEnabled=false, para que el pixel art no
+   se interpole nunca.
+   ===================================================================== */
+const TW = 32, TH = 16, HW = TW/2, HH = TH/2;
+function w2s(gx, gy){ return { x:(gx-gy)*HW, y:(gx+gy)*HH }; }
+
+const cv  = document.getElementById("world");
+const ctx = cv.getContext("2d");
+let CW = 0, CH = 0, DPR = 1;
+const cam = { x:0, y:0, scale:2, tx:null, ty:null };   // tx/ty = destino de la animacion
+
+function baseScale(){
+  const w = window.innerWidth;
+  if(w < 340) return 1;
+  if(w < 1100) return 2;
+  return 3;
+}
+function resize(){
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  CW = window.innerWidth; CH = window.innerHeight;
+  cv.width  = Math.round(CW * DPR);
+  cv.height = Math.round(CH * DPR);
+  cv.style.width = CW + "px"; cv.style.height = CH + "px";
+  ctx.imageSmoothingEnabled = false;
+}
+window.addEventListener("resize", ()=>{ resize(); dirty = true; });
+
+/* transform mundo -> pantalla (redondeado a pixel entero: nada borroso) */
+function applyCam(){
+  const s = cam.scale * DPR;
+  ctx.setTransform(s, 0, 0, s,
+    Math.round(-cam.x * s + cv.width/2),
+    Math.round(-cam.y * s + cv.height/2));
+  ctx.imageSmoothingEnabled = false;
+}
+function screenOf(wx, wy){
+  const s = cam.scale;
+  return { x:(wx - cam.x) * s + CW/2, y:(wy - cam.y) * s + CH/2 };
+}
+/* rectangulo del mundo visible ahora mismo (para no dibujar de mas) */
+function viewRect(){
+  const s = cam.scale, mw = CW/s/2, mh = CH/s/2;
+  return { x0:cam.x-mw-40, x1:cam.x+mw+40, y0:cam.y-mh-80, y1:cam.y+mh+60 };
+}
+
+/* --------- primitivas iso --------- */
+function shade(hex, f){
+  const n = parseInt(hex.slice(1),16);
+  let r = (n>>16)&255, g = (n>>8)&255, b = n&255;
+  r = Math.max(0,Math.min(255,Math.round(r*f)));
+  g = Math.max(0,Math.min(255,Math.round(g*f)));
+  b = Math.max(0,Math.min(255,Math.round(b*f)));
+  return "#" + ((1<<24)|(r<<16)|(g<<8)|b).toString(16).slice(1);
+}
+/* rombo (una losa de piso) */
+function tile(gx, gy, col, line){
+  const p = w2s(gx, gy);
+  ctx.beginPath();
+  ctx.moveTo(p.x, p.y);
+  ctx.lineTo(p.x+HW, p.y+HH);
+  ctx.lineTo(p.x, p.y+TH);
+  ctx.lineTo(p.x-HW, p.y+HH);
+  ctx.closePath();
+  ctx.fillStyle = col; ctx.fill();
+  if(line){ ctx.strokeStyle = line; ctx.lineWidth = 1; ctx.stroke(); }
+}
+/* piso rectangular de w x d tiles con origen (gx,gy) */
+function floor(gx, gy, w, d, col, line){
+  for(let j=0;j<d;j++) for(let i=0;i<w;i++) tile(gx+i, gy+j, col, line);
+}
+/* caja isometrica: huella w x d tiles, altura h en px de mundo */
+function isoBox(gx, gy, w, d, h, col, opt){
+  opt = opt || {};
+  const z0 = opt.z || 0, z1 = z0 + h;      // z0 = elevacion de la base (para apilar)
+  const A = w2s(gx, gy),        B = w2s(gx+w, gy);
+  const C = w2s(gx+w, gy+d),    D = w2s(gx, gy+d);
+  const top = opt.topCol || shade(col, opt.topF || 1.0);
+  const rgt = shade(col, opt.rgtF || 0.74);
+  const lft = shade(col, opt.lftF || 0.55);
+  // cara derecha (mira abajo-derecha)
+  ctx.beginPath();
+  ctx.moveTo(B.x, B.y-z1); ctx.lineTo(C.x, C.y-z1); ctx.lineTo(C.x, C.y-z0); ctx.lineTo(B.x, B.y-z0);
+  ctx.closePath(); ctx.fillStyle = rgt; ctx.fill();
+  // cara izquierda (mira abajo-izquierda)
+  ctx.beginPath();
+  ctx.moveTo(D.x, D.y-z1); ctx.lineTo(C.x, C.y-z1); ctx.lineTo(C.x, C.y-z0); ctx.lineTo(D.x, D.y-z0);
+  ctx.closePath(); ctx.fillStyle = lft; ctx.fill();
+  // tapa
+  ctx.beginPath();
+  ctx.moveTo(A.x, A.y-z1); ctx.lineTo(B.x, B.y-z1); ctx.lineTo(C.x, C.y-z1); ctx.lineTo(D.x, D.y-z1);
+  ctx.closePath(); ctx.fillStyle = top; ctx.fill();
+  if(opt.line){ ctx.strokeStyle = opt.line; ctx.lineWidth = 1; ctx.stroke(); }
+  return { A:A, B:B, C:C, D:D, h:h };
+}
+/* sombra ovalada bajo un objeto */
+function sombra(gx, gy, rx){
+  const p = w2s(gx, gy);
+  ctx.save();
+  ctx.globalAlpha = 0.30; ctx.fillStyle = "#000000";
+  ctx.beginPath(); ctx.ellipse(p.x, p.y+HH, rx, rx/2, 0, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+
+/* =====================================================================
+   4. SPRITES
+   Generados por codigo (rectangulos de 1 px sobre un canvas fuera de
+   pantalla) y cacheados. Cero binarios en el repo, cero peticiones.
+   ===================================================================== */
+const SPR = {};
+function makeSprite(key, w, h, ops){
+  if(SPR[key]) return SPR[key];
+  const c = document.createElement("canvas");
+  c.width = w; c.height = h;
+  const g = c.getContext("2d");
+  g.imageSmoothingEnabled = false;
+  for(const op of ops){ g.fillStyle = op[4]; g.fillRect(op[0], op[1], op[2], op[3]); }
+  SPR[key] = c; return c;
+}
+
+const C_OUT = "#101213", C_MAST = "#6d7276", C_MASTD = "#42464a",
+      C_TIRE = "#232628", C_FORK = "#9aa0a4", C_GLASS = "#4f8fe0", C_SEAT = "#2b2f31";
+
+/* Montacargas 24 x 22, mirando abajo-izquierda. body = color del chasis. */
+const FK_W = 24, FK_H = 22;
+function forklift(body){
+  const key = "fk_" + body;
+  const bd = shade(body, 0.74), bl = shade(body, 1.14);
+  return makeSprite(key, FK_W, FK_H, [
+    // mastil: dos rieles y el carro portahorquillas
+    [5,1,5,16,C_MASTD], [5,1,1,16,C_MAST], [9,1,1,16,C_MAST], [5,0,5,1,C_OUT],
+    [4,10,7,2,C_MAST],
+    // horquillas
+    [0,16,10,2,C_FORK], [0,15,2,4,C_FORK], [0,18,10,1,shade(C_FORK,0.6)],
+    // techo de proteccion
+    [12,0,11,2,C_OUT], [12,2,2,9,C_OUT], [21,2,2,9,C_OUT],
+    // asiento y respaldo
+    [14,4,7,7,C_SEAT], [14,4,7,2,C_GLASS],
+    // chasis
+    [10,11,13,7,bd], [10,11,13,2,bl], [10,17,13,1,C_OUT],
+    [20,10,3,8,shade(body,0.62)],                       // contrapeso
+    [10,11,1,7,C_OUT], [22,10,1,8,C_OUT],
+    // llantas
+    [10,17,5,4,C_TIRE], [11,18,3,2,shade(C_TIRE,2.1)],
+    [17,17,5,4,C_TIRE], [18,18,3,2,shade(C_TIRE,2.1)]
+  ]);
+}
+/* Hoja de papel 9 x 12, parada. tint = color del membrete. */
+function papel(tint){
+  const key = "pp_" + tint;
+  return makeSprite(key, 9, 12, [
+    [0,0,9,12,"#c9c6bd"], [0,0,9,1,C_OUT], [0,11,9,1,"#8d8a83"],
+    [0,0,1,12,"#e2dfd6"], [8,0,1,12,"#8d8a83"],
+    [2,2,5,1,tint], [2,4,5,1,"#7c7972"], [2,6,5,1,"#7c7972"], [2,8,3,1,"#7c7972"]
+  ]);
+}
+
+/* Barra de urgencia sobre un equipo (spec 3.1). */
+const COL_URG = { ok:"#3ecf7e", warn:"#f5a524", crit:"#e5534b", nodata:"#565b5f" };
+function barraUrgencia(px, py, ev){
+  const H = 22, W = 4;
+  const x = Math.round(px) - W/2, y = Math.round(py) - H;
+  ctx.fillStyle = "#101213";      ctx.fillRect(x-1, y-1, W+2, H+2);
+  ctx.fillStyle = "#2a2d2f";      ctx.fillRect(x, y, W, H);
+  if(ev.urgencia == null){
+    ctx.fillStyle = COL_URG.nodata;
+    ctx.fillRect(x, y+H-2, W, 2);
+    return;
+  }
+  const r = Math.min(ev.urgencia, 1);
+  const hh = Math.max(2, Math.round(H * r));
+  ctx.fillStyle = COL_URG[ev.color];
+  ctx.fillRect(x, y + H - hh, W, hh);
+  if(ev.urgencia >= 1){
+    /* pasado de vuelta: la barra SE SALE del marco, hacia arriba */
+    const extra = Math.min(10, Math.round(H * (ev.urgencia - 1)) + 3);
+    ctx.fillRect(x-1, y-1-extra, W+2, extra);
+  }
+}
+
+/* =====================================================================
+   5. EL MUNDO: zonas y armado de la escena
+   La escena se arma UNA VEZ por refresco de datos (no por frame). Cada
+   item guarda su profundidad (gx+gy) para el orden de pintado, y su caja
+   en pantalla para el tap.
+   ===================================================================== */
+const ZONAS = [
+  { id:"taller",  nombre:"TALLER",           x:0,  y:0,  w:12, d:10, piso:"#2a2d2f", linea:"#34383b" },
+  { id:"patio",   nombre:"PATIO",            x:16, y:0,  w:18, d:12, piso:"#25282a", linea:"#31353800" },
+  { id:"campo",   nombre:"CAMPO / CLIENTES", x:38, y:0,  w:22, d:13, piso:"#1f2426", linea:"#2a2f3100" },
+  { id:"oficina", nombre:"OFICINA",          x:0,  y:14, w:14, d:14, piso:"#2d3032", linea:"#3a3e41" },
+  { id:"conta",   nombre:"CONTABILIDAD",     x:18, y:16, w:24, d:11, piso:"#2b2e30", linea:"#3a3e41" },
+  { id:"bodega",  nombre:"BODEGA",           x:46, y:20, w:17, d:20, piso:"#282b2d", linea:"#35393c" }
+];
+const ZONA = {}; ZONAS.forEach(z => ZONA[z.id] = z);
+function centroZona(z){ const p = w2s(z.x + z.w/2, z.y + z.d/2); return p; }
+
+let scene = { items:[], labels:[] };
+let dirty = true;
+
+function push(gx, gy, draw, hit, tap){
+  scene.items.push({ d:gx+gy, gx:gx, gy:gy, draw:draw, hit:hit||null, tap:tap||null });
+}
+function label(wx, wy, text, o){
+  o = o || {};
+  scene.labels.push({ x:wx, y:wy, t:text, col:o.col||"#8b9096", size:o.size||9,
+                      w:o.w||"400", al:o.al||"center", fam:o.fam||"mono", box:o.box||false });
+}
+/* Punto de anclaje del rotulo: justo encima del vertice mas alto de la zona.
+   (en iso el centro de la zona NO esta encima del centro de la huella) */
+function anclaZona(z){
+  const c = centroZona(z);
+  return { x:c.x, y:c.y - (z.w + z.d) * HH / 2 - 58 };
+}
+function rotuloZona(z){
+  const a = anclaZona(z);
+  label(a.x, a.y, z.nombre, { col:"#f5a524", size:13, w:"800", fam:"disp", box:true });
+  return a;
+}
+
+/* --------- reparto en rejilla dentro de una zona --------- */
+function rejilla(n, cols, x0, y0, dx, dy){
+  const out = [];
+  for(let i=0;i<n;i++) out.push({ gx:x0 + (i%cols)*dx, gy:y0 + Math.floor(i/cols)*dy });
+  return out;
+}
+
+/* --------- un montacargas dibujable + tappable --------- */
+function ponerEquipo(gx, gy, eq, ev, opt){
+  opt = opt || {};
+  const body = opt.body || "#f5a524";
+  const fantasma = (ev && ev.color === "nodata");
+  const p = w2s(gx, gy);
+  const sx = Math.round(p.x - FK_W/2), sy = Math.round(p.y + HH - FK_H);
+  push(gx, gy, function(){
+    sombra(gx, gy, 11);
+    const img = forklift(fantasma ? "#4a4f52" : body);
+    if(fantasma){
+      /* HUECO DE DATOS: silueta translucida. Tiene que verse tan feo como
+         un equipo vencido (spec 3.1) — no es un gris discreto. */
+      ctx.save(); ctx.globalAlpha = 0.34; ctx.drawImage(img, sx, sy); ctx.restore();
+      ctx.save(); ctx.globalAlpha = 0.55; ctx.strokeStyle = COL_URG.nodata;
+      ctx.setLineDash([2,2]); ctx.lineWidth = 1;
+      ctx.strokeRect(sx-1.5, sy-1.5, FK_W+3, FK_H+3); ctx.restore();
+    }else{
+      ctx.drawImage(img, sx, sy);
+    }
+    if(opt.barra && ev) barraUrgencia(p.x, sy - 3, ev);
+  }, { x:sx-3, y:sy-30, w:FK_W+6, h:FK_H+34 }, function(){ fichaEquipo(eq, ev); });
+  if(opt.codigo !== false){
+    /* con barra el rotulo va ARRIBA de la barra, para que nunca la tape */
+    label(p.x, sy - (opt.barra ? 45 : 6), (ev && ev.codigo) || eq.codigo || eq.id || "?",
+      { size:8.5, col: fantasma ? "#565b5f" : "#8b9096" });
+  }
+}
+
+/* --------- ZONA 1: TALLER --------- */
+function zonaTaller(mant){
+  const z = ZONA.taller;
+  push(z.x, z.y, function(){
+    floor(z.x, z.y, z.w, z.d, z.piso, z.linea);
+    /* bahias: piso rayado y muro al fondo */
+    isoBox(z.x, z.y-0.4, z.w, 0.4, 26, "#31363a", { line:"#3f4448" });
+    isoBox(z.x-0.4, z.y, 0.4, z.d, 26, "#2b3033", { line:"#3f4448" });
+  });
+  rotuloZona(z);
+
+  if(!NODO_EMPRESA[activeCompany]){ enConstruccion(z, "Sin nodo de flota"); return; }
+  if(state.flotaErr){ zonaApagada(z, "No se pudo leer equipos"); return; }
+
+  const lista = mant.taller;
+  if(!lista.length){
+    label(centroZona(z).x, centroZona(z).y, "TALLER VACÍO", { col:"#3ecf7e", size:11, w:"700", fam:"disp" });
+    return;
+  }
+  /* el mas urgente primero, arriba a la izquierda */
+  const pos = rejilla(lista.length, 3, z.x+1.6, z.y+1.4, 3.4, 2.8);
+  lista.forEach(function(it, i){
+    const p = pos[i] || { gx:z.x+1.6, gy:z.y+1.4 + i*2.8 };
+    ponerEquipo(p.gx, p.gy, it.eq, it.ev, { barra:true, body:"#e5534b" });
+  });
+}
+
+/* --------- ZONA 2: PATIO --------- */
+function zonaPatio(mant){
+  const z = ZONA.patio;
+  push(z.x, z.y, function(){
+    floor(z.x, z.y, z.w, z.d, z.piso, null);
+    /* lineas de estacionamiento */
+    ctx.save(); ctx.globalAlpha = 0.35; ctx.strokeStyle = "#565b5f"; ctx.lineWidth = 1;
+    for(let j=0;j<=z.d;j+=3){
+      const a = w2s(z.x, z.y+j), b = w2s(z.x+z.w, z.y+j);
+      ctx.beginPath(); ctx.moveTo(a.x, a.y+HH); ctx.lineTo(b.x, b.y+HH); ctx.stroke();
+    }
+    ctx.restore();
+  });
+  rotuloZona(z);
+
+  if(!NODO_EMPRESA[activeCompany]){ enConstruccion(z, "Sin nodo de flota"); return; }
+  if(state.flotaErr){ zonaApagada(z, "No se pudo leer equipos"); return; }
+
+  const lista = mant.patio;
+  const c = centroZona(z);
+  if(!lista.length){
+    /* patio vacio = todo rentado. Es buena noticia y se dice como tal. */
+    label(c.x, c.y, "PATIO VACÍO", { col:"#3ecf7e", size:12, w:"800", fam:"disp" });
+    label(c.x, c.y+13, "todo el equipo está afuera", { col:"#8b9096", size:9 });
+    return;
+  }
+  const pos = rejilla(lista.length, 5, z.x+1.5, z.y+1.2, 3.2, 2.4);
+  lista.forEach(function(it, i){
+    const p = pos[i]; if(!p) return;
+    ponerEquipo(p.gx, p.gy, it.eq, it.ev, { body:"#3ecf7e" });
+  });
+  label(c.x, c.y + (z.w + z.d) * HH / 2 + 16, lista.length + " disponibles · " +
+        (mant.total ? Math.round(lista.length/mant.total*100) : 0) + "% de la flota parqueada",
+        { col:"#8b9096", size:9.5, box:true });
+}
+
+/* --------- ZONA 3: CAMPO / CLIENTES --------- */
+function zonaCampo(mant){
+  const z = ZONA.campo;
+  push(z.x, z.y, function(){
+    floor(z.x, z.y, z.w, z.d, z.piso, null);
+  });
+  rotuloZona(z);
+
+  if(!NODO_EMPRESA[activeCompany]){ enConstruccion(z, "Sin nodo de flota"); return; }
+  if(state.flotaErr){ zonaApagada(z, "No se pudo leer equipos"); return; }
+
+  const grupos = mant.campo;      // [{nombre, sondeado, items:[]}]
+  const c = centroZona(z);
+  if(!grupos.length){
+    label(c.x, c.y, "NADA EN RENTA", { col:"#565b5f", size:12, w:"800", fam:"disp" });
+    return;
+  }
+  /* bajo el rotulo de zona: los ingresos de renta del mes (RADAR, 5.3) */
+  const rd = state.radar;
+  let ing = null;
+  if(rd && typeof rd === "object" && rd.flota) ing = fixUsd(rd.flota.ingresos_renta_mes, rd);
+  const az = anclaZona(z);
+  label(az.x, az.y + 14,
+        ing != null ? ("renta del mes · " + usd(ing)) : "renta del mes · sin dato de RADAR",
+        { col: ing != null ? "#4f8fe0" : "#565b5f", size:9 });
+
+  /* un sitio de cliente por grupo: nave chica + sus equipos adentro */
+  let gy = z.y + 1.2, gx = z.x + 1.2, colH = 0;
+  grupos.forEach(function(g){
+    const filas = Math.ceil(g.items.length / 2);
+    const alto  = Math.max(3.2, 1.8 + filas * 2.2);
+    if(gy + alto > z.y + z.d - 0.5 && gx + 10 < z.x + z.w){ gx += 10.5; gy = z.y + 1.2; }
+    const ox = gx, oy = gy, ancho = 9;
+    const shedW = Math.min(ancho, 6);
+    push(ox, oy - 2.2, function(){
+      /* patio del cliente */
+      floor(ox, oy, ancho, alto, "#2a2f33", "#343a3e");
+      /* nave / galpon al fondo: gris, con canto azul (= sitio de cliente) */
+      isoBox(ox, oy - 2.2, shedW, 2.2, 20, "#343b40", { line:"#454e54", topCol:"#3d474d" });
+      isoBox(ox, oy - 0.45, shedW, 0.35, 3, "#4f8fe0", { z:20 });          // canto del techo
+      isoBox(ox + shedW*0.35, oy - 0.42, 1.3, 0.3, 13, "#22282c", { line:"#454e54" }); // porton
+    });
+    /* rotulo del sitio, justo encima del vertice mas alto de la nave */
+    const rc = { x: w2s(ox + shedW/2, oy - 1.1).x, y: w2s(ox, oy - 2.2).y - 36 };
+    label(rc.x, rc.y, g.nombre, { col:"#4f8fe0", size:11, w:"700", fam:"disp", box:true });
+    label(rc.x, rc.y + 12,
+          g.sondeado ? (g.items.length + (g.items.length === 1 ? " equipo" : " equipos"))
+                     : (g.items.length + " equipos · sin campo de cliente en la base"),
+          { col: g.sondeado ? "#8b9096" : "#565b5f", size:8.5, box:true });
+    g.items.forEach(function(it, i){
+      const px = ox + 2 + (i % 2) * 4.2, py = oy + 0.8 + Math.floor(i/2) * 2.2;
+      ponerEquipo(px, py, it.eq, it.ev, { body:"#4f8fe0" });
+    });
+    gy += alto + 1.6;
+    colH++;
+  });
+}
+
+/* --------- zonas sin datos: apagada / en construccion --------- */
+function zonaApagada(z, msg){
+  const c = centroZona(z);
+  label(c.x, c.y, msg, { col:"#e5534b", size:11, w:"700", fam:"disp" });
+  label(c.x, c.y+13, "sin datos — no se dibuja nada inventado", { col:"#565b5f", size:8.5 });
+}
+/* MONHAGRO: NODO_EMPRESA.monhagro === null. Andamios y sin techo (spec 3.7). */
+function enConstruccion(z, msg){
+  push(z.x, z.y, function(){
+    ctx.save(); ctx.globalAlpha = 0.72;
+    const cols = Math.max(2, Math.floor(z.w/4)), rows = Math.max(2, Math.floor(z.d/4));
+    for(let j=0;j<rows;j++) for(let i=0;i<cols;i++){
+      const bx = z.x + 1 + i*4, by = z.y + 1 + j*4;
+      isoBox(bx, by, 0.35, 0.35, 34, "#7a6a3a", { line:"#8f7c44" });
+      isoBox(bx+2.4, by, 0.35, 0.35, 34, "#7a6a3a", { line:"#8f7c44" });
+      isoBox(bx, by+2.4, 0.35, 0.35, 34, "#7a6a3a", { line:"#8f7c44" });
+      isoBox(bx, by, 3, 0.25, 5, "#8f7c44", { z:22 });
+      isoBox(bx, by, 0.25, 3, 5, "#8f7c44", { z:22 });
+    }
+    ctx.restore();
+  });
+  const c = centroZona(z);
+  label(c.x, c.y - 30, "EN CONSTRUCCIÓN", { col:"#f5a524", size:12, w:"800", fam:"disp", box:true });
+  label(c.x, c.y - 16, msg, { col:"#8b9096", size:9, box:true });
+}
+
+/* --------- ZONA 4: CONTABILIDAD (las cuatro estaciones + papelera) -----
+   Cada registro de data-cajachica / data-viajes es UNA HOJA parada en la
+   estacion que le toca segun su campo "estado". El papel no se mueve
+   porque una animacion lo diga: se mueve porque el registro cambio de
+   estado en Firebase (spec 2).
+   ----------------------------------------------------------------------- */
+const MESA = { pend:"#57606a", rev:"#f5a524", aprob:"#3ecf7e", liq:"#4f8fe0", rech:"#e5534b" };
+
+function zonaConta(papeles){
+  const z = ZONA.conta;
+  push(z.x, z.y, function(){
+    floor(z.x, z.y, z.w, z.d, z.piso, z.linea);
+    isoBox(z.x, z.y-0.4, z.w, 0.4, 24, "#33373a", { line:"#41464a" });
+  });
+  rotuloZona(z);
+
+  if(papeles.err){ zonaApagada(z, "No se pudo leer la bitácora"); return; }
+  if(papeles.sinSede){
+    const c = centroZona(z);
+    label(c.x, c.y, "SIN SEDE ASIGNADA", { col:"#565b5f", size:11, w:"700", fam:"disp" });
+    label(c.x, c.y+13, "esta empresa no tiene sede en caja chica", { col:"#565b5f", size:8.5 });
+    return;
+  }
+
+  ESTACIONES.forEach(function(st, i){
+    const esPapelera = (st.id === "rech");
+    const ex = esPapelera ? (z.x + 8.6) : (z.x + 1.4 + i*5.4);
+    const ey = esPapelera ? (z.y + 7.0) : (z.y + 1.6);
+    const items = papeles.por[st.id] || [];
+
+    push(ex, ey, function(){
+      /* mesa de trabajo: cuerpo gris, tapa con el color de la estacion */
+      isoBox(ex, ey, 3, 2.2, 14, "#3a3f43", { line:"#4a5054", topCol: shade(MESA[st.id], 0.34) });
+      if(esPapelera){ isoBox(ex+1.05, ey+0.65, 0.9, 0.9, 12, "#4a3230", { z:14, line:"#e5534b" }); }
+      /* flecha al siguiente puesto */
+      if(!esPapelera && i < 3){
+        const a = w2s(ex+3.3, ey+1.1), b = w2s(ex+5.2, ey+1.1);
+        ctx.strokeStyle = "#41464a"; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(a.x, a.y-8); ctx.lineTo(b.x, b.y-8); ctx.stroke();
+        ctx.fillStyle = "#41464a";
+        ctx.beginPath(); ctx.moveTo(b.x, b.y-8); ctx.lineTo(b.x-5, b.y-11); ctx.lineTo(b.x-5, b.y-5); ctx.fill();
+      }
+    });
+
+    /* rotulos: bien por encima de la mesa y de los papeles */
+    const cab = w2s(ex+1.5, ey+1.1);
+    const ctop = cab.y - (3 + 2.2) * HH / 2 - 46;
+    label(cab.x, ctop, st.titulo, { col: items.length ? "#eae7e0" : "#565b5f",
+          size:11, w:"700", fam:"disp", box:true });
+    label(cab.x, ctop + 12, st.sub + " · " + items.length,
+          { col: items.length ? MESA[st.id] : "#565b5f", size:8.5, box:true });
+
+    /* las hojas: hasta 8 visibles, el resto se cuenta (nunca se inventan) */
+    const vis = items.slice(0, 8);
+    vis.forEach(function(r, k){
+      const px = ex + 0.35 + (k % 4) * 0.72, py = ey + 0.4 + Math.floor(k/4) * 0.85;
+      const p  = w2s(px, py);
+      const sx = Math.round(p.x - 4), sy = Math.round(p.y + HH - 26);
+      push(px, py, function(){
+        /* si este registro acaba de cambiar de estado, entra deslizandose
+           hacia su nueva estacion (el movimiento lo manda el dato, no el reloj) */
+        const a = animOf(r.id);
+        const img = papel(r._viaje ? "#4f8fe0" : MESA[st.id]);
+        if(a){ ctx.save(); ctx.globalAlpha = Math.max(0.25, 1 - a/40); }
+        ctx.drawImage(img, sx - Math.round(a * 1.6), sy - Math.round(a * 0.5));
+        if(a) ctx.restore();
+      }, { x:sx-4, y:sy-4, w:17, h:20 }, function(){ fichaPapel(r, st); });
+    });
+    const cbot = cab.y + (3 + 2.2) * HH / 2 - 2;
+    if(items.length > vis.length){
+      label(cab.x, cbot, "+" + (items.length - vis.length) + " más", { col:"#8b9096", size:8, box:true });
+    }
+    const suma = items.reduce(function(a,r){ return a + (aNumero(r.monto) || 0); }, 0);
+    if(items.length) label(cab.x, cbot + 12, fmtL(suma), { col:"#8b9096", size:8.5, box:true });
+  });
+}
+
+/* --------- ZONA 5: BODEGA --------- */
+function zonaBodega(bod){
+  const z = ZONA.bodega;
+  push(z.x, z.y, function(){
+    floor(z.x, z.y, z.w, z.d, z.piso, z.linea);
+    isoBox(z.x, z.y-0.4, z.w, 0.4, 28, "#32363a", { line:"#41464a" });
+  });
+  rotuloZona(z);
+
+  if(bod.err){ zonaApagada(z, "No se pudo leer data-almacen"); return; }
+  if(!bod.sedes.length){
+    const c = centroZona(z);
+    label(c.x, c.y, "BODEGA VACÍA", { col:"#565b5f", size:11, w:"700", fam:"disp" });
+    return;
+  }
+  let oy = z.y + 1.4;
+  bod.sedes.forEach(function(sd){
+    /* rotulo justo encima del vertice mas alto del bloque de esta sede */
+    const cab = { x: w2s(z.x + 1 + (3*4.6)/2, oy + 0.6 + 2.15).x,
+                  y: w2s(z.x + 1, oy + 0.6).y };
+    const cy  = cab.y - 34;
+    label(cab.x, cy, "SEDE " + sd.sede.toUpperCase(),
+          { col:"#f5a524", size:11, w:"700", fam:"disp", box:true });
+    label(cab.x, cy + 12, "semana: +" + sd.entSem + " entradas / -" + sd.salSem + " salidas",
+          { col:"#8b9096", size:8.5, box:true });
+
+    sd.productos.slice(0, 6).forEach(function(pr, i){
+      const bx = z.x + 1 + (i % 3) * 4.6, by = oy + 0.6 + Math.floor(i/3) * 3.0;
+      push(bx, by, function(){
+        /* estanteria: dos parales y dos entrepaños */
+        isoBox(bx,       by, 0.22, 1.3, 40, "#5b5045", { line:"#6b5e50" });
+        isoBox(bx + 3.2, by, 0.22, 1.3, 40, "#5b5045", { line:"#6b5e50" });
+        isoBox(bx, by, 3.42, 1.3, 2, "#4a4038", { z:2,  line:"#6b5e50" });
+        isoBox(bx, by, 3.42, 1.3, 2, "#4a4038", { z:20, line:"#6b5e50" });
+        /* cajas = existencia neta (entradas - salidas). Tope visual 6:
+           el numero exacto va en el rotulo, la pila no miente por encima. */
+        const n = Math.max(0, Math.min(6, Math.round(pr.neto)));
+        const col = pr.neto > 0 ? "#a9741f" : "#57606a";
+        for(let k=0;k<n;k++){
+          const nivel = (k < 3 ? 22 : 4);
+          isoBox(bx + 0.35 + (k % 3) * 1.0, by + 0.25, 0.85, 0.85, 11, col,
+                 { z:nivel, line:"#101213" });
+        }
+        if(n === 0){
+          /* sin existencia: hueco marcado, no una caja inventada */
+          const p = w2s(bx + 1.7, by + 0.65);
+          ctx.save(); ctx.globalAlpha = 0.55; ctx.strokeStyle = "#e5534b";
+          ctx.lineWidth = 1; ctx.setLineDash([2,2]);
+          ctx.strokeRect(Math.round(p.x-9), Math.round(p.y-30), 18, 13); ctx.restore();
+        }
+      }, null, null);
+      const lp = w2s(bx + 1.7, by + 0.65);
+      label(lp.x, lp.y - 58, pr.producto.slice(0, 18), { col:"#eae7e0", size:8.5, box:true });
+      label(lp.x, lp.y - 47, (pr.neto >= 0 ? "+" : "") + pr.neto + " " + (pr.unidad || ""),
+            { col: pr.neto > 0 ? "#3ecf7e" : (pr.neto < 0 ? "#e5534b" : "#565b5f"), size:8.5, box:true });
+    });
+    oy += 8.6;
+  });
+}
+
+/* --------- ZONA 6: OFICINA (el catalogo de KPIs como objetos) ---------
+   Tocar un objeto lo cuelga o lo descuelga de la pared. Escribe en la
+   MISMA llave de localStorage que usa el dash ("dash_kpis"), asi que
+   decidir aca cambia los tiles de alla.
+   ----------------------------------------------------------------------- */
+const KIND_COL = { cuadro:"#4f8fe0", pizarra:"#3ecf7e", carpeta:"#a9741f",
+                   corcho:"#8a6a44", semaforo:"#f5a524" };
+
+function zonaOficina(){
+  const z = ZONA.oficina;
+  push(z.x, z.y, function(){
+    floor(z.x, z.y, z.w, z.d, z.piso, z.linea);
+    /* dos paredes al fondo */
+    isoBox(z.x, z.y-0.4, z.w, 0.4, 46, "#383c40", { line:"#454a4e" });
+    isoBox(z.x-0.4, z.y, 0.4, z.d, 46, "#31363a", { line:"#454a4e" });
+    /* escritorio */
+    isoBox(z.x+8.5, z.y+9, 4, 2.4, 16, "#4a4038", { line:"#5b5045" });
+  });
+  rotuloZona(z);
+
+  const todos = [];
+  KPI_GROUPS.forEach(function(g){
+    g.items.forEach(function(it){ todos.push({ id:it[0], label:it[1], grupo:g.n, gTitle:g.title }); });
+  });
+  todos.forEach(function(k, i){
+    const meta = KPI_OBJETO[k.grupo] || { kind:"cuadro" };
+    const gx = z.x + 0.9 + (i % 6) * 2.15;
+    const gy = z.y + 0.9 + Math.floor(i / 6) * 1.35;
+    const fix = FIX_IDS.has(k.id);
+    const on  = selected.has(k.id);
+    const p   = w2s(gx, gy);
+    const sx  = Math.round(p.x - 9), sy = Math.round(p.y + HH - 34);
+    push(gx, gy, function(){
+      objetoKpi(sx, sy, meta.kind, fix, on);
+    }, { x:sx-3, y:sy-3, w:24, h:26 }, function(){ fichaKpi(k, meta, fix); });
+    label(p.x, sy - 4, k.id, { size:7.5, col: fix ? "#565b5f" : (on ? "#f5a524" : "#565b5f") });
+  });
+
+  const c = centroZona(z);
+  const yBajo = c.y + (z.w + z.d) * HH / 2 + 16;
+  label(c.x, yBajo,
+        selected.size + " de " + todos.length + " colgados · " + FIX_IDS.size + " sin energía",
+        { col:"#8b9096", size:9.5, box:true });
+  label(c.x, yBajo + 13,
+        "tocá un objeto para colgarlo o descolgarlo", { col:"#565b5f", size:8.5, box:true });
+}
+
+/* Un objeto de la oficina. fix = RADAR aun no lo calcula -> SIN ENERGIA:
+   monitor apagado, foco fundido, marco vacio (spec 3.6). */
+function objetoKpi(sx, sy, kind, fix, on){
+  const base = KIND_COL[kind] || "#4f8fe0";
+  const col  = fix ? "#3a3e41" : (on ? base : shade(base, 0.42));
+  const ink  = fix ? "#2a2d2f" : (on ? "#eae7e0" : "#4a4f52");
+  ctx.save();
+  if(!on && !fix) ctx.globalAlpha = 0.55;
+  if(kind === "cuadro" || kind === "pizarra"){
+    ctx.fillStyle = "#101213"; ctx.fillRect(sx, sy, 18, 14);
+    ctx.fillStyle = col;       ctx.fillRect(sx+1, sy+1, 16, 12);
+    if(!fix){ ctx.fillStyle = ink; ctx.fillRect(sx+3, sy+9, 12, 1); ctx.fillRect(sx+3, sy+6, 8, 1); }
+  }else if(kind === "carpeta"){
+    ctx.fillStyle = "#101213"; ctx.fillRect(sx+1, sy+4, 16, 10);
+    ctx.fillStyle = col;       ctx.fillRect(sx+2, sy+5, 14, 8);
+    ctx.fillStyle = shade(col, 1.2); ctx.fillRect(sx+2, sy+3, 6, 2);
+  }else if(kind === "corcho"){
+    ctx.fillStyle = "#101213"; ctx.fillRect(sx, sy+1, 18, 13);
+    ctx.fillStyle = "#8a6a44"; ctx.fillRect(sx+1, sy+2, 16, 11);
+    ctx.fillStyle = fix ? "#4a4038" : (on ? "#c9c6bd" : "#6b675f");
+    ctx.fillRect(sx+3, sy+4, 5, 6); ctx.fillRect(sx+10, sy+5, 5, 6);
+  }else{ /* semaforo colgado del techo */
+    ctx.fillStyle = "#3a3e41"; ctx.fillRect(sx+8, sy-6, 1, 7);
+    ctx.fillStyle = "#101213"; ctx.fillRect(sx+4, sy+1, 9, 15);
+    ctx.fillStyle = fix ? "#2a2d2f" : (on ? "#e5534b" : "#4a2e2c"); ctx.fillRect(sx+6, sy+3, 5, 3);
+    ctx.fillStyle = fix ? "#2a2d2f" : (on ? "#f5a524" : "#4a3c22"); ctx.fillRect(sx+6, sy+7, 5, 3);
+    ctx.fillStyle = fix ? "#2a2d2f" : (on ? "#3ecf7e" : "#254a35"); ctx.fillRect(sx+6, sy+11, 5, 3);
+  }
+  ctx.restore();
+  if(fix){
+    /* cable cortado: cruz roja apagada, para que el hueco se vea */
+    ctx.save(); ctx.globalAlpha = 0.5; ctx.strokeStyle = "#e5534b"; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(sx+2, sy+2); ctx.lineTo(sx+16, sy+13); ctx.stroke(); ctx.restore();
+  }
+}
+
+/* =====================================================================
+   6. DE LOS DATOS A LA ESCENA
+   ===================================================================== */
+function computeFlotaMundo(){
+  const equipos = state.equipos || {};
+  const ultimo = {};
+  NODOS_MANT.forEach(function(nodo){
+    const registros = state[nodo];
+    if(!registros) return;
+    Object.values(registros).forEach(function(r){
+      if(r.completado === false) return;
+      const eqid = primerCampo(r, CAMPOS_MANT_EQUIPOID);
+      const f    = aFecha(primerCampo(r, CAMPOS_FECHA));
+      if(!eqid || !f) return;
+      const snap = aNumero(primerCampo(r, CAMPOS_HOROMETRO_SNAP));
+      if(!ultimo[eqid] || f > ultimo[eqid].fecha) ultimo[eqid] = { fecha:f, horometro:snap };
+    });
+  });
+
+  const taller = [], patio = [], otros = [], renta = [];
+  Object.values(equipos).forEach(function(eq){
+    const ev = evalCached(eq, ultimo[eq.id] || null);
+    const b  = bucketEstado(eq.estado);
+    const it = { eq:eq, ev:ev, bucket:b };
+    if(b === "mant")       taller.push(it);
+    else if(b === "disp")  patio.push(it);
+    else if(b === "renta") renta.push(it);
+    else                   otros.push(it);
+  });
+  /* mismo orden que el dash: con datos por urgencia, los sin datos al final */
+  function ordenar(a){
+    const con = a.filter(x=>x.ev.urgencia != null).sort((x,y)=> y.ev.urgencia - x.ev.urgencia);
+    const sin = a.filter(x=>x.ev.urgencia == null);
+    return con.concat(sin);
+  }
+
+  /* --- agrupacion por cliente (SONDEO, ver CAMPOS_CLIENTE arriba) --- */
+  const mapa = new Map();
+  let sondeado = false;
+  renta.forEach(function(it){
+    let nom = primerCampo(it.eq, CAMPOS_CLIENTE);
+    if(nom != null){ sondeado = true; }
+    else nom = primerCampo(it.eq, CAMPOS_UBICACION);
+    const key = (nom == null || nom === "") ? "EN CLIENTE" : String(nom).trim().toUpperCase();
+    if(!mapa.has(key)) mapa.set(key, []);
+    mapa.get(key).push(it);
+  });
+  const campo = [...mapa.entries()]
+    .sort(function(a,b){ return b[1].length - a[1].length; })
+    .map(function(e){ return { nombre:e[0], sondeado:sondeado, items:ordenar(e[1]) }; });
+
+  return {
+    taller: ordenar(taller), patio: ordenar(patio), otros: ordenar(otros), campo: campo,
+    total: taller.length + patio.length + otros.length + renta.length,
+    renta: renta.length
+  };
+}
+
+function computePapeles(){
+  const sedes = CC_SEDES[activeCompany] || [];
+  const out = { por:{}, err:false, sinSede:false, total:0 };
+  ESTACIONES.forEach(function(st){ out.por[st.id] = []; });
+  if(state.caja === "error" || state.viajes === "error"){ out.err = true; return out; }
+  if(!sedes.length){ out.sinSede = true; return out; }
+
+  (Array.isArray(state.caja) ? state.caja : []).forEach(function(r){
+    if(!sedes.includes(r.sede)) return;
+    out.por[estacionDe(r.estado)].push(r);
+    out.total++;
+  });
+  /* data-viajes no tiene sede: es global de la bitacora. Se marca como
+     viatico (_viaje) y solo se muestra si la empresa tiene sede activa. */
+  (Array.isArray(state.viajes) ? state.viajes : []).forEach(function(r){
+    const c = Object.assign({}, r); c._viaje = true;
+    out.por[estacionDe(r.estado)].push(c);
+    out.total++;
+  });
+  ESTACIONES.forEach(function(st){
+    out.por[st.id].sort(function(a,b){ return String(b.fecha||"").localeCompare(String(a.fecha||"")); });
+  });
+  return out;
+}
+
+function computeBodega(){
+  const out = { sedes:[], err:false };
+  if(state.almacen === "error"){ out.err = true; return out; }
+  const arr = Array.isArray(state.almacen) ? state.almacen : [];
+  const hace7 = Date.now() - 7*86400000;
+  const porSede = new Map();
+  arr.forEach(function(r){
+    const sd = r.sede || "General";
+    if(!porSede.has(sd)) porSede.set(sd, { sede:sd, prod:new Map(), entSem:0, salSem:0 });
+    const s = porSede.get(sd);
+    const q = aNumero(r.cantidad) || 0;
+    const esEntrada = String(r.tipo||"").trim().toLowerCase() === "entrada";
+    const key = String(r.producto || "—").trim();
+    if(!s.prod.has(key)) s.prod.set(key, { producto:key, neto:0, unidad:r.unidad||"" , mov:0 });
+    const p = s.prod.get(key);
+    p.neto += esEntrada ? q : -q;
+    p.mov++;
+    const f = aFecha(r.fecha);
+    if(f && f.getTime() >= hace7){ if(esEntrada) s.entSem += q; else s.salSem += q; }
+  });
+  out.sedes = [...porSede.values()].map(function(s){
+    return { sede:s.sede, entSem:s.entSem, salSem:s.salSem,
+             productos:[...s.prod.values()].sort(function(a,b){ return b.mov - a.mov; }) };
+  }).sort(function(a,b){ return a.sede.localeCompare(b.sede); });
+  return out;
+}
+
+function buildScene(){
+  scene = { items:[], labels:[] };
+  const flota   = computeFlotaMundo();
+  const papeles = computePapeles();
+  const bodega  = computeBodega();
+  lastFlota = flota; lastPapeles = papeles;
+
+  zonaTaller(flota);
+  zonaPatio(flota);
+  zonaCampo(flota);
+  zonaOficina();
+  zonaConta(papeles);
+  zonaBodega(bodega);
+
+  /* "Otros / interno": no tienen zona propia en el spec, pero tampoco
+     pueden desaparecer. Van al fondo del patio, en ambar. */
+  if(flota.otros && flota.otros.length && NODO_EMPRESA[activeCompany] && !state.flotaErr){
+    const z = ZONA.patio;
+    const y0 = z.y + z.d - 2.2;
+    flota.otros.slice(0, 10).forEach(function(it, i){
+      ponerEquipo(z.x + 1.5 + (i%5)*3.2, y0 + Math.floor(i/5)*1.9, it.eq, it.ev, { body:"#a9741f" });
+    });
+    label(w2s(z.x + z.w/2, y0).x, w2s(z.x + z.w/2, y0).y - 46,
+          "OTROS / INTERNO · " + flota.otros.length,
+          { col:"#a9741f", size:10, w:"700", fam:"disp", box:true });
+  }
+
+  scene.items.sort(function(a,b){ return a.d - b.d; });
+  renderZoneNav(flota, papeles, bodega);
+  dirty = true;
+}
+let lastFlota = null, lastPapeles = null;
+
+/* =====================================================================
+   7. DIBUJO
+   ===================================================================== */
+function draw(){
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.fillStyle = "#17191a";
+  ctx.fillRect(0, 0, CW, CH);
+
+  applyCam();
+  const v = viewRect();
+  for(const it of scene.items){
+    const p = w2s(it.gx, it.gy);
+    if(p.x < v.x0 - 120 || p.x > v.x1 + 120 || p.y < v.y0 - 140 || p.y > v.y1 + 140) continue;
+    it.draw();
+  }
+  drawLabels();
+}
+function drawLabels(){
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.textBaseline = "middle";
+  for(const l of scene.labels){
+    const s = screenOf(l.x, l.y);
+    if(s.x < -160 || s.x > CW+160 || s.y < 44 || s.y > CH-52) continue;
+    const size = Math.round(l.size * (cam.scale >= 3 ? 1.15 : 1));
+    if(size < 9 && cam.scale < 2) continue;
+    ctx.font = l.w + " " + size + "px " +
+      (l.fam === "disp" ? "'Barlow Condensed',sans-serif" : "'IBM Plex Mono',monospace");
+    ctx.textAlign = l.al;
+    if(l.box){
+      const w = ctx.measureText(l.t).width + 10;
+      const x = l.al === "left" ? s.x - 5 : s.x - w/2;
+      ctx.fillStyle = "rgba(23,25,26,0.85)";
+      ctx.fillRect(Math.round(x), Math.round(s.y - size/2 - 3), Math.round(w), size + 6);
+    }
+    ctx.fillStyle = l.col;
+    ctx.fillText(l.t, Math.round(s.x), Math.round(s.y));
+  }
+}
+
+let raf = null;
+function loop(){
+  /* animacion de camara */
+  if(cam.tx != null){
+    cam.x += (cam.tx - cam.x) * 0.18;
+    cam.y += (cam.ty - cam.y) * 0.18;
+    if(Math.abs(cam.tx - cam.x) < 0.5 && Math.abs(cam.ty - cam.y) < 0.5){
+      cam.x = cam.tx; cam.y = cam.ty; cam.tx = cam.ty = null;
+    }
+    dirty = true;
+  }
+  /* animacion del papel que cambio de estacion */
+  if(animState.t > 0){ animState.t -= 1.4; if(animState.t <= 0){ animState.t = 0; animState.id = null; } dirty = true; }
+  if(dirty){ draw(); dirty = false; }
+  raf = requestAnimationFrame(loop);
+}
+const animState = { id:null, t:0 };
+function animOf(id){ return (animState.id && animState.id === id) ? animState.t : 0; }
+
+/* =====================================================================
+   8. INTERACCION (movil primero: arrastrar para moverse, tocar para ver)
+   ===================================================================== */
+function worldOf(sx, sy){
+  return { x:(sx - CW/2)/cam.scale + cam.x, y:(sy - CH/2)/cam.scale + cam.y };
+}
+let ptr = { down:false, id:null, x:0, y:0, moved:0 };
+cv.addEventListener("pointerdown", function(e){
+  ptr.down = true; ptr.id = e.pointerId; ptr.x = e.clientX; ptr.y = e.clientY; ptr.moved = 0;
+  cv.setPointerCapture(e.pointerId); cv.classList.add("drag");
+});
+cv.addEventListener("pointermove", function(e){
+  if(!ptr.down || e.pointerId !== ptr.id) return;
+  const dx = e.clientX - ptr.x, dy = e.clientY - ptr.y;
+  ptr.moved += Math.abs(dx) + Math.abs(dy);
+  cam.x -= dx / cam.scale; cam.y -= dy / cam.scale;
+  cam.tx = cam.ty = null;
+  ptr.x = e.clientX; ptr.y = e.clientY;
+  dirty = true;
+});
+function endPtr(e){
+  if(!ptr.down) return;
+  ptr.down = false; cv.classList.remove("drag");
+  if(ptr.moved < 8) tap(e.clientX, e.clientY);
+}
+cv.addEventListener("pointerup", endPtr);
+cv.addEventListener("pointercancel", function(){ ptr.down = false; cv.classList.remove("drag"); });
+
+function tap(sx, sy){
+  const w = worldOf(sx, sy);
+  /* de adelante hacia atras: gana el objeto mas cercano a la camara */
+  for(let i = scene.items.length - 1; i >= 0; i--){
+    const it = scene.items[i];
+    if(!it.hit || !it.tap) continue;
+    const h = it.hit;
+    if(w.x >= h.x && w.x <= h.x + h.w && w.y >= h.y && w.y <= h.y + h.h){ it.tap(); return; }
+  }
+  cerrarFicha();
+}
+
+/* teclado en escritorio */
+window.addEventListener("keydown", function(e){
+  const paso = 60 / cam.scale;
+  if(e.key === "ArrowLeft"){ cam.x -= paso; cam.tx = null; dirty = true; }
+  else if(e.key === "ArrowRight"){ cam.x += paso; cam.tx = null; dirty = true; }
+  else if(e.key === "ArrowUp"){ cam.y -= paso; cam.tx = null; dirty = true; }
+  else if(e.key === "ArrowDown"){ cam.y += paso; cam.tx = null; dirty = true; }
+  else if(e.key === "Escape"){ cerrarFicha(); }
+  else return;
+  e.preventDefault();
+});
+/* rueda = zoom por enteros (escritorio) */
+cv.addEventListener("wheel", function(e){ e.preventDefault(); zoom(e.deltaY < 0 ? 1 : -1); }, { passive:false });
+function zoom(dir){
+  const n = Math.max(1, Math.min(4, cam.scale + dir));
+  if(n === cam.scale) return;
+  cam.scale = n; dirty = true;
+}
+document.getElementById("zin").onclick  = function(){ zoom(1); };
+document.getElementById("zout").onclick = function(){ zoom(-1); };
+
+/* --------- navegador de zonas --------- */
+let zonaActiva = "taller";
+function irAZona(id){
+  const z = ZONA[id]; if(!z) return;
+  const c = centroZona(z);
+  cam.tx = c.x; cam.ty = c.y;
+  zonaActiva = id;
+  document.getElementById("zone-name").textContent = z.nombre;
+  [...document.querySelectorAll(".zbtn")].forEach(function(b){
+    b.classList.toggle("active", b.dataset.zona === id);
+  });
+}
+function renderZoneNav(flota, papeles, bodega){
+  const nav = document.getElementById("zones");
+  const cont = {
+    taller:  { n: NODO_EMPRESA[activeCompany] ? flota.taller.length : "—", alerta: flota.taller.some(function(x){ return x.ev.color === "crit" || x.ev.color === "nodata"; }) },
+    patio:   { n: NODO_EMPRESA[activeCompany] ? flota.patio.length : "—" },
+    campo:   { n: NODO_EMPRESA[activeCompany] ? flota.renta : "—" },
+    oficina: { n: selected.size },
+    conta:   { n: papeles.err ? "!" : (papeles.por.rev ? papeles.por.rev.length : 0), alerta: !papeles.err && papeles.por.rev.length > 0 },
+    bodega:  { n: bodega.err ? "!" : bodega.sedes.length }
+  };
+  nav.innerHTML = ZONAS.map(function(z){
+    const c = cont[z.id] || { n:"" };
+    return '<button class="zbtn' + (z.id === zonaActiva ? " active" : "") + (c.alerta ? " alert" : "") +
+      '" data-zona="' + z.id + '">' + z.nombre.split(" / ")[0] + ' <b>' + c.n + '</b></button>';
+  }).join("");
+  [...nav.querySelectorAll(".zbtn")].forEach(function(b){
+    b.onclick = function(){ irAZona(b.dataset.zona); };
+  });
+}
+
+/* =====================================================================
+   9. FICHAS (bottom sheet)
+   ===================================================================== */
+const sheet = document.getElementById("sheet");
+const sheetBody = document.getElementById("sheet-body");
+document.getElementById("sheet-close").onclick = cerrarFicha;
+function abrirFicha(html){ sheetBody.innerHTML = html; sheet.classList.add("open"); }
+function cerrarFicha(){ sheet.classList.remove("open"); }
+function esc(s){ return String(s == null ? "—" : s).replace(/[&<>"]/g, function(c){
+  return ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" })[c]; }); }
+function rows(pairs){
+  return '<div class="rows">' + pairs.map(function(p){
+    return '<div><span>' + esc(p[0]) + '</span><b>' + esc(p[1]) + '</b></div>'; }).join("") + '</div>';
+}
+
+const ETQ_URG = { ok:"al día", warn:"por vencer", crit:"vencido", nodata:"SIN DATOS" };
+function fichaEquipo(eq, ev){
+  const b = bucketEstado(eq.estado);
+  const zonaTxt = { mant:"Taller", disp:"Patio", renta:"Campo / cliente", uso:"Otros / interno" }[b];
+  const cliente = primerCampo(eq, CAMPOS_CLIENTE);
+  const ubic    = primerCampo(eq, CAMPOS_UBICACION);
+  const horo    = aNumero(primerCampo(eq, CAMPOS_HOROMETRO_ACT));
+  const pares = [
+    ["Estado en la base", eq.estado || "—"],
+    ["Zona del mundo", zonaTxt],
+    ["Mantenimiento", ETQ_URG[ev.color] + (ev.urgencia != null ? " · " + ev.etiqueta : "")],
+    ["Urgencia", ev.urgencia != null ? Math.round(ev.urgencia * 100) + "%" : "—"],
+    ["Horómetro", horo != null ? horo.toLocaleString("es-HN") + " h" : "—"],
+    ["Cliente", cliente != null ? cliente : "—"],
+    ["Ubicación", ubic != null ? ubic : "—"],
+    ["Marca / modelo", [eq.marca, eq.modelo].filter(Boolean).join(" ") || "—"]
+  ];
+  let nota = "";
+  if(ev.color === "nodata"){
+    nota = '<div class="note warn">Este equipo se dibuja como fantasma porque la base no tiene ' +
+           'ni fecha de último mantenimiento ni horómetro comparable. No es que esté bien: ' +
+           'es que no se sabe. Cargar el dato en la app de mantenimientos lo devuelve al mundo.</div>';
+  }else if(ev.color === "crit"){
+    nota = '<div class="note warn">Pasado del intervalo (' + INTERVALO_DIAS + ' días / ' +
+           INTERVALO_HORAS + ' h). La barra se sale del marco a propósito.</div>';
+  }
+  abrirFicha('<div class="kicker">' + esc(zonaTxt) + '</div><h2 class="display">' +
+    esc(ev.codigo) + '</h2>' + rows(pares) + nota);
+}
+
+function fichaPapel(r, st){
+  const esCaja = !r._viaje;
+  const pares = esCaja ? [
+    ["Estación", st.titulo], ["Estado", r.estado], ["Fecha", r.fecha],
+    ["Sede", r.sede], ["Tipo", r.tipo], ["Categoría", r.categoria],
+    ["Monto", fmtL(r.monto)], ["Responsable", r.responsable],
+    ["Registrado por", r.registradoPor], ["Comprobante", r.comprobante],
+    ["Decidido por", r.decididoPor]
+  ] : [
+    ["Estación", st.titulo], ["Estado", r.estado], ["Fecha", r.fecha],
+    ["Viajero", r.viajero], ["Destino", r.destino], ["Motivo", r.motivo],
+    ["Monto", fmtL(r.monto)], ["Anticipo", fmtL(r.anticipo)],
+    ["Registrado por", r.registradoPor]
+  ];
+  let acc = "";
+  if(String(r.estado).trim() === "Enviado a revisión"){
+    if(esCaja){
+      acc = '<div class="acts"><button class="ok" id="ap">Aprobar</button>' +
+            '<button class="no" id="rz">Rechazar</button></div>' +
+            '<div class="note">Al decidir, el papel se desliza a la siguiente estación: ' +
+            'lo que se mueve es el registro en Firebase, no una animación decorativa.</div>';
+    }else{
+      acc = '<div class="note">Los viáticos se aprueban desde la app de bitácora. ' +
+            'El dash solo escribe caja chica (decidirCajaChica), así que acá tampoco se inventa esa escritura.</div>';
+    }
+  }
+  abrirFicha('<div class="kicker">' + (esCaja ? "Caja chica" : "Viáticos") + '</div><h2 class="display">' +
+    esc(esCaja ? r.concepto : (r.motivo || r.destino)) + '</h2>' + rows(pares) + acc);
+  const ap = document.getElementById("ap"), rz = document.getElementById("rz");
+  if(ap && rz){
+    const btns = [ap, rz];
+    ap.onclick = function(){ decidirCajaChica(r.id, "aprobar", btns); };
+    rz.onclick = function(){ decidirCajaChica(r.id, "rechazar", btns); };
+  }
+}
+
+function fichaKpi(k, meta, fix){
+  const on = selected.has(k.id);
+  const pares = [
+    ["Grupo", k.grupo + ". " + k.gTitle],
+    ["Objeto", meta.kind],
+    ["Colgado en la pared", on ? "sí" : "no"],
+    ["Fuente", fix ? "RADAR aún no lo calcula" : "RADAR / Firebase"]
+  ];
+  const nota = fix
+    ? '<div class="note warn">Objeto sin energía: <b>' + esc(NO_DISP[k.id]) + '</b> no viene en el ' +
+      'JSON de RADAR. El hueco de capacidad se ve en el mundo, igual que el hueco de datos en el taller. ' +
+      'Se puede colgar igual, pero el tile del dash va a decir "RADAR aún no lo calcula".</div>'
+    : '<div class="note">Colgarlo o descolgarlo cambia también los tiles del dash: ' +
+      'ambos leen la misma llave <b>dash_kpis</b> del navegador.</div>';
+  abrirFicha('<div class="kicker">KPI ' + esc(k.id) + '</div><h2 class="display">' + esc(k.label) + '</h2>' +
+    rows(pares) +
+    '<div class="acts"><button id="tg">' + (on ? "Descolgar" : "Colgar en la pared") + '</button></div>' + nota);
+  document.getElementById("tg").onclick = function(){
+    if(selected.has(k.id)) selected.delete(k.id); else selected.add(k.id);
+    saveSel(); buildScene(); cerrarFicha();
+    showToast(selected.has(k.id) ? ("Colgado · " + k.id) : ("Descolgado · " + k.id));
+  };
+}
+
+/* --------- escritura: aprobar / rechazar caja chica ---------
+   COPIA de decidirCajaChica de ../index.html, con el toque del mundo:
+   al terminar marca el papel para que entre deslizandose a su nueva mesa. */
+async function decidirCajaChica(id, decision, btns){
+  btns.forEach(function(b){ b.disabled = true; });
+  try{
+    const res = await fetch(CC_FB + "/data-cajachica.json?_=" + Date.now(), { cache:"no-store" });
+    if(!res.ok) throw new Error("HTTP " + res.status);
+    const arr = await res.json();
+    if(!Array.isArray(arr)) throw new Error("no hay datos de caja chica");
+    const i = arr.findIndex(function(x){ return x.id === id; });
+    if(i === -1) throw new Error("id no encontrado");
+    if(["Aprobado por Gerencia","Rechazado","Liquidado"].includes(arr[i].estado))
+      throw new Error("ya fue decidido (estado: " + arr[i].estado + ")");
+    arr[i].estado      = (decision === "aprobar") ? "Aprobado por Gerencia" : "Rechazado";
+    arr[i].decididoPor = "Omar";
+    arr[i].decididoEn  = new Date().toISOString();
+    const put = await fetch(CC_FB + "/data-cajachica.json", {
+      method:"PUT", headers:{"Content-Type":"application/json"}, body: JSON.stringify(arr)
+    });
+    if(!put.ok) throw new Error("no se pudo guardar (HTTP " + put.status + ")");
+    try{
+      const bRes = await fetch(CC_FB + "/data-bitacora.json?_=" + Date.now(), { cache:"no-store" });
+      let bit = bRes.ok ? await bRes.json() : null;
+      if(!Array.isArray(bit)) bit = [];
+      bit.unshift({ id:"mundo_"+Date.now(), fecha:new Date().toISOString(), accion:"Cambió estado",
+        modulo:"Caja Chica", descripcion:"Gasto "+id+" → "+arr[i].estado+" (desde el Mundo)", usuario:"Omar" });
+      await fetch(CC_FB + "/data-bitacora.json", { method:"PUT",
+        headers:{"Content-Type":"application/json"}, body: JSON.stringify(bit.slice(0,500)) });
+    }catch(bErr){ console.warn("[Mundo] no se pudo registrar en bitácora:", bErr.message); }
+
+    state.caja = arr;
+    animState.id = id; animState.t = 40;      // el papel se desliza a su nueva mesa
+    buildScene();
+    irAZona("conta");
+    cerrarFicha();
+    showToast((decision === "aprobar" ? "Aprobado" : "Rechazado") + " · " + id);
+  }catch(e){
+    console.error("[Mundo] ERROR al decidir:", e.message);
+    btns.forEach(function(b){ b.disabled = false; });
+    showToast("No se pudo guardar: " + e.message);
+  }
+}
+
+/* =====================================================================
+   10. ARRANQUE Y REFRESCO (60 s, igual que el dash)
+   ===================================================================== */
+function setConn(ok){
+  document.getElementById("conn-dot").classList.toggle("off", !ok);
+  document.getElementById("conn-txt").textContent = ok ? "EN LINEA" : "SIN CONEXION";
+  state.conn = ok;
+}
+function showToast(msg){
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.classList.add("show");
+  clearTimeout(showToast._t); showToast._t = setTimeout(function(){ t.classList.remove("show"); }, 2200);
+}
+
+let cargando = false;
+async function refrescar(){
+  if(cargando) return;
+  cargando = true;
+  try{
+    state.stamp++; evalCache.clear();
+    const [ , caja, viajes, almacen ] = await Promise.all([
+      cargarFlota(),
+      cargarBitacora("data-cajachica"),
+      cargarBitacora("data-viajes"),
+      cargarBitacora("data-almacen")
+    ]);
+    state.caja = caja; state.viajes = viajes; state.almacen = almacen;
+    await cargarRadar();
+    if(!state.fxHNL) await cargarFx();
+    const hayAlgo = (!state.flotaErr) || caja !== "error";
+    setConn(hayAlgo);
+    document.getElementById("hint").style.display = "none";
+    buildScene();
+  }catch(e){
+    console.error("[Mundo] refresco:", e.message);
+    setConn(false);
+    buildScene();
+  }finally{ cargando = false; }
+}
+
+async function cambiarEmpresa(key){
+  activeCompany = key;
+  [...document.querySelectorAll(".pill")].forEach(function(b){
+    const on = b.dataset.company === key;
+    b.classList.toggle("active", on);
+    b.setAttribute("aria-selected", on ? "true" : "false");
+  });
+  state.radar = null;
+  cerrarFicha();
+  document.getElementById("hint").style.display = "";
+  document.getElementById("hint").textContent = "Cargando " + key + "…";
+  await refrescar();
+  irAZona(zonaActiva);
+}
+[...document.querySelectorAll(".pill")].forEach(function(b){
+  b.onclick = function(){ if(b.dataset.company !== activeCompany) cambiarEmpresa(b.dataset.company); };
+});
+
+/* boot */
+resize();
+cam.scale = baseScale();
+renderZoneNav({ taller:[], patio:[], renta:0 }, { err:false, por:{ rev:[] } }, { err:false, sedes:[] });
+irAZona("taller");
+loop();
+refrescar();
+setInterval(refrescar, 60000);
+document.addEventListener("visibilitychange", function(){ if(!document.hidden) refrescar(); });
+</script>
+</body>
+</html>
