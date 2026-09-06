@@ -223,21 +223,30 @@
    ===================================================================== */
 
 /* =====================================================================
-   1. CONFIGURACIÓN DEL MOTOR (Claude)
+   1. CONFIGURACIÓN DEL SERVIDOR
    ---------------------------------------------------------------------
-   >>> PEGAR ACÁ LA URL DEL PROXY DESPLEGADO <<<
-   Ver mundo/servidor/README.md. La API key NO va acá ni en ningún archivo
-   de este repo: el repo es público y una key en un .html es una key
-   regalada. El proxy la guarda del lado del servidor.
-   Mientras esto quede vacío, los agentes se dibujan SIN ENERGÍA y cada
-   tarea dice qué falta. No se inventa ninguna respuesta.
+   >>> PEGAR ACÁ LA BASE DE LA API DESPLEGADA <<<
+   Una sola URL, sin barra final. De ahí salen dos endpoints:
+       {apiBase}/sesion   verifica el código contra la base y emite token
+       {apiBase}/claude   habla con Anthropic (exige ese token)
+   Ver mundo/servidor/README.md.
+
+   La API key NO va acá ni en ningún archivo de este repo: el repo es
+   público y una key en un .html es una key regalada. Vive en el servidor.
+
+   Mientras esto quede vacío, la oficina funciona en MODO LOCAL: el código
+   se verifica en el navegador (alcanza para elegir qué pantalla mostrar,
+   no para confiar en nadie) y los agentes se dibujan SIN ENERGÍA. No se
+   inventa ninguna respuesta.
    ===================================================================== */
 const CLAUDE = {
-  proxyUrl: "",                    // ej: "https://montasa-web.vercel.app/api/claude"
-  modelo:   "claude-opus-5",       // informativo: el modelo real lo fija el proxy
+  apiBase:  "",                    // ej: "https://montasa-web.vercel.app/api"
+  modelo:   "claude-opus-5",       // informativo: el modelo real lo fija el servidor
   maxTurnos: 12                    // techo de idas y vueltas por tarea
 };
-function motorListo(){ return !!CLAUDE.proxyUrl; }
+function motorListo(){ return !!CLAUDE.apiBase; }
+function urlSesion(){ return CLAUDE.apiBase + "/sesion"; }
+function urlClaude(){ return CLAUDE.apiBase + "/claude"; }
 
 /* =====================================================================
    2. CAPA DE DATOS
@@ -406,6 +415,33 @@ async function intentarEntrar(){
   if(!rolElegido){ err.textContent = "Elegí tu rol."; return; }
   if(!code){ err.textContent = "Escribí tu código."; return; }
   btn.disabled = true; err.textContent = "Verificando…";
+
+  /* CAMINO BUENO: el servidor compara el código contra la base y devuelve
+     un token firmado. El navegador nunca ve el hash guardado, y el proxy
+     tiene con qué saber quién llama. */
+  if(motorListo()){
+    try{
+      const r = await fetch(urlSesion(), {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ rol: rolElegido, codigo: code })
+      });
+      const j = await r.json().catch(()=>({}));
+      if(!r.ok){ err.textContent = j.error || ("No se pudo entrar (HTTP " + r.status + ")");
+                 btn.disabled = false; return; }
+      sesion = { rolId: j.rol, label: j.label, empresa: empresaDeRol(j.rol), token: j.token };
+      try{ sessionStorage.setItem("mundo_sesion", JSON.stringify(sesion)); }catch(e){}
+      await abrirOficina();
+      return;
+    }catch(e){
+      console.error("[Oficina] sesión:", e);
+      err.textContent = "No se pudo hablar con el servidor: " + e.message;
+      btn.disabled = false; return;
+    }
+  }
+
+  /* MODO LOCAL (sin servidor): se verifica en el navegador. Alcanza para
+     elegir qué pantalla mostrar; no alcanza para que nadie confíe en el
+     resultado — y como no hay motor, tampoco hay nada que proteger. */
   try{
     const cfg = await getBit("auth-config");
     if(!cfg || !cfg.roles){
@@ -1062,11 +1098,14 @@ bloqueTools,
 /* --- la llamada, con streaming, vía el proxy --- */
 async function llamarClaude(system, mensajes, onPensar, onTexto){
   if(!motorListo()) throw new Error("SIN_MOTOR");
-  const r = await fetch(CLAUDE.proxyUrl, {
+  if(!sesion || !sesion.token) throw new Error("SIN_SESION");
+  const r = await fetch(urlClaude(), {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json",
+               "Authorization": "Bearer " + sesion.token },
     body: JSON.stringify({ system, messages: mensajes })
   });
+  if(r.status === 401){ vencioSesion(); throw new Error("SESION_VENCIDA"); }
   if(!r.ok){
     let msg = "HTTP " + r.status;
     try{ const j = await r.json(); if(j && j.error) msg = j.error; }catch(e){}
@@ -1215,7 +1254,7 @@ function abrirTarea(t){
     esc(t.detalle) + '\n\n' + esc(t.contexto) + '</div>' +
     (sinMotor
       ? '<div class="warn"><b>Agente sin energía.</b> Falta conectar el motor de Claude: ' +
-        'no hay <code>proxyUrl</code> configurada en <code>mundo/oficina.html</code>. ' +
+        'no hay <code>apiBase</code> configurada en <code>mundo/oficina.html</code>. ' +
         'El contexto de arriba es real y está completo — lo único que falta es quién lo procese. ' +
         'Ver <code>mundo/servidor/README.md</code>.</div>'
       : '<label class="lab" for="entry">¿Qué querés que haga ' + esc(a.nombre) + '?</label>' +
@@ -1404,13 +1443,25 @@ async function seguir(t){
     console.error("[Oficina] motor:", e);
     t.estado = "listo";
     t.informe = { estado:"crudo", texto:
-      (e.message === "SIN_MOTOR"
-        ? "No hay motor de Claude configurado (falta proxyUrl)."
-        : "El motor falló: " + e.message) };
+      (e.message === "SIN_MOTOR"  ? "No hay motor de Claude configurado (falta apiBase)."
+       : e.message === "SIN_SESION" ? "Esta sesión no tiene token del servidor. Volvé a entrar."
+       : e.message === "SESION_VENCIDA" ? "La sesión venció mientras el agente trabajaba."
+       : "El motor falló: " + e.message) };
     sincronizarAgentes(); pintarChips();
     if(modal.classList.contains("on")) verInforme(t);
     else toast("Falló " + AG[t.agente].nombre + ": " + e.message);
   }
+}
+
+/* El token dura una jornada. Cuando vence no se reintenta a ciegas: se
+   avisa y se vuelve a la puerta. */
+function vencioSesion(){
+  try{ sessionStorage.removeItem("mundo_sesion"); }catch(e){}
+  abrir("bad", "Sesión", "Tu sesión venció",
+    '<div class="informe">Pasó la jornada desde que entraste. Volvé a poner tu código ' +
+    'para seguir.</div><div class="acts"><button class="go" id="revol">Volver a entrar</button></div>');
+  const b = document.getElementById("revol");
+  if(b) b.onclick = function(){ location.reload(); };
 }
 
 function tocarAgente(id){
@@ -1460,16 +1511,21 @@ function pintarMotor(){
   el.onclick = function(){
     abrir(motorListo() ? "" : "bad", "Motor", motorListo() ? "Claude conectado" : "Claude sin conectar",
       motorListo()
-        ? '<div class="ctx">Proxy: <b>' + esc(CLAUDE.proxyUrl) + '</b>\nModelo declarado: <b>' +
-          esc(CLAUDE.modelo) + '</b>\nTope de turnos por tarea: <b>' + CLAUDE.maxTurnos + '</b></div>' +
-          '<div class="dim">El modelo y los topes de tokens los fija el servidor, no esta página.</div>'
-        : '<div class="warn">Los agentes están <b>sin energía</b> porque no hay proxy configurado.\n\n' +
+        ? '<div class="ctx">Servidor: <b>' + esc(CLAUDE.apiBase) + '</b>\nModelo declarado: <b>' +
+          esc(CLAUDE.modelo) + '</b>\nTope de turnos por tarea: <b>' + CLAUDE.maxTurnos + '</b>\n' +
+          'Sesión verificada en el servidor: <b>' + (sesion && sesion.token ? "sí" : "no") + '</b></div>' +
+          '<div class="dim">El modelo, los topes de tokens y la validación del código los fija ' +
+          'el servidor, no esta página.</div>'
+        : '<div class="warn">Los agentes están <b>sin energía</b> porque no hay servidor configurado.\n\n' +
           'La API key de Anthropic no puede ir en este archivo: el repo es público y una key ' +
-          'en un .html es una key regalada. Por eso la llamada pasa por una función serverless ' +
-          'que guarda la key del lado del servidor.</div>' +
-          '<div class="ctx">1. Desplegar <b>mundo/servidor/claude-proxy.js</b> en Vercel\n' +
-          '2. Poner ANTHROPIC_API_KEY como variable de entorno\n' +
-          '3. Pegar la URL en CLAUDE.proxyUrl (arriba del script de este archivo)</div>' +
+          'en un .html es una key regalada. Por eso todo pasa por dos funciones serverless ' +
+          'que guardan la key del lado del servidor.</div>' +
+          '<div class="ctx">1. Desplegar <b>servidor/sesion.js</b> y <b>servidor/claude-proxy.js</b>\n' +
+          '2. Poner ANTHROPIC_API_KEY y MUNDO_SESSION_SECRET como variables de entorno\n' +
+          '3. Pegar la URL base en CLAUDE.apiBase (arriba del script de este archivo)</div>' +
+          '<div class="warn">Ojo: la licencia de <b>Claude Enterprise</b> (los asientos de ' +
+          'claude.ai) no sirve para esto. Hace falta una organización del <b>Developer ' +
+          'Platform</b> (console.anthropic.com), que es un alta aparte.</div>' +
           '<div class="dim">Instrucciones completas en <b>mundo/servidor/README.md</b>. ' +
           'Mientras tanto, las tareas y el contexto que ves son reales: lo único que falta ' +
           'es quién los procese.</div>');
@@ -1508,12 +1564,27 @@ document.getElementById("codigo").addEventListener("keydown", function(e){
   if(e.key === "Enter") intentarEntrar();
 });
 
+/* La nota de la puerta dice la verdad sobre dónde se verifica el código. */
+(function(){
+  const n = document.getElementById("nota-auth");
+  n.innerHTML = 'Se usa el <b>mismo código</b> de la app de Bitácora SGI. Si tu rol todavía no ' +
+    'tiene código, alguien con acceso de administrador tiene que crearlo allá primero — ' +
+    'desde acá no se pueden crear códigos nuevos.' +
+    (motorListo()
+      ? '<br><br>Tu código se verifica <b>en el servidor</b>, no en este navegador.'
+      : '<br><br><b>Modo local:</b> sin servidor configurado, el código se verifica en este ' +
+        'navegador y los agentes quedan sin energía.');
+})();
+
 pintarRoles();
 /* si ya había sesión en esta pestaña, se entra directo */
 (function(){
   try{
     const s = JSON.parse(sessionStorage.getItem("mundo_sesion"));
-    if(s && s.rolId && ROLES.some(r => r.id === s.rolId)){ sesion = s; abrirOficina(); }
+    /* con servidor configurado, una sesión sin token no vale: se vuelve a la puerta */
+    const sirve = s && s.rolId && ROLES.some(r => r.id === s.rolId) && (!motorListo() || s.token);
+    if(sirve){ sesion = s; abrirOficina(); }
+    else if(s){ try{ sessionStorage.removeItem("mundo_sesion"); }catch(e){} }
   }catch(e){}
 })();
 </script>

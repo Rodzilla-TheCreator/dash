@@ -17,6 +17,7 @@
    ===================================================================== */
 
 import Anthropic from "@anthropic-ai/sdk";
+import { verificar } from "./sesion.js";
 
 /* --- Limites duros. El navegador NO los puede subir. ------------------
    Quien llegue a esta URL puede gastar tokens de la cuenta, asi que el
@@ -41,7 +42,7 @@ function cors(req, res){
     res.setHeader("Vary", "Origin");
   }
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
   return ORIGENES.includes(origen);
 }
 
@@ -54,6 +55,16 @@ export default async function handler(req, res){
 
   const key = process.env.ANTHROPIC_API_KEY;
   if(!key) return res.status(500).json({ error: "Falta ANTHROPIC_API_KEY en el servidor" });
+
+  /* ---- quién llama ----
+     El token lo emite /api/sesion tras verificar el código CONTRA LA BASE,
+     del lado del servidor. Sin token no se llama a Anthropic: si no, la URL
+     del proxy sería una puerta abierta y el gasto, de cualquiera. */
+  const secreto = process.env.MUNDO_SESSION_SECRET;
+  if(!secreto) return res.status(500).json({ error: "Falta MUNDO_SESSION_SECRET en el servidor" });
+  const auth = req.headers.authorization || "";
+  const sesion = auth.startsWith("Bearer ") ? verificar(auth.slice(7), secreto) : null;
+  if(!sesion) return res.status(401).json({ error: "Sesión inválida o vencida. Volvé a entrar." });
 
   /* ---- validacion de la peticion ---- */
   const body = req.body || {};
@@ -107,6 +118,10 @@ export default async function handler(req, res){
       }
     }
     const final = await stream.finalMessage();
+    /* Queda en el log del servidor quién gastó qué: con esto se puede sacar
+       consumo por rol sin depender de nada del lado del cliente. */
+    console.log("[claude-proxy]", sesion.rol, "in", final.usage?.input_tokens,
+                "out", final.usage?.output_tokens);
     enviar({ t:"fin", stop: final.stop_reason, usage: final.usage });
   }catch(e){
     console.error("[claude-proxy]", e);

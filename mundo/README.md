@@ -146,16 +146,36 @@ rastro en `/bitacora/data-bitacora`.
 Si Claude devuelve algo que no se entiende, se muestra crudo y marcado como
 *respuesta no entendida*. No se adivina qué quiso decir.
 
-### El motor: hace falta desplegar un proxy
+### Acceso verificado en el servidor
+
+El código se compara **en el servidor** (`POST /api/sesion`), que devuelve un
+token firmado de 8 horas; el proxy de Claude no atiende sin ese token. Antes
+la comparación ocurría en el navegador: alcanzaba para decidir qué pantalla
+mostrar, pero el servidor no podía confiar en ella y la URL del proxy quedaba
+abierta a cualquiera.
+
+Sin servidor configurado la oficina corre en **modo local** — verifica en el
+navegador y los agentes quedan sin energía — y la pantalla de acceso lo dice.
+
+Esto cierra el proxy, **no la base**: mientras las reglas de Firebase estén
+abiertas, alguien puede cambiar los hashes de `auth-config` sin pasar por
+ninguna puerta.
+
+### El motor: hace falta desplegar un servidor
 
 La oficina **no llama a Anthropic desde el navegador**. La API key no puede
 vivir en este repo: es público, y una key en un `.html` es una key regalada.
-La llamada pasa por una función serverless que guarda la key del lado del
-servidor — está escrita y lista en
-[`servidor/claude-proxy.js`](servidor/README.md), son unos cinco minutos de
-despliegue en Vercel.
+Todo pasa por dos funciones serverless — están escritas y listas en
+[`servidor/`](servidor/README.md), unos cinco minutos de despliegue en Vercel.
 
-Mientras `CLAUDE.proxyUrl` esté vacío, la oficina funciona igual: el login,
+**Ojo con la licencia:** los asientos de **Claude Enterprise** (claude.ai) no
+sirven para esto. Son para que la gente chatee en el navegador; no hay forma
+de que una app de terceros gaste el asiento de un empleado. Hace falta una
+organización del **Developer Platform** (`console.anthropic.com`), que es un
+alta aparte, y conviene darle al mundo su propio *workspace* para aislar
+límites y costo.
+
+Mientras `CLAUDE.apiBase` esté vacío, la oficina funciona igual: el login,
 la sala, las tareas y el contexto son reales. Lo único que pasa es que los
 agentes se dibujan **sin energía** y cada tarea dice exactamente qué falta.
 Misma gramática que los KPIs que RADAR no calcula: el hueco se ve, no se
@@ -163,14 +183,13 @@ disimula.
 
 Lo que el servidor fija y el navegador no puede subir: modelo
 (`claude-opus-5`), 8 000 tokens por respuesta, 40 turnos, 120 000 caracteres
-de payload, y una lista blanca de orígenes. En el cliente hay además un tope
-de 12 idas y vueltas por tarea.
+de payload, una lista blanca de orígenes, y **quién llama**. En el cliente hay
+además un tope de 12 idas y vueltas por tarea.
 
-**Lo que todavía no está resuelto:** el proxy no autentica al usuario. El
-login valida en el navegador, así que el servidor no puede confiar en él —
-quien tenga la URL puede gastar tokens, aunque los topes acotan cuánto. Para
-cerrarlo hace falta que el login emita un token verificable del lado del
-servidor. Está anotado en `servidor/README.md`.
+**Lo que todavía no está resuelto:** no hay cuota por empleado — los topes son
+por petición, no por persona ni por día. Un tope real necesita estado
+compartido, y montarlo sobre una base con las reglas abiertas sería un control
+que cualquiera puede editar. Primero se cierran las reglas.
 
 ---
 
