@@ -16,4 +16,9 @@ Se despliega con GitHub Pages. Refresca datos cada 60 s.
   pixel-art recorrible (taller, patio, campo/clientes, contabilidad, bodega,
   oficina). Se entra desde el botón **MUNDO ▸** del header. Ver
   [`mundo/README.md`](mundo/README.md).
+- `mundo/oficina.html` — **Oficina Virtual**: cada empleado entra con su
+  código de Bitácora SGI y trabaja con agentes de IA (Claude) sobre los
+  datos reales. Las tareas salen de la base; ninguna escritura ocurre sin
+  que el empleado la autorice en pantalla. Necesita el proxy de
+  [`mundo/servidor/`](mundo/servidor/README.md) para tener motor.
 - `bitacora/` — app SGI de control interno (fork de la de Christian).

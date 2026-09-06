@@ -1,0 +1,1521 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Mi Oficina · Mundo Montasa</title>
+
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Oficina">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#17191a">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+  :root{
+    --bg:#17191a; --panel:#202325; --panel-line:#34383b;
+    --amber:#f5a524; --amber-dim:#a9741f; --green:#3ecf7e; --red:#e5534b; --blue:#4f8fe0;
+    --ink:#eae7e0; --ink-dim:#8b9096; --ink-faint:#565b5f;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{height:100%;overflow:hidden;}
+  body{background:var(--bg);color:var(--ink);font-family:'IBM Plex Mono',monospace;
+    -webkit-font-smoothing:antialiased;overscroll-behavior:none;}
+  .display{font-family:'Barlow Condensed',sans-serif;}
+  button{font-family:inherit;cursor:pointer;}
+
+  /* ================= LOGIN ================= */
+  #login{position:fixed;inset:0;z-index:40;background:var(--bg);overflow-y:auto;
+    padding:calc(24px + env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom));
+    display:flex;align-items:center;justify-content:center;}
+  .card{background:var(--panel);border:1px solid var(--panel-line);padding:24px 20px;
+    max-width:440px;width:100%;}
+  .card h1{font-family:'Barlow Condensed',sans-serif;font-size:26px;font-weight:800;letter-spacing:.5px;line-height:1;}
+  .card .sub{color:var(--ink-dim);font-size:10px;letter-spacing:2px;text-transform:uppercase;margin:6px 0 20px;}
+  .roles{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:14px;}
+  .role{background:transparent;border:1px solid var(--panel-line);color:var(--ink-dim);
+    font-size:11px;text-align:left;padding:9px 10px;display:flex;align-items:center;gap:8px;}
+  .role .d{width:7px;height:7px;border-radius:50%;flex:0 0 auto;}
+  .role.on{border-color:var(--amber);color:var(--ink);background:rgba(245,165,36,.07);}
+  #codigo{width:100%;background:#191c1d;border:1px solid var(--panel-line);color:var(--ink);
+    font-family:inherit;font-size:15px;letter-spacing:3px;padding:11px 12px;text-align:center;}
+  #codigo:focus{outline:none;border-color:var(--amber);}
+  .primary{width:100%;margin-top:10px;background:var(--amber);border:0;color:#1a1a1a;
+    font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:16px;letter-spacing:2px;
+    text-transform:uppercase;padding:12px;}
+  .primary:disabled{background:var(--panel-line);color:var(--ink-faint);cursor:default;}
+  .err{color:var(--red);font-size:11px;margin-top:10px;min-height:15px;line-height:1.4;}
+  .nota{font-size:10px;line-height:1.6;color:var(--ink-dim);border-left:2px solid var(--panel-line);
+    padding-left:9px;margin-top:16px;}
+  .nota b{color:var(--ink);}
+  .volver{display:inline-block;margin-top:14px;color:var(--ink-faint);font-size:10px;
+    letter-spacing:1.5px;text-transform:uppercase;text-decoration:none;}
+  .volver:hover{color:var(--amber);}
+
+  /* ================= APP ================= */
+  #app{display:none;}
+  #sala{position:fixed;inset:0;display:block;touch-action:manipulation;}
+
+  #top{position:fixed;left:0;right:0;top:0;z-index:5;pointer-events:none;
+    padding:calc(8px + env(safe-area-inset-top)) 10px 8px;
+    background:linear-gradient(180deg,rgba(23,25,26,.94) 62%,rgba(23,25,26,0));
+    display:flex;align-items:center;gap:8px;}
+  #top > *{pointer-events:auto;}
+  .icobtn{width:30px;height:30px;flex:0 0 auto;border:1px solid var(--panel-line);
+    background:var(--panel);color:var(--ink-dim);font-size:14px;line-height:1;
+    display:flex;align-items:center;justify-content:center;text-decoration:none;}
+  .icobtn:active{border-color:var(--amber);color:var(--amber);}
+  .quien{min-width:0;}
+  .quien b{display:block;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:17px;
+    line-height:1;letter-spacing:.4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .quien span{display:block;font-size:8.5px;letter-spacing:1.6px;text-transform:uppercase;
+    color:var(--ink-dim);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  #motor{margin-left:auto;flex:0 0 auto;font-size:8.5px;letter-spacing:1px;text-align:right;
+    line-height:1.5;color:var(--ink-dim);white-space:nowrap;}
+  #motor b{display:block;font-size:9.5px;letter-spacing:1.2px;}
+  #motor.on b{color:var(--green);} #motor.off b{color:var(--red);}
+
+  /* bandeja de tareas */
+  #bandeja{position:fixed;left:0;right:0;bottom:0;z-index:5;
+    padding:8px 10px calc(8px + env(safe-area-inset-bottom));
+    background:linear-gradient(0deg,rgba(23,25,26,.95) 58%,rgba(23,25,26,0));}
+  .bhead{display:flex;align-items:baseline;gap:8px;margin-bottom:6px;padding:0 2px;}
+  .bhead b{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:12px;
+    letter-spacing:1.8px;text-transform:uppercase;}
+  .bhead span{font-size:9px;color:var(--ink-dim);}
+  .chips{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;}
+  .chips::-webkit-scrollbar{display:none;}
+  .chip{flex:0 0 auto;max-width:74vw;background:var(--panel);border:1px solid var(--panel-line);
+    color:var(--ink);text-align:left;padding:7px 10px;display:flex;flex-direction:column;gap:3px;}
+  .chip i{font-style:normal;font-size:8px;letter-spacing:1.4px;text-transform:uppercase;color:var(--amber);}
+  .chip u{text-decoration:none;font-size:10.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;}
+  .chip.crit{border-color:var(--red);} .chip.crit i{color:var(--red);}
+  .chip.listo{border-color:var(--green);} .chip.listo i{color:var(--green);}
+  .chip.espera{border-color:var(--blue);} .chip.espera i{color:var(--blue);}
+  .vacio{font-size:10.5px;color:var(--ink-faint);padding:8px 2px;}
+
+  /* ================= MODAL ================= */
+  #modal{position:fixed;inset:0;z-index:30;background:rgba(10,11,12,.72);
+    display:none;align-items:flex-end;justify-content:center;}
+  #modal.on{display:flex;}
+  .sheet{background:var(--panel);border-top:2px solid var(--amber);width:100%;max-width:620px;
+    max-height:88vh;display:flex;flex-direction:column;
+    padding:14px 14px calc(14px + env(safe-area-inset-bottom));}
+  .sheet.q{border-top-color:var(--amber);} .sheet.c{border-top-color:var(--blue);}
+  .sheet.ok{border-top-color:var(--green);} .sheet.bad{border-top-color:var(--red);}
+  .shead{display:flex;align-items:flex-start;gap:10px;margin-bottom:10px;}
+  .shead .k{font-size:8.5px;letter-spacing:2px;text-transform:uppercase;color:var(--amber);}
+  .shead h2{font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:800;
+    letter-spacing:.4px;line-height:1.1;margin-top:3px;}
+  .shead .x{margin-left:auto;flex:0 0 auto;width:28px;height:28px;background:transparent;
+    border:1px solid var(--panel-line);color:var(--ink-dim);font-size:13px;}
+  .sbody{overflow-y:auto;flex:1;min-height:0;}
+  .ctx{background:#191c1d;border:1px solid var(--panel-line);padding:10px;font-size:11px;
+    line-height:1.65;color:var(--ink-dim);white-space:pre-wrap;word-break:break-word;}
+  .ctx b{color:var(--ink);}
+  label.lab{display:block;font-size:9px;letter-spacing:1.6px;text-transform:uppercase;
+    color:var(--ink-dim);margin:14px 0 6px;}
+  textarea{width:100%;min-height:88px;background:#191c1d;border:1px solid var(--panel-line);
+    color:var(--ink);font-family:inherit;font-size:12.5px;line-height:1.6;padding:10px;resize:vertical;}
+  textarea:focus{outline:none;border-color:var(--amber);}
+  .acts{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;}
+  .acts button{flex:1 1 auto;min-width:110px;padding:11px 8px;border:1px solid var(--panel-line);
+    background:transparent;color:var(--ink);font-family:'Barlow Condensed',sans-serif;
+    font-weight:700;font-size:14px;letter-spacing:1.2px;text-transform:uppercase;}
+  .acts .go{border-color:var(--amber);color:var(--amber);}
+  .acts .ok{border-color:var(--green);color:var(--green);}
+  .acts .no{border-color:var(--red);color:var(--red);}
+  .acts button:disabled{opacity:.4;cursor:default;}
+  .ops{display:flex;flex-direction:column;gap:7px;margin-top:12px;}
+  .ops button{width:100%;text-align:left;padding:11px 12px;border:1px solid var(--panel-line);
+    background:transparent;color:var(--ink);font-size:12px;line-height:1.5;}
+  .ops button:active{border-color:var(--amber);}
+
+  /* la vista de "cocinando" */
+  .cook{margin-top:12px;}
+  .cookbar{height:3px;background:var(--panel-line);overflow:hidden;margin-bottom:10px;}
+  .cookbar i{display:block;height:100%;width:34%;background:var(--amber);
+    animation:slide 1.15s ease-in-out infinite;}
+  @keyframes slide{0%{transform:translateX(-100%)}100%{transform:translateX(390%)}}
+  .think{font-size:11px;line-height:1.7;color:var(--ink-dim);white-space:pre-wrap;
+    max-height:34vh;overflow-y:auto;border-left:2px solid var(--amber-dim);padding-left:10px;}
+  .think:empty::after{content:'arrancando…';color:var(--ink-faint);}
+  .informe{font-size:12.5px;line-height:1.75;white-space:pre-wrap;word-break:break-word;}
+  .accion{background:#191c1d;border:1px solid var(--blue);padding:10px;margin-top:12px;
+    font-size:11.5px;line-height:1.7;white-space:pre-wrap;word-break:break-word;}
+  .accion b{color:var(--blue);letter-spacing:1px;text-transform:uppercase;font-size:9px;display:block;margin-bottom:6px;}
+  .warn{font-size:10.5px;line-height:1.6;color:var(--amber);border-left:2px solid var(--amber-dim);
+    padding-left:9px;margin-top:12px;}
+  .dim{font-size:10.5px;line-height:1.6;color:var(--ink-dim);border-left:2px solid var(--panel-line);
+    padding-left:9px;margin-top:12px;}
+
+  #toast{position:fixed;left:50%;bottom:100px;transform:translate(-50%,14px);z-index:35;
+    background:var(--panel);border:1px solid var(--amber);padding:9px 14px;font-size:11px;
+    opacity:0;transition:opacity .2s,transform .2s;pointer-events:none;max-width:88vw;text-align:center;}
+  #toast.show{opacity:1;transform:translate(-50%,0);}
+</style>
+</head>
+<body>
+
+<!-- ============ ACCESO ============ -->
+<div id="login">
+  <div class="card">
+    <h1 class="display">MI OFICINA</h1>
+    <div class="sub">Mundo Montasa · acceso de empleados</div>
+    <div class="roles" id="roles"></div>
+    <input id="codigo" type="password" inputmode="numeric" autocomplete="off"
+           placeholder="CÓDIGO" aria-label="Código de acceso">
+    <button class="primary" id="entrar" disabled>Entrar</button>
+    <div class="err" id="err"></div>
+    <div class="nota" id="nota-auth">
+      Se usa el <b>mismo código</b> de la app de Bitácora SGI. Si tu rol todavía no tiene
+      código, alguien con acceso de administrador tiene que crearlo allá primero —
+      desde acá no se pueden crear códigos nuevos.
+    </div>
+    <a class="volver" href="index.html">← Volver al mundo</a>
+  </div>
+</div>
+
+<!-- ============ OFICINA ============ -->
+<div id="app">
+  <canvas id="sala"></canvas>
+
+  <div id="top">
+    <a class="icobtn" href="index.html" title="Volver al mundo" aria-label="Volver al mundo">&#8592;</a>
+    <div class="quien"><b id="quien-rol" class="display">—</b><span id="quien-sub">—</span></div>
+    <div id="motor"><b id="motor-est">—</b><span id="motor-sub">—</span></div>
+    <button class="icobtn" id="salir" title="Cerrar sesión" aria-label="Cerrar sesión">&#9211;</button>
+  </div>
+
+  <div id="bandeja">
+    <div class="bhead"><b class="display">Bandeja</b><span id="bandeja-sub">—</span></div>
+    <div class="chips" id="chips"></div>
+  </div>
+</div>
+
+<div id="modal" role="dialog" aria-modal="true"><div class="sheet" id="sheet"></div></div>
+<div id="toast"></div>
+
+<script>
+"use strict";
+/* =====================================================================
+   OFICINA VIRTUAL — Mundo Montasa
+   ---------------------------------------------------------------------
+   El empleado entra con su código, cae en su oficina isométrica, y ahí
+   tiene agentes de IA en sus estaciones. Las tareas NO son inventadas:
+   salen de condiciones reales de la base (equipos vencidos, gastos
+   esperando decisión, existencia negativa en bodega...).
+
+   El empleado abre una tarea, escribe qué quiere que se haga, y el agente
+   se pone a COCINAR: Claude trabaja y su razonamiento se ve en vivo en la
+   pantalla del agente. Claude puede devolver tres cosas:
+
+     pregunta      -> el agente tira un pop-up de seguimiento
+     confirmacion  -> el agente pide permiso ANTES de escribir en la base
+     listo         -> queda el informe
+
+   NINGUNA escritura ocurre sin que el empleado la confirme en el pop-up.
+   Ese candado es a la vez la mecánica del juego y la regla de seguridad.
+   ===================================================================== */
+
+/* =====================================================================
+   1. CONFIGURACIÓN DEL MOTOR (Claude)
+   ---------------------------------------------------------------------
+   >>> PEGAR ACÁ LA URL DEL PROXY DESPLEGADO <<<
+   Ver mundo/servidor/README.md. La API key NO va acá ni en ningún archivo
+   de este repo: el repo es público y una key en un .html es una key
+   regalada. El proxy la guarda del lado del servidor.
+   Mientras esto quede vacío, los agentes se dibujan SIN ENERGÍA y cada
+   tarea dice qué falta. No se inventa ninguna respuesta.
+   ===================================================================== */
+const CLAUDE = {
+  proxyUrl: "",                    // ej: "https://montasa-web.vercel.app/api/claude"
+  modelo:   "claude-opus-5",       // informativo: el modelo real lo fija el proxy
+  maxTurnos: 12                    // techo de idas y vueltas por tarea
+};
+function motorListo(){ return !!CLAUDE.proxyUrl; }
+
+/* =====================================================================
+   2. CAPA DE DATOS
+   ---------------------------------------------------------------------
+   COPIA de ../index.html (el dash) y de index.html (el mundo). Cada página
+   de este repo es autocontenida —sin build, sin bundler— así que la única
+   forma de reusar las reglas es duplicarlas. SI CAMBIAN ALLÁ, CAMBIAN ACÁ.
+   Los ROLES y PERMISSIONS son copia de bitacora/index.html.
+   ===================================================================== */
+const DB_BASE = "https://montasa-app-default-rtdb.firebaseio.com";
+const CC_FB   = DB_BASE + "/bitacora";
+async function getJSON(path){
+  const r = await fetch(DB_BASE + "/" + path + ".json?_=" + Date.now(), { cache:"no-store" });
+  if(!r.ok) throw new Error("HTTP " + r.status + " en " + path);
+  return await r.json();
+}
+async function getBit(key){
+  const r = await fetch(CC_FB + "/" + key + ".json?_=" + Date.now(), { cache:"no-store" });
+  if(!r.ok) throw new Error("HTTP " + r.status);
+  return await r.json();
+}
+const NODO_EMPRESA = { montasa:"montasa", monhaco:"monhaco", monhagro:null };
+const CC_SEDES     = { montasa:["SPS"], monhaco:["Choloma"], monhagro:[] };
+
+function bucketEstado(estadoRaw){
+  const e = (estadoRaw||"").toString().trim().toUpperCase();
+  if(e === "DISPONIBLE") return "disp";
+  if(e === "EN RENTA")   return "renta";
+  if(e === "MAL ESTADO") return "mant";
+  return "uso";
+}
+const INTERVALO_DIAS = 90, INTERVALO_HORAS = 250, UMBRAL_AMARILLO = 0.75;
+const CAMPOS_HOROMETRO_ACT        = ["horometro","horometroActual","horas","horometer","hrs"];
+const CAMPOS_ULT_FECHA_EQUIPO     = ["ultimoMant","fechaUltimoMant","ultimoMantenimiento"];
+const CAMPOS_ULT_HOROMETRO_EQUIPO = ["horometroUltimoMant","horometroMant","hrsUltimoMant"];
+const NODOS_MANT           = ["preventivos","correctivos"];
+const CAMPOS_MANT_EQUIPOID = ["equipoId","equipoID","idEquipo"];
+const CAMPOS_FECHA         = ["fechaCompletado","fecha","fechaFin"];
+const CAMPOS_HOROMETRO_SNAP= ["horometro"];
+const CAMPOS_CLIENTE       = ["cliente","clienteNombre","clienteId","razonSocial","empresa"];
+
+function primerCampo(obj, posibles){
+  for(const k of posibles){ if(obj && obj[k] != null && obj[k] !== "") return obj[k]; }
+  return null;
+}
+function aFecha(v){
+  if(v == null) return null;
+  if(typeof v === "number") return new Date(v);
+  const d = new Date(v); return isNaN(d) ? null : d;
+}
+function aNumero(v){
+  if(v == null) return null;
+  const n = parseFloat(String(v).replace(/[^0-9.\-]/g,""));
+  return isNaN(n) ? null : n;
+}
+function diasDesde(f){ return (Date.now() - f.getTime()) / 86400000; }
+function fmtL(m){
+  const n = aNumero(m);
+  return n == null ? (m==null?"—":String(m))
+    : "L " + n.toLocaleString("es-HN",{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+function evaluarEquipo(eq, ultimoDeHistorial){
+  const codigo = eq.codigo || eq.id || "?";
+  const horoAct = aNumero(primerCampo(eq, CAMPOS_HOROMETRO_ACT));
+  const fechaUlt = aFecha(primerCampo(eq, CAMPOS_ULT_FECHA_EQUIPO)) ||
+                   (ultimoDeHistorial ? ultimoDeHistorial.fecha : null);
+  const horoUlt  = aNumero(primerCampo(eq, CAMPOS_ULT_HOROMETRO_EQUIPO)) ??
+                   (ultimoDeHistorial ? ultimoDeHistorial.horometro : null);
+  let rT=null, etqT=null;
+  if(fechaUlt){
+    const d = diasDesde(fechaUlt);
+    rT = d / INTERVALO_DIAS;
+    etqT = (d >= INTERVALO_DIAS) ? ("+"+Math.round(d-INTERVALO_DIAS)+"d") : (Math.round(d)+"d");
+  }
+  let rH=null, etqH=null;
+  if(horoAct != null && horoUlt != null){
+    const h = horoAct - horoUlt;
+    rH = h / INTERVALO_HORAS;
+    etqH = (h >= INTERVALO_HORAS) ? ("+"+Math.round(h-INTERVALO_HORAS)+"h") : (Math.round(h)+"h");
+  }
+  let urgencia=null, etiqueta="sin datos";
+  if(rT != null || rH != null){
+    if(rT == null){ urgencia=rH; etiqueta=etqH; }
+    else if(rH == null){ urgencia=rT; etiqueta=etqT; }
+    else if(rH >= rT){ urgencia=rH; etiqueta=etqH; }
+    else { urgencia=rT; etiqueta=etqT; }
+  }
+  let color = "nodata";
+  if(urgencia != null) color = urgencia >= 1 ? "crit" : (urgencia >= UMBRAL_AMARILLO ? "warn" : "ok");
+  return { codigo, urgencia, color, etiqueta };
+}
+
+/* --- roles y permisos: COPIA de bitacora/index.html --- */
+const ROLES = [
+  {id:'gerente_general',   label:'Gerente General',   dot:'#4f8fe0'},
+  {id:'gerente_comercial', label:'Gerente Comercial', dot:'#3ecf7e'},
+  {id:'rrhh',              label:'RRHH',              dot:'#f5a524'},
+  {id:'almacen_sps',       label:'Almacén SPS',       dot:'#5DBBE8'},
+  {id:'almacen_choloma',   label:'Almacén Choloma',   dot:'#3FAEDB'},
+  {id:'ventas1',           label:'Ventas 1',          dot:'#C77DD1'},
+  {id:'ventas2',           label:'Ventas 2',          dot:'#C77DD1'},
+  {id:'ventas3',           label:'Ventas 3',          dot:'#C77DD1'},
+  {id:'ventas4',           label:'Ventas 4',          dot:'#C77DD1'},
+  {id:'contabilidad',      label:'Contabilidad',      dot:'#a78bfa'},
+  {id:'admin',             label:'SGI y Mercadeo Administrador', dot:'#a3e635'}
+];
+const PERMISSIONS = {
+  admin:             { modules:'all', readOnly:false },
+  gerente_general:   { modules:'all', readOnly:true  },
+  gerente_comercial: { modules:'all', readOnly:true  },
+  rrhh:              { modules:'all', readOnly:true  },
+  almacen_sps:       { modules:['mi_panel','cajachica','viajes','almacen'], readOnly:false, sede:'SPS' },
+  almacen_choloma:   { modules:['mi_panel','cajachica','viajes','almacen'], readOnly:false, sede:'Choloma' },
+  ventas1:{ modules:['mi_panel','viajes'], readOnly:false, ownOnly:true },
+  ventas2:{ modules:['mi_panel','viajes'], readOnly:false, ownOnly:true },
+  ventas3:{ modules:['mi_panel','viajes'], readOnly:false, ownOnly:true },
+  ventas4:{ modules:['mi_panel','viajes'], readOnly:false, ownOnly:true },
+  contabilidad:      { modules:['cajachica','viajes'], readOnly:false }
+};
+function permisos(){ return PERMISSIONS[sesion && sesion.rolId] || { modules:[], readOnly:true }; }
+function puedeModulo(m){ const p = permisos(); return p.modules === 'all' || p.modules.indexOf(m) >= 0; }
+function soloLectura(){ return !!permisos().readOnly; }
+
+/* ===================== ESTADO GLOBAL ===================== */
+let sesion = null;           // { rolId, label, empresa }
+const state = {
+  equipos:{}, preventivos:{}, correctivos:{},
+  caja:null, viajes:null, almacen:null,
+  flotaErr:null, bitErr:null, cargando:false
+};
+let tareas = [];             // tareas vivas (generadas de los datos)
+let resueltas = 0;
+
+/* =====================================================================
+   3. ACCESO
+   ---------------------------------------------------------------------
+   Mismo mecanismo que la app de Bitácora SGI: el código se convierte en
+   SHA-256 y se compara contra /bitacora/auth-config. La diferencia: acá
+   NO se pueden crear códigos nuevos. Bitácora, si falta el código de un
+   rol, lo crea con lo que escribas; eso está bien en una app interna de
+   configuración, pero una puerta que se abre sola no es una puerta.
+   ===================================================================== */
+let rolElegido = null;
+async function hashCode(t){
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(t));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+function pintarRoles(){
+  document.getElementById("roles").innerHTML = ROLES.map(function(r){
+    return '<button class="role" data-rol="'+r.id+'"><span class="d" style="background:'+r.dot+'"></span>'+r.label+'</button>';
+  }).join("");
+  [...document.querySelectorAll(".role")].forEach(function(b){
+    b.onclick = function(){
+      rolElegido = b.dataset.rol;
+      [...document.querySelectorAll(".role")].forEach(x=>x.classList.remove("on"));
+      b.classList.add("on");
+      document.getElementById("entrar").disabled = false;
+      document.getElementById("err").textContent = "";
+    };
+  });
+}
+async function intentarEntrar(){
+  const err = document.getElementById("err");
+  const btn = document.getElementById("entrar");
+  const code = document.getElementById("codigo").value.trim();
+  if(!rolElegido){ err.textContent = "Elegí tu rol."; return; }
+  if(!code){ err.textContent = "Escribí tu código."; return; }
+  btn.disabled = true; err.textContent = "Verificando…";
+  try{
+    const cfg = await getBit("auth-config");
+    if(!cfg || !cfg.roles){
+      err.textContent = "La base no tiene códigos configurados todavía. Configuralos en la app de Bitácora SGI.";
+      btn.disabled = false; return;
+    }
+    const entry = cfg.roles[rolElegido];
+    if(!entry || !entry.code){
+      err.textContent = "Ese rol todavía no tiene código. Pedile a SGI que lo cree en la app de Bitácora — desde acá no se pueden crear.";
+      btn.disabled = false; return;
+    }
+    if(entry.code !== await hashCode(code)){
+      err.textContent = "Código incorrecto.";
+      btn.disabled = false; return;
+    }
+    const rol = ROLES.find(r=>r.id === rolElegido);
+    sesion = { rolId: rol.id, label: rol.label, empresa: empresaDeRol(rol.id) };
+    try{ sessionStorage.setItem("mundo_sesion", JSON.stringify(sesion)); }catch(e){}
+    await abrirOficina();
+  }catch(e){
+    console.error("[Oficina] login:", e);
+    err.textContent = "No se pudo leer la base: " + e.message;
+    btn.disabled = false;
+  }
+}
+/* La sede del rol decide qué empresa mira su oficina (SPS = Montasa,
+   Choloma = Monhaco). Los roles sin sede arrancan en Montasa. */
+function empresaDeRol(id){
+  const p = PERMISSIONS[id] || {};
+  if(p.sede === "Choloma") return "monhaco";
+  return "montasa";
+}
+
+/* =====================================================================
+   4. LA SALA (canvas isométrico, cámara fija)
+   ---------------------------------------------------------------------
+   A diferencia del mundo grande, acá NO hay que navegar: es un solo
+   cuarto y entra completo en la pantalla. La cámara se calcula para que
+   la sala quepa, y listo. Un tile mide 32 x 16 a escala 1x, igual que en
+   index.html, y el escalado es por enteros con el suavizado apagado.
+   ===================================================================== */
+/* Tile de 48 x 24 (no 32 x 16 como el mundo grande): la sala es un solo
+   cuarto y en un celular de 380 px entra completa recién a este tamaño.
+   Con tiles chicos la escala entera caía a 1x y no se veía nada. */
+const TW = 48, TH = 24, HW = TW/2, HH = TH/2;
+function w2s(gx, gy){ return { x:(gx-gy)*HW, y:(gx+gy)*HH }; }
+
+const SALA = { w:8, h:6 };
+const cv  = document.getElementById("sala");
+const ctx = cv.getContext("2d");
+let CW=0, CH=0, DPR=1, ESC=2, OX=0, OY=0;
+
+function medir(){
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  CW = window.innerWidth; CH = window.innerHeight;
+  cv.width = Math.round(CW*DPR); cv.height = Math.round(CH*DPR);
+  cv.style.width = CW+"px"; cv.style.height = CH+"px";
+  /* la sala vive entre la barra de arriba (~78 px) y la bandeja (~104 px) */
+  const TOPE = 82, PISO = 108;
+  const dispW = CW - 12, dispH = CH - TOPE - PISO;
+  /* Alto real de lo dibujado, en unidades de mundo: desde el borde de arriba
+     de las paredes (-62) hasta el pie del piso. Centrar con eso —y no con el
+     centro de la huella— es lo que deja la sala parada en medio del hueco. */
+  const ALTO_PARED = 62;
+  const yTop = -ALTO_PARED, yBot = (SALA.w + SALA.h) * HH + TH;
+  const salaW = (SALA.w + SALA.h) * HW, salaH = yBot - yTop;
+  ESC = Math.max(1, Math.min(4, Math.floor(Math.min(dispW/salaW, dispH/salaH))));
+  const c = w2s(SALA.w/2, SALA.h/2);
+  OX = CW/2 - c.x*ESC;
+  OY = TOPE + dispH/2 - ((yTop + yBot)/2) * ESC;
+  ctx.imageSmoothingEnabled = false;
+}
+window.addEventListener("resize", function(){ medir(); pintar(); });
+
+function aplicar(){
+  const s = ESC*DPR;
+  ctx.setTransform(s,0,0,s, Math.round(OX*DPR), Math.round(OY*DPR));
+  ctx.imageSmoothingEnabled = false;
+}
+function pantallaDe(wx, wy){ return { x: wx*ESC + OX, y: wy*ESC + OY }; }
+
+function shade(hex, f){
+  const n = parseInt(hex.slice(1),16);
+  const r = Math.max(0,Math.min(255,Math.round(((n>>16)&255)*f)));
+  const g = Math.max(0,Math.min(255,Math.round(((n>>8)&255)*f)));
+  const b = Math.max(0,Math.min(255,Math.round((n&255)*f)));
+  return "#" + ((1<<24)|(r<<16)|(g<<8)|b).toString(16).slice(1);
+}
+function tile(gx, gy, col, line){
+  const p = w2s(gx, gy);
+  ctx.beginPath();
+  ctx.moveTo(p.x, p.y); ctx.lineTo(p.x+HW, p.y+HH);
+  ctx.lineTo(p.x, p.y+TH); ctx.lineTo(p.x-HW, p.y+HH);
+  ctx.closePath(); ctx.fillStyle = col; ctx.fill();
+  if(line){ ctx.strokeStyle = line; ctx.lineWidth = 1; ctx.stroke(); }
+}
+function isoBox(gx, gy, w, d, h, col, opt){
+  opt = opt || {};
+  const z0 = opt.z || 0, z1 = z0 + h;
+  const A=w2s(gx,gy), B=w2s(gx+w,gy), C=w2s(gx+w,gy+d), D=w2s(gx,gy+d);
+  const top = opt.topCol || shade(col, opt.topF || 1.0);
+  ctx.beginPath(); ctx.moveTo(B.x,B.y-z1); ctx.lineTo(C.x,C.y-z1); ctx.lineTo(C.x,C.y-z0); ctx.lineTo(B.x,B.y-z0);
+  ctx.closePath(); ctx.fillStyle = shade(col, .74); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(D.x,D.y-z1); ctx.lineTo(C.x,C.y-z1); ctx.lineTo(C.x,C.y-z0); ctx.lineTo(D.x,D.y-z0);
+  ctx.closePath(); ctx.fillStyle = shade(col, .55); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(A.x,A.y-z1); ctx.lineTo(B.x,B.y-z1); ctx.lineTo(C.x,C.y-z1); ctx.lineTo(D.x,D.y-z1);
+  ctx.closePath(); ctx.fillStyle = top; ctx.fill();
+  if(opt.line){ ctx.strokeStyle = opt.line; ctx.lineWidth = 1; ctx.stroke(); }
+}
+
+/* =====================================================================
+   5. LOS AGENTES
+   ---------------------------------------------------------------------
+   Cada agente es un trabajador de IA parado en su subestación. Su dominio
+   decide qué datos ve, qué tareas le tocan y qué herramientas puede pedir
+   usar. Un rol solo ve los agentes de los módulos que le permite bitácora
+   (un vendedor no ve al de Caja Chica).
+   ===================================================================== */
+const AGENTES = [
+  { id:"mant",   nombre:"ORACLE-MT", oficio:"Mantenimiento",
+    gx:0.5, gy:0.4, col:"#e5534b", modulo:"all",
+    alcance:"equipos, preventivos y correctivos: urgencias, vencidos y huecos de datos" },
+  { id:"caja",   nombre:"CONTA-01",  oficio:"Caja chica y viáticos",
+    gx:4.3, gy:0.3, col:"#f5a524", modulo:"cajachica",
+    alcance:"data-cajachica y data-viajes: el flujo de 4 estados, montos y responsables" },
+  { id:"bodega", nombre:"STOCK-9",   oficio:"Bodega",
+    gx:6.2, gy:2.0, col:"#a9741f", modulo:"almacen",
+    alcance:"data-almacen: entradas, salidas y existencia neta por producto y sede" },
+  { id:"flota",  nombre:"RENTA-3",   oficio:"Flota y rentas",
+    gx:0.3, gy:3.5, col:"#3ecf7e", modulo:"all",
+    alcance:"equipos por estado: disponibles, en renta, en taller y en cliente" },
+  { id:"radar",  nombre:"RADAR-X",   oficio:"Ventas y KPIs",
+    gx:5.7, gy:4.3, col:"#4f8fe0", modulo:"all",
+    alcance:"lo que el mundo ya leyó de la operación; RADAR se consulta desde el dash" }
+];
+const AG = {}; AGENTES.forEach(a => AG[a.id] = a);
+/* estado visual de cada agente: apagado | libre | cocinando | espera | listo */
+const estadoAgente = {};
+AGENTES.forEach(a => estadoAgente[a.id] = "libre");
+
+function agentesVisibles(){
+  return AGENTES.filter(a => a.modulo === "all" || puedeModulo(a.modulo));
+}
+
+let t0 = Date.now();
+function pintar(){
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.fillStyle = "#17191a"; ctx.fillRect(0,0,CW,CH);
+  aplicar();
+
+  /* piso a cuadros */
+  for(let j=0;j<SALA.h;j++) for(let i=0;i<SALA.w;i++)
+    tile(i, j, ((i+j)%2 ? "#2d3032" : "#292c2e"), "#33373a");
+  /* paredes del fondo */
+  isoBox(0, -0.35, SALA.w, 0.35, 62, "#383c40", { line:"#454a4e" });
+  isoBox(-0.35, 0, 0.35, SALA.h, 62, "#31363a", { line:"#454a4e" });
+  /* mesa central */
+  isoBox(2.7, 2.3, 2.5, 1.8, 20, "#4a4038", { line:"#5b5045" });
+
+  const visibles = agentesVisibles();
+  /* orden de pintado por profundidad, para que no se tapen mal */
+  visibles.slice().sort((a,b)=> (a.gx+a.gy) - (b.gx+b.gy)).forEach(dibujarAgente);
+
+  /* el empleado, parado en la puerta */
+  dibujarEmpleado(4.2, 5.4);
+
+  etiquetas(visibles);
+}
+
+function dibujarAgente(a){
+  const est = estadoAgente[a.id];
+  const apagado = (est === "apagado");
+  const cocina  = (est === "cocinando");
+  const col = apagado ? "#3a3e41" : a.col;
+
+  /* subestación: escritorio + terminal */
+  isoBox(a.gx, a.gy, 1.6, 1.1, 18, "#3a3f43", { line:"#4a5054" });
+  /* pantalla del terminal: es lo que se enciende cuando está cocinando */
+  const brillo = cocina ? (0.75 + 0.25*Math.sin((Date.now()-t0)/140)) : (apagado ? 0 : 0.34);
+  isoBox(a.gx+0.25, a.gy+0.12, 0.85, 0.14, 16, "#22282c", { z:18, line:"#4a5054" });
+  isoBox(a.gx+0.25, a.gy+0.12, 0.85, 0.14, 13,
+         apagado ? "#26292b" : shade(col, 0.25 + brillo*0.9), { z:19 });
+
+  /* el robot */
+  const p = w2s(a.gx+1.25, a.gy+0.7);
+  const bx = Math.round(p.x-10), by = Math.round(p.y+HH-42);
+  ctx.save();
+  if(apagado) ctx.globalAlpha = 0.38;
+  ctx.fillStyle = "#000"; ctx.globalAlpha *= 1;
+  ctx.save(); ctx.globalAlpha = apagado?0.15:0.3;
+  ctx.beginPath(); ctx.ellipse(p.x, p.y+HH, 11, 5, 0, 0, Math.PI*2); ctx.fill(); ctx.restore();
+  ctx.fillStyle = "#101213"; ctx.fillRect(bx, by, 20, 30);                        // silueta
+  ctx.fillStyle = shade(col, apagado?1:0.7); ctx.fillRect(bx+1, by+11, 18, 17);   // cuerpo
+  ctx.fillStyle = shade(col, apagado?1:1.08); ctx.fillRect(bx+1, by+11, 18, 4);
+  ctx.fillStyle = shade(col, apagado?1:0.5);  ctx.fillRect(bx+1, by+24, 18, 4);
+  ctx.fillStyle = "#22282c"; ctx.fillRect(bx+3, by+2, 14, 9);                     // cabeza
+  ctx.fillStyle = "#101213"; ctx.fillRect(bx+8, by-3, 4, 3);                      // antena
+  ctx.fillStyle = apagado ? "#2f3336" : shade(col, 1.2); ctx.fillRect(bx+8, by-5, 4, 2);
+  /* los ojos: apagados si no hay motor, parpadean si cocina */
+  const ojo = apagado ? "#2f3336" : (cocina ? shade(col, 1.4) : shade(col, 0.95));
+  const guino = (!apagado && !cocina && ((Date.now()-t0) % 4200) < 130);
+  ctx.fillStyle = guino ? "#22282c" : ojo;
+  ctx.fillRect(bx+5, by+5, 4, 3); ctx.fillRect(bx+11, by+5, 4, 3);
+  ctx.fillStyle = "#101213"; ctx.fillRect(bx+5, by+28, 4, 3); ctx.fillRect(bx+11, by+28, 4, 3);
+  ctx.restore();
+
+  /* partículas mientras cocina: se ve que está trabajando */
+  if(cocina){
+    const t = (Date.now()-t0)/260;
+    for(let k=0;k<3;k++){
+      const f = ((t + k*0.33) % 1);
+      ctx.save(); ctx.globalAlpha = 0.85*(1-f);
+      ctx.fillStyle = a.col;
+      ctx.fillRect(Math.round(p.x - 8 + k*7), Math.round(by - 10 - f*22), 3, 3);
+      ctx.restore();
+    }
+  }
+  /* globo de aviso */
+  const globo = { espera:"?", listo:"✓" }[est];
+  if(globo){
+    const gc = est==="espera" ? "#4f8fe0" : "#3ecf7e";
+    const gx = Math.round(p.x + 14), gy = Math.round(by - 4);
+    ctx.fillStyle = "#101213"; ctx.fillRect(gx-9, gy-10, 18, 17);
+    ctx.fillStyle = gc;        ctx.fillRect(gx-8, gy-9, 16, 15);
+    ctx.fillStyle = "#101213"; ctx.font = "bold 11px 'IBM Plex Mono',monospace";
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText(globo, gx, gy-1);
+  }
+}
+
+/* El empleado: sos vos, parado en tu oficina. */
+function dibujarEmpleado(gx, gy){
+  const p = w2s(gx, gy);
+  const bx = Math.round(p.x-9), by = Math.round(p.y+HH-34);
+  ctx.save(); ctx.globalAlpha = .3; ctx.fillStyle = "#000";
+  ctx.beginPath(); ctx.ellipse(p.x, p.y+HH, 11, 5, 0, 0, Math.PI*2); ctx.fill(); ctx.restore();
+  ctx.fillStyle = "#101213"; ctx.fillRect(bx, by, 18, 34);
+  ctx.fillStyle = "#57606a"; ctx.fillRect(bx+1, by+12, 16, 15);
+  ctx.fillStyle = "#eae7e0"; ctx.fillRect(bx+1, by+12, 16, 3);
+  ctx.fillStyle = "#3a3f43"; ctx.fillRect(bx+1, by+27, 16, 6);
+  ctx.fillStyle = "#8b7355"; ctx.fillRect(bx+4, by+2, 10, 9);
+  ctx.fillStyle = "#5a4a38"; ctx.fillRect(bx+4, by+2, 10, 3);
+  /* el rótulo va a los PIES, no arriba: arriba choca con los escritorios */
+  empleadoAnclaje = { x: p.x, y: p.y + HH + 10 };
+}
+let empleadoAnclaje = { x:0, y:0 };
+
+/* Los rótulos van en espacio de pantalla, sin escalar: así se leen sin
+   zoom en un celular chico. */
+function etiquetas(visibles){
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.textBaseline = "middle"; ctx.textAlign = "center";
+  /* el rótulo del empleado */
+  if(sesion){
+    const se = pantallaDe(empleadoAnclaje.x, empleadoAnclaje.y);
+    if(se.y > 62 && se.y < CH-110){
+      ctx.font = "700 10px 'Barlow Condensed',sans-serif";
+      const w0 = ctx.measureText(sesion.label.toUpperCase()).width + 10;
+      ctx.fillStyle = "rgba(23,25,26,.85)";
+      ctx.fillRect(Math.round(se.x-w0/2), Math.round(se.y-7), Math.round(w0), 14);
+      ctx.fillStyle = "#8b9096";
+      ctx.fillText(sesion.label.toUpperCase(), Math.round(se.x), Math.round(se.y));
+    }
+  }
+  const ETQ = { apagado:["SIN ENERGÍA","#565b5f"], libre:["libre","#8b9096"],
+                cocinando:["cocinando…","#f5a524"], espera:["te pregunta","#4f8fe0"],
+                listo:["listo","#3ecf7e"] };
+  visibles.forEach(function(a){
+    const w = w2s(a.gx+0.9, a.gy+0.6);
+    const s = pantallaDe(w.x, w.y - 62);
+    if(s.y < 62 || s.y > CH-116) return;
+    const est = ETQ[estadoAgente[a.id]] || ETQ.libre;
+    ctx.font = "700 11px 'Barlow Condensed',sans-serif";
+    const tw = ctx.measureText(a.nombre).width + 10;
+    ctx.fillStyle = "rgba(23,25,26,.85)";
+    ctx.fillRect(Math.round(s.x-tw/2), Math.round(s.y-8), Math.round(tw), 15);
+    ctx.fillStyle = estadoAgente[a.id]==="apagado" ? "#565b5f" : a.col;
+    ctx.fillText(a.nombre, Math.round(s.x), Math.round(s.y));
+    ctx.font = "400 8.5px 'IBM Plex Mono',monospace";
+    ctx.fillStyle = est[1];
+    ctx.fillText(est[0], Math.round(s.x), Math.round(s.y+12));
+  });
+}
+
+let raf = null;
+function bucle(){ pintar(); raf = requestAnimationFrame(bucle); }
+
+/* tocar un agente abre su tarea pendiente (o dice que no tiene) */
+cv.addEventListener("click", function(e){
+  const visibles = agentesVisibles();
+  let mejor = null, mejorD = 1e9;
+  visibles.forEach(function(a){
+    const w = w2s(a.gx+1.0, a.gy+0.7);
+    const s = pantallaDe(w.x, w.y - 20);
+    const d = Math.hypot(s.x - e.clientX, s.y - e.clientY);
+    if(d < mejorD){ mejorD = d; mejor = a; }
+  });
+  if(mejor && mejorD < 60) tocarAgente(mejor.id);
+});
+
+/* =====================================================================
+   6. CARGA DE DATOS
+   ===================================================================== */
+async function cargarTodo(){
+  if(state.cargando) return;
+  state.cargando = true;
+  const nodo = NODO_EMPRESA[sesion.empresa];
+  try{
+    if(nodo){
+      const [eq, pv, cr] = await Promise.all([
+        getJSON(nodo + "/equipos"),
+        getJSON(nodo + "/preventivos").catch(()=>({})),
+        getJSON(nodo + "/correctivos").catch(()=>({}))
+      ]);
+      state.equipos = eq || {}; state.preventivos = pv || {}; state.correctivos = cr || {};
+      state.flotaErr = null;
+    }else{
+      state.equipos = {}; state.preventivos = {}; state.correctivos = {};
+      state.flotaErr = "esta empresa no tiene nodo de flota";
+    }
+  }catch(e){ console.error("[Oficina] flota:", e); state.flotaErr = e.message; }
+
+  try{
+    const [cj, vj, al] = await Promise.all([
+      getBit("data-cajachica"), getBit("data-viajes"), getBit("data-almacen")
+    ]);
+    state.caja    = Array.isArray(cj) ? cj : [];
+    state.viajes  = Array.isArray(vj) ? vj : [];
+    state.almacen = Array.isArray(al) ? al : [];
+    state.bitErr  = null;
+  }catch(e){ console.error("[Oficina] bitacora:", e); state.bitErr = e.message; }
+  state.cargando = false;
+}
+
+/* --- resúmenes que alimentan tanto las tareas como el contexto de Claude --- */
+function resumenFlota(){
+  const ultimo = {};
+  NODOS_MANT.forEach(function(n){
+    const regs = state[n]; if(!regs) return;
+    Object.values(regs).forEach(function(r){
+      if(r.completado === false) return;
+      const id = primerCampo(r, CAMPOS_MANT_EQUIPOID);
+      const f  = aFecha(primerCampo(r, CAMPOS_FECHA));
+      if(!id || !f) return;
+      const snap = aNumero(primerCampo(r, CAMPOS_HOROMETRO_SNAP));
+      if(!ultimo[id] || f > ultimo[id].fecha) ultimo[id] = { fecha:f, horometro:snap };
+    });
+  });
+  const filas = Object.values(state.equipos || {}).map(function(eq){
+    const ev = evaluarEquipo(eq, ultimo[eq.id] || null);
+    return { eq, ev, bucket: bucketEstado(eq.estado), cliente: primerCampo(eq, CAMPOS_CLIENTE) };
+  });
+  return {
+    filas,
+    total: filas.length,
+    crit:   filas.filter(f=>f.ev.color==="crit").sort((a,b)=>b.ev.urgencia-a.ev.urgencia),
+    warn:   filas.filter(f=>f.ev.color==="warn").sort((a,b)=>b.ev.urgencia-a.ev.urgencia),
+    nodata: filas.filter(f=>f.ev.color==="nodata"),
+    disp:   filas.filter(f=>f.bucket==="disp"),
+    renta:  filas.filter(f=>f.bucket==="renta"),
+    taller: filas.filter(f=>f.bucket==="mant"),
+    otros:  filas.filter(f=>f.bucket==="uso")
+  };
+}
+function misSedes(){
+  const p = permisos();
+  if(p.sede) return [p.sede];
+  return CC_SEDES[sesion.empresa] || [];
+}
+function resumenCaja(){
+  const sedes = misSedes();
+  const todos = (state.caja || []).filter(r => !sedes.length || sedes.indexOf(r.sede) >= 0);
+  const por = e => todos.filter(r => String(r.estado||"").trim() === e);
+  return { todos, sedes,
+    revision: por("Enviado a revisión"),
+    pendiente: por("Pendiente de liquidar"),
+    aprobado: por("Aprobado por Gerencia"),
+    rechazado: por("Rechazado"),
+    liquidado: por("Liquidado") };
+}
+function resumenViajes(){
+  const v = state.viajes || [];
+  return { todos:v, revision: v.filter(r => String(r.estado||"").trim() === "Enviado a revisión") };
+}
+function resumenBodega(){
+  const sedes = misSedes();
+  const arr = (state.almacen || []).filter(r => !sedes.length || sedes.indexOf(r.sede || "General") >= 0);
+  const m = new Map();
+  arr.forEach(function(r){
+    const k = (r.sede||"General") + " · " + String(r.producto||"—").trim();
+    if(!m.has(k)) m.set(k, { clave:k, sede:r.sede||"General", producto:String(r.producto||"—").trim(),
+                             neto:0, unidad:r.unidad||"", movs:0 });
+    const p = m.get(k), q = aNumero(r.cantidad) || 0;
+    p.neto += (String(r.tipo||"").trim().toLowerCase() === "entrada") ? q : -q;
+    p.movs++;
+  });
+  const prods = [...m.values()];
+  return { prods, negativos: prods.filter(p => p.neto < 0), enCero: prods.filter(p => p.neto === 0) };
+}
+
+/* =====================================================================
+   7. GENERADOR DE TAREAS
+   ---------------------------------------------------------------------
+   Las tareas SALEN DE LOS DATOS. Ninguna es decorativa: si no hay
+   condición real, no hay tarea, y la bandeja se ve vacía. El `id` es
+   determinista (mismo problema = misma tarea) para que un refresco no
+   duplique lo que ya estás trabajando.
+   ===================================================================== */
+function generarTareas(){
+  const out = [];
+  const f  = resumenFlota();
+  const cj = resumenCaja();
+  const vj = resumenViajes();
+  const bd = resumenBodega();
+
+  /* "1 equipos" queda feo y se nota; el plural se calcula. */
+  function pl(n, sing, plur){ return n + " " + (n === 1 ? sing : plur); }
+  function T(id, agente, nivel, titulo, detalle, contexto, sugerencia){
+    out.push({ id, agente, nivel, titulo, detalle, contexto, sugerencia,
+               estado:"abierta", conv:null, informe:null, pendiente:null });
+  }
+
+  if(state.flotaErr){
+    T("flota-err","flota","crit","No se pudo leer la flota",
+      state.flotaErr,
+      "El nodo de equipos de " + sesion.empresa + " no respondió: " + state.flotaErr,
+      "¿Qué hago mientras no se pueda leer la flota?");
+  }else{
+    if(f.crit.length)
+      T("mant-crit","mant","crit", pl(f.crit.length, "equipo pasado", "equipos pasados") + " de mantenimiento",
+        "Ratio ≥ 1.0 sobre el intervalo de " + INTERVALO_DIAS + " días / " + INTERVALO_HORAS + " h",
+        "Equipos vencidos (código · urgencia · atraso · estado):\n" +
+          f.crit.slice(0,25).map(x => "· " + x.ev.codigo + " · " + Math.round(x.ev.urgencia*100) + "% · " +
+            x.ev.etiqueta + " · " + (x.eq.estado||"?")).join("\n"),
+        "Armame el orden de atención para esta semana y decime cuáles frenan renta.");
+    if(f.warn.length)
+      T("mant-warn","mant","warn", pl(f.warn.length, "equipo", "equipos") + " por vencer",
+        "Ratio entre " + UMBRAL_AMARILLO + " y 1.0",
+        "Por vencer:\n" + f.warn.slice(0,25).map(x => "· " + x.ev.codigo + " · " +
+          Math.round(x.ev.urgencia*100) + "% · " + x.ev.etiqueta).join("\n"),
+        "¿Cuáles conviene adelantar para no parar equipo rentado?");
+    if(f.nodata.length)
+      T("mant-nodata","mant","crit", pl(f.nodata.length, "equipo", "equipos") + " sin datos de mantenimiento",
+        "Ni fecha de último mantenimiento ni horómetro comparable",
+        "Sin datos (son los fantasmas del taller en el mundo):\n" +
+          f.nodata.slice(0,25).map(x => "· " + x.ev.codigo + " · estado " + (x.eq.estado||"?")).join("\n"),
+        "Decime qué dato falta en cada uno y cómo lo levanto rápido.");
+    if(f.disp.length === 0 && f.total > 0)
+      T("flota-vacia","flota","warn","Patio vacío: nada disponible",
+        "Ningún equipo en estado DISPONIBLE",
+        "Total de flota: " + f.total + " · en renta: " + f.renta.length +
+          " · en taller: " + f.taller.length + " · otros: " + f.otros.length,
+        "¿Qué hago si entra una solicitud de renta hoy?");
+    if(f.taller.length)
+      T("taller","mant","warn", pl(f.taller.length, "equipo", "equipos") + " en taller (MAL ESTADO)",
+        "Están fuera de servicio y no generan renta",
+        "En taller:\n" + f.taller.slice(0,25).map(x => "· " + x.ev.codigo + " · " +
+          x.ev.color + " · " + x.ev.etiqueta).join("\n"),
+        "Priorizá la salida del taller por impacto en ingreso.");
+  }
+
+  if(state.bitErr){
+    T("bit-err","caja","crit","No se pudo leer la bitácora", state.bitErr,
+      "El nodo /bitacora no respondió: " + state.bitErr,
+      "¿Cómo sigo sin acceso a caja chica?");
+  }else if(puedeModulo("cajachica")){
+    if(cj.revision.length)
+      T("caja-rev","caja","crit", pl(cj.revision.length, "gasto espera", "gastos esperan") + " tu decisión",
+        "Estado: Enviado a revisión · sede " + (cj.sedes.join(", ") || "todas"),
+        "Gastos en revisión:\n" + cj.revision.slice(0,25).map(r => "· id " + r.id + " · " +
+          (r.concepto||"—") + " · " + fmtL(r.monto) + " · " + (r.responsable||"—") +
+          " · " + (r.fecha||"—")).join("\n") +
+        "\n\nFondo y totales: pendiente de liquidar " + cj.pendiente.length +
+          ", aprobado " + cj.aprobado.length + ", liquidado " + cj.liquidado.length,
+        "Revisá uno por uno y decime cuáles aprobarías y por qué.");
+    if(vj.revision.length)
+      T("viaje-rev","caja","warn", pl(vj.revision.length, "viático", "viáticos") + " en revisión",
+        "data-viajes · estado Enviado a revisión",
+        "Viáticos en revisión:\n" + vj.revision.slice(0,25).map(r => "· " + (r.viajero||"—") +
+          " → " + (r.destino||"—") + " · " + fmtL(r.monto) + " · anticipo " +
+          fmtL(r.anticipo) + " · " + (r.fecha||"—")).join("\n"),
+        "¿Cuáles cuadran contra el anticipo y cuáles no?");
+    const sinComp = cj.todos.filter(r => !r.comprobante || String(r.comprobante).trim() === "" ||
+                                          String(r.comprobante).trim().toUpperCase() === "S/N");
+    if(sinComp.length >= 3)
+      T("caja-sincomp","caja","warn", pl(sinComp.length, "gasto", "gastos") + " sin comprobante",
+        "Comprobante vacío o S/N",
+        "Sin comprobante (los primeros 20):\n" + sinComp.slice(0,20).map(r => "· " +
+          (r.concepto||"—") + " · " + fmtL(r.monto) + " · " + (r.fecha||"—") +
+          " · " + (r.responsable||"—")).join("\n"),
+        "Agrupá por responsable y armame el texto para pedirles el comprobante.");
+  }
+
+  if(puedeModulo("almacen") && !state.bitErr){
+    if(bd.negativos.length)
+      T("bodega-neg","bodega","crit", pl(bd.negativos.length, "producto", "productos") + " con existencia negativa",
+        "Salieron más unidades de las que entraron: hay movimientos sin registrar",
+        "Existencia negativa:\n" + bd.negativos.slice(0,25).map(p => "· " + p.clave + " · " +
+          p.neto + " " + p.unidad + " · " + p.movs + " movimientos").join("\n"),
+        "¿Qué revisamos primero para cuadrar esto?");
+    if(bd.enCero.length >= 3)
+      T("bodega-cero","bodega","warn", pl(bd.enCero.length, "producto", "productos") + " en cero",
+        "Existencia neta 0 según entradas menos salidas",
+        "En cero:\n" + bd.enCero.slice(0,25).map(p => "· " + p.clave).join("\n"),
+        "¿Cuáles hay que reponer sí o sí y cuáles pueden esperar?");
+  }
+
+  /* Tarea libre: siempre disponible, para lo que no cae en ninguna alerta. */
+  T("libre","radar","info","Consulta libre",
+    "Preguntale a RADAR-X cualquier cosa sobre la operación cargada",
+    contextoGeneral(),
+    "");
+
+  /* se conserva el trabajo en curso de las tareas que ya existían */
+  const antes = {}; tareas.forEach(t => antes[t.id] = t);
+  tareas = out.map(function(t){
+    const v = antes[t.id];
+    if(v && v.estado !== "abierta"){
+      return Object.assign({}, t, { estado:v.estado, conv:v.conv, informe:v.informe, pendiente:v.pendiente });
+    }
+    return t;
+  });
+  sincronizarAgentes();
+}
+
+/* El contexto general: lo que TODO agente ve de la operación. Se arma de
+   los datos ya cargados, nunca de supuestos. */
+function contextoGeneral(){
+  const f = resumenFlota(), cj = resumenCaja(), bd = resumenBodega(), vj = resumenViajes();
+  const L = [];
+  L.push("EMPRESA ACTIVA: " + sesion.empresa + " (nodo " + (NODO_EMPRESA[sesion.empresa] || "no existe") + ")");
+  L.push("USUARIO: " + sesion.label + (soloLectura() ? " [solo lectura]" : ""));
+  L.push("");
+  if(state.flotaErr){
+    L.push("FLOTA: no disponible (" + state.flotaErr + ")");
+  }else{
+    L.push("FLOTA (" + f.total + " equipos): disponibles " + f.disp.length + " · en renta " +
+           f.renta.length + " · en taller " + f.taller.length + " · otros/interno " + f.otros.length);
+    L.push("MANTENIMIENTO: vencidos " + f.crit.length + " · por vencer " + f.warn.length +
+           " · SIN DATOS " + f.nodata.length + "   (intervalo " + INTERVALO_DIAS + " d / " +
+           INTERVALO_HORAS + " h, ámbar al " + (UMBRAL_AMARILLO*100) + "%)");
+    const cl = {};
+    f.renta.forEach(x => { const k = x.cliente || "sin cliente en la base"; cl[k] = (cl[k]||0)+1; });
+    const ks = Object.keys(cl);
+    if(ks.length) L.push("EN CLIENTE: " + ks.map(k => k + " (" + cl[k] + ")").join(" · "));
+  }
+  L.push("");
+  if(state.bitErr){
+    L.push("BITÁCORA: no disponible (" + state.bitErr + ")");
+  }else{
+    L.push("CAJA CHICA (sede " + (cj.sedes.join(", ") || "todas") + "): en revisión " +
+           cj.revision.length + " · pendiente de liquidar " + cj.pendiente.length +
+           " · aprobado " + cj.aprobado.length + " · liquidado " + cj.liquidado.length +
+           " · rechazado " + cj.rechazado.length);
+    L.push("VIÁTICOS: en revisión " + vj.revision.length + " de " + vj.todos.length);
+    L.push("BODEGA: " + bd.prods.length + " productos · negativos " + bd.negativos.length +
+           " · en cero " + bd.enCero.length);
+  }
+  return L.join("\n");
+}
+
+/* El estado de cada agente sale de sus tareas: no es una animación suelta. */
+function sincronizarAgentes(){
+  AGENTES.forEach(function(a){
+    if(!motorListo()){ estadoAgente[a.id] = "apagado"; return; }
+    const mias = tareas.filter(t => t.agente === a.id);
+    if(mias.some(t => t.estado === "cocinando")) estadoAgente[a.id] = "cocinando";
+    else if(mias.some(t => t.estado === "espera")) estadoAgente[a.id] = "espera";
+    else if(mias.some(t => t.estado === "listo")) estadoAgente[a.id] = "listo";
+    else estadoAgente[a.id] = "libre";
+  });
+}
+
+/* =====================================================================
+   8. EL MOTOR: Claude adentro del juego
+   ---------------------------------------------------------------------
+   El agente y Claude hablan con un SOBRE JSON. Claude siempre contesta un
+   objeto con `estado`, y ese estado es lo que mueve el juego:
+
+     "pregunta"     -> pop-up de seguimiento; la respuesta vuelve al hilo
+     "confirmacion" -> pop-up con la acción EXACTA; sin un sí, no se escribe
+     "listo"        -> informe final
+
+   Las herramientas son deliberadamente pocas. Cada una escribe en la base
+   y NINGUNA se ejecuta sin confirmación humana en pantalla.
+   ===================================================================== */
+const HERRAMIENTAS = {
+  decidir_caja_chica: {
+    modulo: "cajachica",
+    descripcion: "Aprobar o rechazar UN gasto de caja chica que esté en 'Enviado a revisión'. " +
+                 "args: { id: string, decision: \"aprobar\"|\"rechazar\", motivo: string }",
+    resumir: a => "Caja chica " + a.id + " → " +
+                  (a.decision === "aprobar" ? "Aprobado por Gerencia" : "Rechazado") +
+                  (a.motivo ? ("\nMotivo: " + a.motivo) : ""),
+    ejecutar: ejecDecidirCaja
+  },
+  nota_bitacora: {
+    modulo: "all",
+    descripcion: "Dejar una nota en el historial de cambios (/bitacora/data-bitacora). " +
+                 "No cambia ningún registro: solo deja constancia. " +
+                 "args: { modulo: string, descripcion: string }",
+    resumir: a => "Nota en bitácora [" + (a.modulo || "General") + "]:\n" + (a.descripcion || ""),
+    ejecutar: ejecNotaBitacora
+  }
+};
+function herramientasDe(agente){
+  return Object.keys(HERRAMIENTAS).filter(function(k){
+    const h = HERRAMIENTAS[k];
+    if(soloLectura()) return false;                    // gerencias miran, no escriben
+    return h.modulo === "all" || puedeModulo(h.modulo);
+  });
+}
+
+function systemDe(tarea){
+  const a = AG[tarea.agente];
+  const libres = herramientasDe(tarea.agente);
+  const bloqueTools = libres.length
+    ? ("HERRAMIENTAS QUE PODÉS PEDIR (siempre vía estado \"confirmacion\"):\n" +
+       libres.map(k => "- " + k + ": " + HERRAMIENTAS[k].descripcion).join("\n"))
+    : "NO TENÉS HERRAMIENTAS DISPONIBLES en esta sesión (el rol es de solo lectura o no " +
+      "tiene ese módulo). No propongas escrituras: analizá y recomendá.";
+
+  return [
+"Sos " + a.nombre + ", un agente de IA que trabaja en la oficina virtual de Montasa.",
+"Tu oficio: " + a.oficio + ". Tu alcance de datos: " + a.alcance + ".",
+"",
+"Hablás con " + sesion.label + ", un empleado real, en su celular, en español de Honduras.",
+"Sé directo y breve. Nada de relleno ni de felicitaciones. Los montos son Lempiras (HNL).",
+"",
+"REGLA QUE NO SE ROMPE: no inventes datos. Si algo no está en el contexto que te doy,",
+"decí que no está. Un número inventado en un tablero de operaciones es peor que un hueco,",
+"porque el hueco se ve y el invento no. Si te falta un dato para decidir, preguntá.",
+"",
+bloqueTools,
+"",
+"FORMATO DE RESPUESTA — contestá SIEMPRE con un solo objeto JSON, sin texto alrededor,",
+"sin ``` y sin comentarios. Estas son las tres formas válidas:",
+"",
+'{\"estado\":\"pregunta\",\"mensaje\":\"<lo que necesitás saber, 1-2 frases>\",\"opciones\":[\"<opción corta>\",\"<opción corta>\"]}',
+"   Usalo cuando te falta un dato o una decisión del empleado. `opciones` es opcional:",
+"   ponelas cuando la respuesta sea una elección; omitilas si necesitás texto libre.",
+"",
+'{\"estado\":\"confirmacion\",\"mensaje\":\"<por qué querés hacerlo>\",\"accion\":{\"herramienta\":\"<nombre>\",\"args\":{...}}}',
+"   Usalo ANTES de cualquier escritura. El empleado ve la acción exacta y decide.",
+"   Una acción por vez. Si hay varias, pedí la primera y seguí después.",
+"",
+'{\"estado\":\"listo\",\"mensaje\":\"<resumen en una frase>\",\"informe\":\"<el resultado completo, texto plano con saltos de línea y viñetas con ·>\"}',
+"   Usalo cuando terminaste. El informe queda guardado en la oficina.",
+"",
+"No uses markdown en `informe`: texto plano, viñetas con «· ». Nada de tablas."
+  ].join("\n");
+}
+
+/* --- la llamada, con streaming, vía el proxy --- */
+async function llamarClaude(system, mensajes, onPensar, onTexto){
+  if(!motorListo()) throw new Error("SIN_MOTOR");
+  const r = await fetch(CLAUDE.proxyUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ system, messages: mensajes })
+  });
+  if(!r.ok){
+    let msg = "HTTP " + r.status;
+    try{ const j = await r.json(); if(j && j.error) msg = j.error; }catch(e){}
+    throw new Error(msg);
+  }
+  if(!r.body) throw new Error("el proxy no devolvió stream");
+
+  const lector = r.body.getReader();
+  const dec = new TextDecoder();
+  let buf = "", texto = "", err = null;
+  while(true){
+    const { value, done } = await lector.read();
+    if(done) break;
+    buf += dec.decode(value, { stream:true });
+    const partes = buf.split("\n\n");
+    buf = partes.pop();
+    for(const p of partes){
+      const linea = p.split("\n").find(l => l.indexOf("data: ") === 0);
+      if(!linea) continue;
+      let ev; try{ ev = JSON.parse(linea.slice(6)); }catch(e){ continue; }
+      if(ev.t === "pensando") onPensar && onPensar(ev.x);
+      else if(ev.t === "texto"){ texto += ev.x; onTexto && onTexto(ev.x); }
+      else if(ev.t === "error") err = ev.msg;
+    }
+  }
+  if(err) throw new Error(err);
+  return texto;
+}
+
+/* --- lectura del sobre ---
+   Claude devuelve JSON. Si algo sale mal, NO se adivina el contenido: se
+   muestra crudo y se marca como respuesta no entendida. */
+function leerSobre(txt){
+  const t = (txt || "").trim();
+  let crudo = t;
+  const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if(fence) crudo = fence[1].trim();
+  else{
+    const a = crudo.indexOf("{"), b = crudo.lastIndexOf("}");
+    if(a >= 0 && b > a) crudo = crudo.slice(a, b+1);
+  }
+  let o = null;
+  try{ o = JSON.parse(crudo); }catch(e){ return { estado:"crudo", texto:t }; }
+  if(!o || typeof o !== "object" || !o.estado) return { estado:"crudo", texto:t };
+  if(["pregunta","confirmacion","listo"].indexOf(o.estado) < 0) return { estado:"crudo", texto:t };
+  return o;
+}
+
+/* =====================================================================
+   9. HERRAMIENTAS (las escrituras reales)
+   ---------------------------------------------------------------------
+   Se llaman DESPUÉS de que el empleado confirmó en el pop-up. Cada una
+   devuelve un texto que se le manda de vuelta a Claude como resultado.
+   ===================================================================== */
+async function ejecDecidirCaja(args){
+  const id = args && args.id;
+  const dec = args && args.decision;
+  if(!id) throw new Error("falta el id del gasto");
+  if(dec !== "aprobar" && dec !== "rechazar") throw new Error("decision debe ser aprobar o rechazar");
+  if(soloLectura()) throw new Error("tu rol es de solo lectura");
+  if(!puedeModulo("cajachica")) throw new Error("tu rol no tiene el módulo de caja chica");
+
+  const arr = await getBit("data-cajachica");
+  if(!Array.isArray(arr)) throw new Error("no hay datos de caja chica");
+  const i = arr.findIndex(x => x.id === id);
+  if(i === -1) throw new Error("id no encontrado: " + id);
+
+  const sedes = misSedes();
+  if(sedes.length && sedes.indexOf(arr[i].sede) < 0)
+    throw new Error("ese gasto es de la sede " + arr[i].sede + " y tu rol no la maneja");
+  if(["Aprobado por Gerencia","Rechazado","Liquidado"].indexOf(arr[i].estado) >= 0)
+    throw new Error("ya fue decidido (estado: " + arr[i].estado + ")");
+
+  arr[i].estado      = (dec === "aprobar") ? "Aprobado por Gerencia" : "Rechazado";
+  arr[i].decididoPor = sesion.label;
+  arr[i].decididoEn  = new Date().toISOString();
+
+  const put = await fetch(CC_FB + "/data-cajachica.json", {
+    method:"PUT", headers:{"Content-Type":"application/json"}, body: JSON.stringify(arr)
+  });
+  if(!put.ok) throw new Error("no se pudo guardar (HTTP " + put.status + ")");
+  state.caja = arr;
+  await anotarBitacora("Caja Chica", "Gasto " + id + " → " + arr[i].estado +
+    " (Oficina virtual · " + AG.caja.nombre + (args.motivo ? " · " + args.motivo : "") + ")");
+  return "Hecho. El gasto " + id + " (" + (arr[i].concepto||"—") + ", " + fmtL(arr[i].monto) +
+         ") quedó en estado \"" + arr[i].estado + "\", decidido por " + sesion.label + ".";
+}
+async function ejecNotaBitacora(args){
+  const d = args && args.descripcion;
+  if(!d) throw new Error("falta la descripción");
+  if(soloLectura()) throw new Error("tu rol es de solo lectura");
+  await anotarBitacora(args.modulo || "General", d);
+  return "Nota registrada en el historial de cambios.";
+}
+async function anotarBitacora(modulo, descripcion){
+  try{
+    let bit = await getBit("data-bitacora");
+    if(!Array.isArray(bit)) bit = [];
+    bit.unshift({ id:"oficina_"+Date.now(), fecha:new Date().toISOString(),
+      accion:"Cambió estado", modulo:modulo, descripcion:descripcion,
+      usuario: sesion.label + " (Oficina virtual)" });
+    await fetch(CC_FB + "/data-bitacora.json", { method:"PUT",
+      headers:{"Content-Type":"application/json"}, body: JSON.stringify(bit.slice(0,500)) });
+  }catch(e){ console.warn("[Oficina] bitácora:", e.message); }
+}
+
+/* =====================================================================
+   10. POP-UPS
+   ===================================================================== */
+const modal = document.getElementById("modal");
+const sheet = document.getElementById("sheet");
+function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g, c =>
+  ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" })[c]); }
+function cerrar(){ modal.classList.remove("on"); sheet.className = "sheet"; }
+function abrir(clase, kicker, titulo, cuerpo, cerrable){
+  sheet.className = "sheet" + (clase ? " " + clase : "");
+  sheet.innerHTML =
+    '<div class="shead"><div><div class="k">' + esc(kicker) + '</div>' +
+    '<h2 class="display">' + esc(titulo) + '</h2></div>' +
+    (cerrable === false ? '' : '<button class="x" id="mx" aria-label="Cerrar">&#10005;</button>') +
+    '</div><div class="sbody">' + cuerpo + '</div>';
+  modal.classList.add("on");
+  const x = document.getElementById("mx");
+  if(x) x.onclick = cerrar;
+}
+modal.addEventListener("click", e => { if(e.target === modal) cerrar(); });
+function toast(m){
+  const t = document.getElementById("toast");
+  t.textContent = m; t.classList.add("show");
+  clearTimeout(toast._t); toast._t = setTimeout(()=>t.classList.remove("show"), 2400);
+}
+
+const NIVEL_CLASE = { crit:"crit", warn:"", info:"" };
+function tareaDe(id){ return tareas.find(t => t.id === id); }
+
+/* --- 1. la tarea: contexto + el "entry" para Claude --- */
+function abrirTarea(t){
+  const a = AG[t.agente];
+  if(t.estado === "cocinando"){ verCocina(t); return; }
+  if(t.estado === "espera"){ verPendiente(t); return; }
+  if(t.estado === "listo"){ verInforme(t); return; }
+
+  const sinMotor = !motorListo();
+  const cuerpo =
+    '<div class="ctx"><b>' + esc(a.nombre) + '</b> · ' + esc(a.oficio) + '\n' +
+    esc(t.detalle) + '\n\n' + esc(t.contexto) + '</div>' +
+    (sinMotor
+      ? '<div class="warn"><b>Agente sin energía.</b> Falta conectar el motor de Claude: ' +
+        'no hay <code>proxyUrl</code> configurada en <code>mundo/oficina.html</code>. ' +
+        'El contexto de arriba es real y está completo — lo único que falta es quién lo procese. ' +
+        'Ver <code>mundo/servidor/README.md</code>.</div>'
+      : '<label class="lab" for="entry">¿Qué querés que haga ' + esc(a.nombre) + '?</label>' +
+        '<textarea id="entry" placeholder="Escribí acá…">' + esc(t.sugerencia || "") + '</textarea>' +
+        '<div class="acts"><button class="go" id="go">Mandar al agente</button></div>' +
+        (herramientasDe(t.agente).length
+          ? '<div class="dim">Este agente puede pedir permiso para escribir en la base. ' +
+            'Nunca escribe sin que vos confirmes en pantalla.</div>'
+          : '<div class="dim">Tu rol es de solo lectura para este módulo: el agente analiza y ' +
+            'recomienda, pero no puede proponer escrituras.</div>'));
+
+  abrir("", a.nombre + " · " + a.oficio, t.titulo, cuerpo);
+  const go = document.getElementById("go");
+  if(go) go.onclick = function(){
+    const txt = document.getElementById("entry").value.trim();
+    if(!txt){ toast("Escribí qué querés que haga."); return; }
+    arrancar(t, txt);
+  };
+}
+
+/* --- 2. cocinando: se ve el razonamiento en vivo --- */
+function verCocina(t){
+  const a = AG[t.agente];
+  abrir("", a.nombre + " · cocinando", t.titulo,
+    '<div class="cook"><div class="cookbar"><i></i></div>' +
+    '<div class="think" id="think">' + esc(t._pensado || "") + '</div></div>' +
+    '<div class="dim">Podés cerrar esto: el agente sigue trabajando y te avisa en su estación.</div>');
+}
+function pintarPensado(t){
+  const el = document.getElementById("think");
+  if(el && modal.classList.contains("on")){
+    el.textContent = t._pensado || "";
+    el.scrollTop = el.scrollHeight;
+  }
+}
+
+/* --- 3. lo que el agente pregunta o quiere confirmar --- */
+function verPendiente(t){
+  const a = AG[t.agente], p = t.pendiente;
+  if(!p) return abrirTarea(t);
+
+  if(p.tipo === "pregunta"){
+    const ops = Array.isArray(p.sobre.opciones) ? p.sobre.opciones : [];
+    abrir("q", a.nombre + " · te pregunta", t.titulo,
+      '<div class="informe">' + esc(p.sobre.mensaje || "") + '</div>' +
+      (ops.length
+        ? '<div class="ops">' + ops.map((o,i) =>
+            '<button data-op="' + i + '">' + esc(o) + '</button>').join("") + '</div>' +
+          '<label class="lab" for="resp">…o contestá con tus palabras</label>'
+        : '<label class="lab" for="resp">Tu respuesta</label>') +
+      '<textarea id="resp" placeholder="Escribí acá…"></textarea>' +
+      '<div class="acts"><button class="go" id="env">Responder</button></div>');
+    [...sheet.querySelectorAll("[data-op]")].forEach(function(b){
+      b.onclick = function(){ responder(t, ops[+b.dataset.op]); };
+    });
+    document.getElementById("env").onclick = function(){
+      const v = document.getElementById("resp").value.trim();
+      if(!v){ toast("Escribí una respuesta o elegí una opción."); return; }
+      responder(t, v);
+    };
+    return;
+  }
+
+  /* confirmación: acá está el candado. Se muestra la acción EXACTA. */
+  const acc  = p.sobre.accion || {};
+  const her  = HERRAMIENTAS[acc.herramienta];
+  const ok   = !!her && herramientasDe(t.agente).indexOf(acc.herramienta) >= 0;
+  const resumen = ok ? her.resumir(acc.args || {}) : null;
+  abrir("c", a.nombre + " · pide permiso", t.titulo,
+    '<div class="informe">' + esc(p.sobre.mensaje || "") + '</div>' +
+    (ok
+      ? '<div class="accion"><b>Va a hacer esto</b>' + esc(resumen) + '</div>' +
+        '<div class="acts"><button class="ok" id="si">Autorizar</button>' +
+        '<button class="no" id="no">No autorizar</button></div>' +
+        '<div class="dim">Se escribe en Firebase con tu nombre (' + esc(sesion.label) +
+        ') y queda registrado en el historial de cambios.</div>'
+      : '<div class="warn">El agente pidió una herramienta que no existe o que tu rol no ' +
+        'tiene habilitada (<b>' + esc(acc.herramienta || "sin nombre") + '</b>). ' +
+        'No se ejecuta nada.</div>' +
+        '<div class="acts"><button class="no" id="no">Devolverle el error</button></div>'));
+  const si = document.getElementById("si"), no = document.getElementById("no");
+  if(si) si.onclick = function(){ confirmar(t, true); };
+  if(no) no.onclick = function(){ confirmar(t, false, ok ? null :
+    "La herramienta \"" + (acc.herramienta||"?") + "\" no existe o no está habilitada para este rol."); };
+}
+
+/* --- 4. el informe --- */
+function verInforme(t){
+  const a = AG[t.agente];
+  const inf = t.informe || {};
+  const crudo = inf.estado === "crudo";
+  abrir(crudo ? "bad" : "ok", a.nombre + (crudo ? " · respuesta no entendida" : " · listo"), t.titulo,
+    (crudo
+      ? '<div class="warn">El agente no devolvió el formato esperado. Se muestra tal cual llegó, ' +
+        'sin interpretar nada.</div><div class="informe">' + esc(inf.texto || "") + '</div>'
+      : '<div class="informe">' + esc(inf.informe || inf.mensaje || "") + '</div>') +
+    '<div class="acts"><button class="go" id="otra">Volver a pedirle</button>' +
+    '<button id="cerr">Cerrar</button></div>');
+  document.getElementById("cerr").onclick = cerrar;
+  document.getElementById("otra").onclick = function(){
+    t.estado = "abierta"; t.conv = null; t.informe = null; t._pensado = "";
+    sincronizarAgentes(); pintarChips(); abrirTarea(t);
+  };
+}
+
+/* =====================================================================
+   11. EL CICLO DE TRABAJO
+   ===================================================================== */
+function arrancar(t, entry){
+  t.conv = [{ role:"user", content:
+    "CONTEXTO REAL (leído de la base hace instantes):\n" + t.contexto +
+    "\n\n--- estado general de la operación ---\n" + contextoGeneral() +
+    "\n\nLO QUE TE PIDE " + sesion.label.toUpperCase() + ":\n" + entry }];
+  t._pensado = "";
+  seguir(t);
+}
+function responder(t, texto){
+  if(!t.conv) return;
+  t.conv.push({ role:"user", content: texto });
+  seguir(t);
+}
+async function confirmar(t, autorizado, errorFijo){
+  const p = t.pendiente;
+  if(!p || !t.conv) return;
+  const acc = p.sobre.accion || {};
+  if(errorFijo){ t.conv.push({ role:"user", content:"NO SE EJECUTÓ. " + errorFijo }); return seguir(t); }
+  if(!autorizado){
+    t.conv.push({ role:"user", content:
+      sesion.label + " NO autorizó la acción. No la vuelvas a pedir igual: " +
+      "explicá por qué la proponías, o seguí sin ella." });
+    return seguir(t);
+  }
+  const her = HERRAMIENTAS[acc.herramienta];
+  abrir("c", AG[t.agente].nombre, t.titulo,
+    '<div class="cook"><div class="cookbar"><i></i></div>' +
+    '<div class="think">ejecutando ' + esc(acc.herramienta) + '…</div></div>', false);
+  try{
+    const res = await her.ejecutar(acc.args || {});
+    toast("Hecho · " + acc.herramienta);
+    t.conv.push({ role:"user", content:"AUTORIZADO Y EJECUTADO. Resultado: " + res });
+  }catch(e){
+    toast("No se pudo: " + e.message);
+    t.conv.push({ role:"user", content:"AUTORIZADO PERO FALLÓ. Error: " + e.message +
+      "\nNo lo reintentes igual: explicá qué pasó o proponé otra cosa." });
+  }
+  seguir(t);
+}
+
+async function seguir(t){
+  if(!motorListo()){ toast("Falta conectar el motor de Claude."); return; }
+  if(t.conv.filter(m => m.role === "assistant").length >= CLAUDE.maxTurnos){
+    t.estado = "listo";
+    t.informe = { estado:"listo", mensaje:"Se acabaron los turnos",
+      informe:"Esta tarea llegó al tope de " + CLAUDE.maxTurnos + " idas y vueltas y se cortó acá.\n" +
+              "Es un tope de gasto, no un error. Podés volver a pedirle con una pregunta más acotada." };
+    sincronizarAgentes(); pintarChips(); verInforme(t); return;
+  }
+
+  t.estado = "cocinando"; t.pendiente = null; t._pensado = "";
+  sincronizarAgentes(); pintarChips();
+  if(modal.classList.contains("on")) verCocina(t);
+
+  try{
+    const txt = await llamarClaude(systemDe(t), t.conv,
+      function(x){ t._pensado = (t._pensado || "") + x; pintarPensado(t); },
+      null);
+    t.conv.push({ role:"assistant", content: txt });
+    const sobre = leerSobre(txt);
+
+    if(sobre.estado === "pregunta" || sobre.estado === "confirmacion"){
+      t.estado = "espera";
+      t.pendiente = { tipo: sobre.estado, sobre: sobre };
+      sincronizarAgentes(); pintarChips();
+      if(modal.classList.contains("on")) verPendiente(t);
+      else toast(AG[t.agente].nombre + " te " +
+                 (sobre.estado === "pregunta" ? "pregunta algo" : "pide permiso"));
+      return;
+    }
+    t.estado = "listo"; t.informe = sobre;
+    if(sobre.estado === "listo") resueltas++;
+    sincronizarAgentes(); pintarChips();
+    if(modal.classList.contains("on")) verInforme(t);
+    else toast(AG[t.agente].nombre + " terminó · " + t.titulo);
+
+  }catch(e){
+    console.error("[Oficina] motor:", e);
+    t.estado = "listo";
+    t.informe = { estado:"crudo", texto:
+      (e.message === "SIN_MOTOR"
+        ? "No hay motor de Claude configurado (falta proxyUrl)."
+        : "El motor falló: " + e.message) };
+    sincronizarAgentes(); pintarChips();
+    if(modal.classList.contains("on")) verInforme(t);
+    else toast("Falló " + AG[t.agente].nombre + ": " + e.message);
+  }
+}
+
+function tocarAgente(id){
+  const mias = tareas.filter(t => t.agente === id);
+  const orden = { espera:0, listo:1, cocinando:2, abierta:3 };
+  mias.sort((a,b)=> (orden[a.estado]-orden[b.estado]) ||
+                    ({crit:0,warn:1,info:2}[a.nivel] - {crit:0,warn:1,info:2}[b.nivel]));
+  if(!mias.length){ toast(AG[id].nombre + " no tiene nada pendiente."); return; }
+  abrirTarea(mias[0]);
+}
+
+/* =====================================================================
+   12. BANDEJA
+   ===================================================================== */
+function pintarChips(){
+  const cont = document.getElementById("chips");
+  const vis  = agentesVisibles().map(a => a.id);
+  const lista = tareas.filter(t => vis.indexOf(t.agente) >= 0);
+  const orden = { espera:0, cocinando:1, listo:2, abierta:3 };
+  lista.sort((a,b)=> (orden[a.estado]-orden[b.estado]) ||
+                     ({crit:0,warn:1,info:2}[a.nivel] - {crit:0,warn:1,info:2}[b.nivel]));
+
+  const abiertas = lista.filter(t => t.estado === "abierta" && t.id !== "libre").length;
+  document.getElementById("bandeja-sub").textContent =
+    abiertas + (abiertas === 1 ? " tarea abierta" : " tareas abiertas") +
+    (resueltas ? (" · " + resueltas + " resueltas hoy") : "");
+
+  if(!lista.length){ cont.innerHTML = '<div class="vacio">Sin tareas. Todo en orden.</div>'; return; }
+  const ETQ = { abierta:null, cocinando:"cocinando", espera:"te responde", listo:"listo" };
+  cont.innerHTML = lista.map(function(t){
+    const cls = t.estado === "espera" ? "espera" : t.estado === "listo" ? "listo"
+              : (t.nivel === "crit" ? "crit" : "");
+    const kick = ETQ[t.estado] || AG[t.agente].nombre;
+    return '<button class="chip ' + cls + '" data-t="' + esc(t.id) + '">' +
+           '<i>' + esc(kick) + '</i><u>' + esc(t.titulo) + '</u></button>';
+  }).join("");
+  [...cont.querySelectorAll("[data-t]")].forEach(function(b){
+    b.onclick = function(){ const t = tareaDe(b.dataset.t); if(t) abrirTarea(t); };
+  });
+}
+
+function pintarMotor(){
+  const el = document.getElementById("motor");
+  el.className = motorListo() ? "on" : "off";
+  document.getElementById("motor-est").textContent = motorListo() ? "CLAUDE OK" : "SIN MOTOR";
+  document.getElementById("motor-sub").textContent = motorListo() ? CLAUDE.modelo : "falta proxy";
+  el.onclick = function(){
+    abrir(motorListo() ? "" : "bad", "Motor", motorListo() ? "Claude conectado" : "Claude sin conectar",
+      motorListo()
+        ? '<div class="ctx">Proxy: <b>' + esc(CLAUDE.proxyUrl) + '</b>\nModelo declarado: <b>' +
+          esc(CLAUDE.modelo) + '</b>\nTope de turnos por tarea: <b>' + CLAUDE.maxTurnos + '</b></div>' +
+          '<div class="dim">El modelo y los topes de tokens los fija el servidor, no esta página.</div>'
+        : '<div class="warn">Los agentes están <b>sin energía</b> porque no hay proxy configurado.\n\n' +
+          'La API key de Anthropic no puede ir en este archivo: el repo es público y una key ' +
+          'en un .html es una key regalada. Por eso la llamada pasa por una función serverless ' +
+          'que guarda la key del lado del servidor.</div>' +
+          '<div class="ctx">1. Desplegar <b>mundo/servidor/claude-proxy.js</b> en Vercel\n' +
+          '2. Poner ANTHROPIC_API_KEY como variable de entorno\n' +
+          '3. Pegar la URL en CLAUDE.proxyUrl (arriba del script de este archivo)</div>' +
+          '<div class="dim">Instrucciones completas en <b>mundo/servidor/README.md</b>. ' +
+          'Mientras tanto, las tareas y el contexto que ves son reales: lo único que falta ' +
+          'es quién los procese.</div>');
+  };
+}
+
+/* =====================================================================
+   13. ARRANQUE
+   ===================================================================== */
+async function abrirOficina(){
+  document.getElementById("login").style.display = "none";
+  document.getElementById("app").style.display = "block";
+  document.getElementById("quien-rol").textContent = sesion.label;
+  document.getElementById("quien-sub").textContent =
+    sesion.empresa + (soloLectura() ? " · solo lectura" : "") +
+    (permisos().sede ? (" · " + permisos().sede) : "");
+  pintarMotor();
+  medir();
+  if(!raf) bucle();
+  await refrescar();
+  setInterval(refrescar, 60000);
+  document.addEventListener("visibilitychange", function(){ if(!document.hidden) refrescar(); });
+}
+async function refrescar(){
+  /* no se pisa una tarea que está a medio trabajar */
+  await cargarTodo();
+  generarTareas();
+  pintarChips();
+}
+document.getElementById("salir").onclick = function(){
+  try{ sessionStorage.removeItem("mundo_sesion"); }catch(e){}
+  location.reload();
+};
+document.getElementById("entrar").onclick = intentarEntrar;
+document.getElementById("codigo").addEventListener("keydown", function(e){
+  if(e.key === "Enter") intentarEntrar();
+});
+
+pintarRoles();
+/* si ya había sesión en esta pestaña, se entra directo */
+(function(){
+  try{
+    const s = JSON.parse(sessionStorage.getItem("mundo_sesion"));
+    if(s && s.rolId && ROLES.some(r => r.id === s.rolId)){ sesion = s; abrirOficina(); }
+  }catch(e){}
+})();
+</script>
+</body>
+</html>

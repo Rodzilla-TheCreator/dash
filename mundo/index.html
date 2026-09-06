@@ -1021,6 +1021,30 @@ function zonaOficina(){
     label(p.x, sy - 4, k.id, { size:7.5, col: fix ? "#565b5f" : (on ? "#f5a524" : "#565b5f") });
   });
 
+  /* --- LA PUERTA: entrada a la oficina virtual del empleado (oficina.html).
+     Es el unico enlace del mundo hacia el modulo con login. --- */
+  const px = z.x + 10.5, py = z.y + 11.5;
+  const pp = w2s(px, py);
+  const psx = Math.round(pp.x - 14), psy = Math.round(pp.y + HH - 46);
+  push(px, py, function(){
+    isoBox(px, py, 2.2, 0.3, 40, "#3a3f43", { line:"#f5a524" });
+    isoBox(px + 0.15, py, 1.9, 0.25, 34, "#1d2022", { line:"#a9741f" });
+    /* luz encendida sobre el marco */
+    ctx.fillStyle = "#f5a524";
+    ctx.fillRect(Math.round(pp.x - 4), Math.round(pp.y + HH - 44), 8, 2);
+  }, { x:psx, y:psy, w:28, h:52 }, function(){
+    abrirFicha('<div class="kicker">Puerta</div><h2 class="display">MI OFICINA</h2>' +
+      rows([["Quién entra","cada empleado, con su código"],
+            ["Código","el mismo de la app de Bitácora SGI"],
+            ["Qué hay adentro","agentes de IA en sus estaciones"],
+            ["Las tareas","salen de los datos, no son de adorno"]]) +
+      '<div class="acts"><button id="entrar-of">Entrar a mi oficina</button></div>' +
+      '<div class="note">Adentro, los agentes trabajan con Claude sobre estos mismos datos. ' +
+      'Ninguno escribe en la base sin que vos lo autorices en pantalla.</div>');
+    document.getElementById("entrar-of").onclick = function(){ location.href = "oficina.html"; };
+  });
+  label(pp.x, psy - 8, "MI OFICINA", { col:"#f5a524", size:10, w:"700", fam:"disp", box:true });
+
   const c = centroZona(z);
   const yBajo = c.y + (z.w + z.d) * HH / 2 + 16;
   label(c.x, yBajo,

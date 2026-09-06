@@ -35,7 +35,7 @@ apagado colgado de la pared.
 | **CAMPO / CLIENTES** | Equipos `EN RENTA`, agrupados por cliente en sitios con nave | `{empresa}/equipos` + RADAR `flota.ingresos_renta_mes` |
 | **CONTABILIDAD** | Las 4 estaciones del flujo + papelera; cada registro es una hoja | `/bitacora/data-cajachica`, `/bitacora/data-viajes` |
 | **BODEGA** | Estanterías; cajas = existencia neta por producto y sede | `/bitacora/data-almacen` |
-| **OFICINA** | Los 51 KPIs del catálogo como objetos que se cuelgan de la pared | `KPI_GROUPS` + `localStorage["dash_kpis"]` |
+| **OFICINA** | Los 51 KPIs del catálogo como objetos que se cuelgan de la pared, y **la puerta a la oficina virtual** | `KPI_GROUPS` + `localStorage["dash_kpis"]` |
 
 ### Barra de urgencia (taller)
 
@@ -77,6 +77,100 @@ tachado, se cuelguen o no.
 
 `NODO_EMPRESA.monhagro === null`. Sus zonas de flota se dibujan **en
 construcción**: andamios, sin techo. Es honesto y se explica solo.
+
+---
+
+## La Oficina Virtual (`oficina.html`)
+
+El mundo se recorre; la oficina **se trabaja**. Cada empleado entra con su
+código, cae en su propia oficina isométrica, y ahí tiene **agentes de IA**
+parados en sus subestaciones.
+
+```
+[login por rol]  →  [tu oficina]  →  [tarea]  →  [cocinando]  ⇄  [pregunta]
+                                                      ↓         ⇄  [confirmación]
+                                                  [informe]
+```
+
+### Acceso
+
+Usa el **mismo código** que la app de Bitácora SGI: SHA-256 del código
+comparado contra `/bitacora/auth-config`, los mismos 11 roles y los mismos
+permisos (`PERMISSIONS`). Una diferencia a propósito: **acá no se pueden
+crear códigos**. Bitácora, si a un rol le falta el código, lo crea con lo
+que escribas — está bien en una app interna de configuración, pero una
+puerta que se abre sola no es una puerta.
+
+Los permisos mandan sobre todo lo demás: un vendedor no ve al agente de
+Caja Chica, y un rol de solo lectura (las gerencias) tiene agentes que
+analizan pero no pueden proponer ninguna escritura.
+
+### Los agentes
+
+| Agente | Oficio | Ve |
+|---|---|---|
+| `ORACLE-MT` | Mantenimiento | equipos, preventivos, correctivos |
+| `CONTA-01` | Caja chica y viáticos | `data-cajachica`, `data-viajes` |
+| `STOCK-9` | Bodega | `data-almacen` |
+| `RENTA-3` | Flota y rentas | equipos por estado |
+| `RADAR-X` | Ventas y KPIs | el estado general de la operación |
+
+### Las tareas salen de los datos
+
+Ninguna tarea es decorativa. Se generan de condiciones reales y si la
+condición no existe, la tarea tampoco: equipos vencidos, equipos **sin
+datos** de mantenimiento, gastos en `Enviado a revisión`, gastos sin
+comprobante, viáticos en revisión, existencia negativa en bodega, patio sin
+nada disponible. Bandeja vacía significa que no hay nada que atender, no
+que el juego se quedó sin contenido.
+
+### El ciclo, y dónde está el candado
+
+El empleado abre la tarea, ve el contexto real y escribe **qué quiere que
+se haga**. El agente se pone a cocinar y su razonamiento se ve en vivo en
+la pantalla. Claude contesta siempre un sobre JSON con uno de tres estados:
+
+- **`pregunta`** → pop-up de seguimiento, con opciones o texto libre. La
+  respuesta vuelve al hilo y sigue trabajando.
+- **`confirmacion`** → pop-up con la **acción exacta** que quiere ejecutar
+  (qué registro, qué cambio, con qué motivo). Sin un *Autorizar*, no se
+  escribe nada.
+- **`listo`** → queda el informe.
+
+Ese candado es a la vez la mecánica del juego y la regla de seguridad:
+**ninguna escritura ocurre sin confirmación humana en pantalla.** Las
+herramientas son deliberadamente pocas — `decidir_caja_chica` y
+`nota_bitacora` — y las dos escriben con el nombre del empleado y dejan
+rastro en `/bitacora/data-bitacora`.
+
+Si Claude devuelve algo que no se entiende, se muestra crudo y marcado como
+*respuesta no entendida*. No se adivina qué quiso decir.
+
+### El motor: hace falta desplegar un proxy
+
+La oficina **no llama a Anthropic desde el navegador**. La API key no puede
+vivir en este repo: es público, y una key en un `.html` es una key regalada.
+La llamada pasa por una función serverless que guarda la key del lado del
+servidor — está escrita y lista en
+[`servidor/claude-proxy.js`](servidor/README.md), son unos cinco minutos de
+despliegue en Vercel.
+
+Mientras `CLAUDE.proxyUrl` esté vacío, la oficina funciona igual: el login,
+la sala, las tareas y el contexto son reales. Lo único que pasa es que los
+agentes se dibujan **sin energía** y cada tarea dice exactamente qué falta.
+Misma gramática que los KPIs que RADAR no calcula: el hueco se ve, no se
+disimula.
+
+Lo que el servidor fija y el navegador no puede subir: modelo
+(`claude-opus-5`), 8 000 tokens por respuesta, 40 turnos, 120 000 caracteres
+de payload, y una lista blanca de orígenes. En el cliente hay además un tope
+de 12 idas y vueltas por tarea.
+
+**Lo que todavía no está resuelto:** el proxy no autentica al usuario. El
+login valida en el navegador, así que el servidor no puede confiar en él —
+quien tenga la URL puede gastar tokens, aunque los topes acotan cuánto. Para
+cerrarlo hace falta que el login emita un token verificable del lado del
+servidor. Está anotado en `servidor/README.md`.
 
 ---
 
