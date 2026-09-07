@@ -24,4 +24,7 @@ Se despliega con GitHub Pages. Refresca datos cada 60 s.
 - `mundo/procesos/` — la entrevista que cada empleado corre en **su propio
   Claude** para que sus agentes trabajen con su proceso real y no con uno
   supuesto. No necesita API. Ver [`mundo/procesos/README.md`](mundo/procesos/README.md).
+- `mundo/claude-code/` — el puente para enganchar el Claude Code de cada
+  empleado a su oficina: levanta sus encargos, los trabaja en su máquina y
+  devuelve el resultado.
 - `bitacora/` — app SGI de control interno (fork de la de Christian).

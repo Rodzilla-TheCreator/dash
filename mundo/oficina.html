@@ -189,6 +189,7 @@
     <a class="icobtn" href="index.html" title="Volver al mundo" aria-label="Volver al mundo">&#8592;</a>
     <div class="quien"><b id="quien-rol" class="display">—</b><span id="quien-sub">—</span></div>
     <div id="motor"><b id="motor-est">—</b><span id="motor-sub">—</span></div>
+    <button class="icobtn" id="pas-btn" title="Pasillo" aria-label="Pasillo">&#9723;</button>
     <button class="icobtn" id="proc-btn" title="Mi proceso" aria-label="Mi proceso">&#9776;</button>
     <button class="icobtn" id="salir" title="Cerrar sesión" aria-label="Cerrar sesión">&#9211;</button>
   </div>
@@ -496,6 +497,32 @@ const TW = 48, TH = 24, HW = TW/2, HH = TH/2;
 function w2s(gx, gy){ return { x:(gx-gy)*HW, y:(gx+gy)*HH }; }
 
 const SALA = { w:8, h:6 };
+/* El pasillo: las puertas de todas las oficinas. No se ve adentro de ninguna
+   —son cerradas— pero sí la puerta y su aviso. */
+/* El pasillo corre EN DIAGONAL en coordenadas de tile, que es lo mismo que
+   decir que baja RECTO en pantalla. Es la única forma de que once puertas
+   entren una debajo de otra en un celular: un corredor "recto" en tiles se
+   iría en diagonal y se saldría por los costados. */
+const PASILLO = { n:11, paso:6, ancho:2 };
+function posPuerta(k){
+  const sPos = 4 + k * PASILLO.paso;      // avance por el corredor
+  return { gx:(sPos - 2)/2, gy:(sPos + 2)/2 };
+}
+function bandaPasillo(){
+  const largo = 4 + (PASILLO.n - 1) * PASILLO.paso + PASILLO.paso;
+  return { largo:largo, alto:(largo) * HH + 70 };
+}
+let vista = "oficina";                 // "oficina" | "pasillo"
+const camP = { y:0, min:0, max:0 };    // desplazamiento vertical del pasillo
+
+/* Dónde está parado el empleado, y hacia dónde camina. Abrir una tarea lo
+   manda a la estación de ese agente: el trabajo se hace yendo hasta ahí. */
+const yo = { gx:4.2, gy:5.4, tx:4.2, ty:5.4 };
+function irAEstacion(agenteId){
+  const a = AG[agenteId];
+  if(!a) return;
+  yo.tx = a.gx + 1.2; yo.ty = a.gy + 1.5;
+}
 const cv  = document.getElementById("sala");
 const ctx = cv.getContext("2d");
 let CW=0, CH=0, DPR=1, ESC=2, OX=0, OY=0;
@@ -512,12 +539,26 @@ function medir(){
      de las paredes (-62) hasta el pie del piso. Centrar con eso —y no con el
      centro de la huella— es lo que deja la sala parada en medio del hueco. */
   const ALTO_PARED = 62;
-  const yTop = -ALTO_PARED, yBot = (SALA.w + SALA.h) * HH + TH;
-  const salaW = (SALA.w + SALA.h) * HW, salaH = yBot - yTop;
-  ESC = Math.max(1, Math.min(4, Math.floor(Math.min(dispW/salaW, dispH/salaH))));
-  const c = w2s(SALA.w/2, SALA.h/2);
-  OX = CW/2 - c.x*ESC;
-  OY = TOPE + dispH/2 - ((yTop + yBot)/2) * ESC;
+  if(vista === "pasillo"){
+    const B = bandaPasillo();
+    /* Escala chica a propósito: entran más puertas de una sola mirada, y el
+       aviso de cada una se lee igual porque los rótulos no se escalan. */
+    ESC = CW < 700 ? 1 : 2;
+    OX = CW/2;                                   // el corredor baja por el centro
+    const alto = B.alto * ESC;
+    camP.min = Math.min(0, dispH - alto - 30);
+    camP.max = 0;
+    camP.y = Math.max(camP.min, Math.min(camP.max, camP.y));
+    OY = TOPE + 70 + camP.y;
+  }else{
+    const R = SALA;
+    const yTop = -ALTO_PARED, yBot = (R.w + R.h) * HH + TH;
+    const salaW = (R.w + R.h) * HW, salaH = yBot - yTop;
+    ESC = Math.max(1, Math.min(4, Math.floor(Math.min(dispW/salaW, dispH/salaH))));
+    const c = w2s(R.w/2, R.h/2);
+    OX = CW/2 - c.x*ESC;
+    OY = TOPE + dispH/2 - ((yTop + yBot)/2) * ESC;
+  }
   ctx.imageSmoothingEnabled = false;
 }
 window.addEventListener("resize", function(){ medir(); pintar(); });
@@ -603,6 +644,11 @@ function pintar(){
   ctx.setTransform(DPR,0,0,DPR,0,0);
   ctx.fillStyle = "#17191a"; ctx.fillRect(0,0,CW,CH);
   aplicar();
+  if(vista === "pasillo") return pintarPasillo();
+
+  /* el empleado camina hacia donde lo mandaron */
+  yo.gx += (yo.tx - yo.gx) * 0.12;
+  yo.gy += (yo.ty - yo.gy) * 0.12;
 
   /* piso a cuadros */
   for(let j=0;j<SALA.h;j++) for(let i=0;i<SALA.w;i++)
@@ -617,7 +663,7 @@ function pintar(){
   visibles.slice().sort((a,b)=> (a.gx+a.gy) - (b.gx+b.gy)).forEach(dibujarAgente);
 
   /* el empleado, parado en la puerta */
-  dibujarEmpleado(4.2, 5.4);
+  dibujarEmpleado(yo.gx, yo.gy);
 
   etiquetas(visibles);
 }
@@ -700,9 +746,108 @@ function dibujarEmpleado(gx, gy){
 }
 let empleadoAnclaje = { x:0, y:0 };
 
+/* ---------- EL PASILLO: las puertas de todas las oficinas ----------
+   Se ve la puerta, no lo de adentro. El aviso dice si la persona está y
+   cuánto tiene entre manos — dos cosas que salen del latido real, no de
+   una animación. */
+function puertasDelPasillo(){
+  return ROLES.slice(0, PASILLO.n).map(function(r, i){
+    const p = posPuerta(i);
+    return { rol:r, gx:p.gx, gy:p.gy };
+  });
+}
+function pintarPasillo(){
+  const B = bandaPasillo();
+  /* el piso: una banda diagonal en tiles = un corredor recto en pantalla */
+  for(let sPos=0; sPos<=B.largo; sPos++){
+    for(let d=-PASILLO.ancho; d<=PASILLO.ancho; d++){
+      if(((sPos + d) % 2) !== 0) continue;         // gx debe ser entero
+      const gx = (sPos + d)/2, gy = (sPos - d)/2;
+      tile(gx, gy, (d === 0) ? "#2b2422" : ((sPos % 4 < 2) ? "#26292b" : "#232628"),
+           (d === 0) ? "#332a27" : "#2e3234");
+    }
+  }
+
+  /* Centro de Distribución, al fondo (arriba del todo) */
+  const cd = posPuerta(-0.6);
+  isoBox(cd.gx - 0.8, cd.gy - 0.8, 2.0, 2.0, 24, "#3a3f43", { line:"#4a5054", topCol:"#4a4038" });
+  isoBox(cd.gx - 0.4, cd.gy - 0.4, 1.2, 1.2, 15, "#22282c", { z:24, line:"#4a5054" });
+  isoBox(cd.gx - 0.4, cd.gy - 0.4, 1.2, 1.2, 12, shade("#c9c6bd", 0.55), { z:25 });
+
+  puertasDelPasillo().forEach(function(p){
+    const dentro  = estaEn(p.rol.id);
+    const yoMismo = (p.rol.id === sesion.rolId);
+    const pr = presencia[p.rol.id] || {};
+    /* la pared con la puerta, mirando al corredor */
+    isoBox(p.gx - 1.1, p.gy + 0.1, 1.1, 0.3, 50, "#33373a", { line:"#414649" });
+    isoBox(p.gx - 0.05, p.gy + 0.05, 1.15, 0.35, 52, "#3a3f43",
+           { line: dentro ? "#f5a524" : "#4a5054" });
+    /* el vano: si está, se ve luz adentro; si no, negro */
+    isoBox(p.gx + 0.06, p.gy + 0.09, 0.95, 0.28, 44,
+           yoMismo ? "#2a2f33" : "#1b1e20", { line: dentro ? "#a9741f" : "#3a4044" });
+    /* la placa con el color del rol */
+    isoBox(p.gx + 0.1, p.gy + 0.06, 0.88, 0.08, 6, p.rol.dot, { z:45 });
+
+    const w0 = w2s(p.gx + 0.55, p.gy + 0.2);
+    /* la luz de presencia, sobre el marco */
+    ctx.fillStyle = "#101213"; ctx.fillRect(Math.round(w0.x-4), Math.round(w0.y-58), 8, 8);
+    ctx.fillStyle = dentro ? "#3ecf7e" : "#3a3e41";
+    ctx.fillRect(Math.round(w0.x-3), Math.round(w0.y-57), 6, 6);
+    /* trabajando: la luz late por debajo de la puerta */
+    if(dentro && (pr.cocinando > 0 || pr.trabajando > 0)){
+      const f = 0.5 + 0.5*Math.sin((Date.now()-t0)/300);
+      ctx.save(); ctx.globalAlpha = 0.3 + 0.4*f; ctx.fillStyle = "#f5a524";
+      ctx.fillRect(Math.round(w0.x-11), Math.round(w0.y-4), 22, 3); ctx.restore();
+    }
+  });
+}
+function etiquetasPasillo(){
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.textBaseline = "middle"; ctx.textAlign = "center";
+  const cdp = posPuerta(-0.6);
+  const cd = w2s(cdp.gx, cdp.gy);
+  const sc = pantallaDe(cd.x, cd.y - 44);
+  if(sc.y > 74 && sc.y < CH-110){
+    ctx.font = "800 12px 'Barlow Condensed',sans-serif";
+    const w1 = ctx.measureText("CENTRO DE DISTRIBUCIÓN").width + 12;
+    ctx.fillStyle = "rgba(23,25,26,.88)";
+    ctx.fillRect(Math.round(sc.x-w1/2), Math.round(sc.y-9), Math.round(w1), 17);
+    ctx.fillStyle = "#c9c6bd"; ctx.fillText("CENTRO DE DISTRIBUCIÓN", Math.round(sc.x), Math.round(sc.y));
+    ctx.font = "400 8.5px 'IBM Plex Mono',monospace"; ctx.fillStyle = "#8b9096";
+    ctx.fillText("traduce lo que una oficina le pide a otra", Math.round(sc.x), Math.round(sc.y+13));
+  }
+  puertasDelPasillo().forEach(function(p){
+    const w0 = w2s(p.gx + 0.55, p.gy + 0.2);
+    const s0 = pantallaDe(w0.x, w0.y - 72);
+    if(s0.y < 74 || s0.y > CH-110) return;
+    const dentro = estaEn(p.rol.id), pr = presencia[p.rol.id] || {};
+    const mio = (p.rol.id === sesion.rolId);
+    ctx.font = "700 10.5px 'Barlow Condensed',sans-serif";
+    const nom = p.rol.label.toUpperCase() + (mio ? " (VOS)" : "");
+    const w1 = ctx.measureText(nom).width + 10;
+    ctx.fillStyle = "rgba(23,25,26,.88)";
+    ctx.fillRect(Math.round(s0.x-w1/2), Math.round(s0.y-8), Math.round(w1), 15);
+    ctx.fillStyle = dentro ? p.rol.dot : "#565b5f";
+    ctx.fillText(nom, Math.round(s0.x), Math.round(s0.y));
+    ctx.font = "400 8.5px 'IBM Plex Mono',monospace";
+    /* "cc" lo escribe el Claude Code de esa persona (ver claude-code/PUENTE.md) */
+    const ccVivo = !!(pr.cc && pr.ccVisto && (Date.now() - pr.ccVisto) < VIVO_MS * 4);
+    const aviso = dentro
+      ? ("está · " + (pr.trabajando || 0) + (pr.trabajando === 1 ? " tarea" : " tareas") +
+         (ccVivo ? " · + Claude Code" : ""))
+      : (ccVivo ? ("no está · su Claude Code sí") : ("no está · " + haceCuanto(p.rol.id)));
+    const w2c = ctx.measureText(aviso).width + 10;
+    ctx.fillStyle = "rgba(23,25,26,.88)";
+    ctx.fillRect(Math.round(s0.x-w2c/2), Math.round(s0.y+4), Math.round(w2c), 14);
+    ctx.fillStyle = dentro ? (pr.cocinando ? "#f5a524" : "#3ecf7e") : "#565b5f";
+    ctx.fillText(aviso, Math.round(s0.x), Math.round(s0.y+11));
+  });
+}
+
 /* Los rótulos van en espacio de pantalla, sin escalar: así se leen sin
    zoom en un celular chico. */
 function etiquetas(visibles){
+  if(vista === "pasillo") return etiquetasPasillo();
   ctx.setTransform(DPR,0,0,DPR,0,0);
   ctx.textBaseline = "middle"; ctx.textAlign = "center";
   /* el rótulo del empleado */
@@ -738,10 +883,42 @@ function etiquetas(visibles){
 }
 
 let raf = null;
-function bucle(){ pintar(); raf = requestAnimationFrame(bucle); }
+function bucle(){
+  pintar();
+  if(vista === "pasillo") etiquetasPasillo();
+  raf = requestAnimationFrame(bucle);
+}
 
 /* tocar un agente abre su tarea pendiente (o dice que no tiene) */
+/* arrastre vertical, solo en el pasillo */
+let arr = { on:false, y:0, mov:0 };
+cv.addEventListener("pointerdown", function(e){
+  if(vista !== "pasillo") return;
+  arr.on = true; arr.y = e.clientY; arr.mov = 0;
+});
+cv.addEventListener("pointermove", function(e){
+  if(!arr.on) return;
+  const d = e.clientY - arr.y;
+  arr.mov += Math.abs(d); arr.y = e.clientY;
+  camP.y = Math.max(camP.min, Math.min(camP.max, camP.y + d));
+  medir();
+});
+cv.addEventListener("pointerup", function(){ arr.on = false; });
+cv.addEventListener("pointercancel", function(){ arr.on = false; });
+
 cv.addEventListener("click", function(e){
+  if(vista === "pasillo"){
+    if(arr.mov > 8) return;
+    let mej = null, md = 1e9;
+    puertasDelPasillo().forEach(function(p){
+      const w0 = w2s(p.gx + 0.55, p.gy + 0.2);
+      const s0 = pantallaDe(w0.x, w0.y - 30);
+      const d = Math.hypot(s0.x - e.clientX, s0.y - e.clientY);
+      if(d < md){ md = d; mej = p; }
+    });
+    if(mej && md < 70) verPuerta(mej.rol.id);
+    return;
+  }
   const visibles = agentesVisibles();
   let mejor = null, mejorD = 1e9;
   visibles.forEach(function(a){
@@ -756,8 +933,75 @@ cv.addEventListener("click", function(e){
 /* =====================================================================
    6. CARGA DE DATOS
    ===================================================================== */
-const NODO_PROCESOS = "mundo-procesos";
-const NODO_MEJORAS  = "mundo-mejoras";
+const NODO_PROCESOS  = "mundo-procesos";
+const NODO_MEJORAS   = "mundo-mejoras";
+const NODO_PRESENCIA = "mundo-presencia";
+const NODO_ENCARGOS  = "mundo-encargos";
+
+/* --- PRESENCIA ------------------------------------------------------------
+   Las oficinas son cerradas: no se ve adentro. Lo que sí se ve es la puerta,
+   y la puerta dice dos cosas ciertas: si la persona está, y cuánto tiene
+   entre manos. El latido se manda cada 20 s mientras la pestaña está abierta;
+   a los 90 s sin latir, la puerta dice que no está. */
+const LATIDO_MS   = 20000;
+const VIVO_MS     = 90000;
+let presencia = {};
+async function latir(salgo){
+  if(!sesion) return;
+  const cocinando = Object.keys(estadoAgente).filter(k => estadoAgente[k] === "cocinando").length;
+  const abiertas  = tareas.filter(t => ["cocinando","espera"].indexOf(t.estado) >= 0).length;
+  const reg = {
+    rol: sesion.rolId, persona: sesion.label,
+    visto: salgo ? 0 : Date.now(),
+    trabajando: salgo ? 0 : abiertas,
+    cocinando: salgo ? 0 : cocinando
+  };
+  try{
+    await fetch(CC_FB + "/" + NODO_PRESENCIA + "/" + sesion.rolId + ".json", {
+      method:"PUT", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify(reg), keepalive: true });
+  }catch(e){ /* el latido no es crítico: si falla, la puerta dice que no está */ }
+}
+async function cargarPresencia(){
+  try{
+    const r = await getBit(NODO_PRESENCIA);
+    presencia = (r && typeof r === "object") ? r : {};
+  }catch(e){ presencia = {}; }
+}
+function estaEn(rolId){
+  const p = presencia[rolId];
+  return !!(p && p.visto && (Date.now() - p.visto) < VIVO_MS);
+}
+function haceCuanto(rolId){
+  const p = presencia[rolId];
+  if(!p || !p.visto) return "nunca entró";
+  const m = Math.round((Date.now() - p.visto) / 60000);
+  if(m < 1) return "recién";
+  if(m < 60) return "hace " + m + " min";
+  const h = Math.round(m/60);
+  return h < 24 ? ("hace " + h + " h") : ("hace " + Math.round(h/24) + " d");
+}
+
+/* --- ENCARGOS entre oficinas ---------------------------------------------
+   Un encargo NO se le manda directo al otro: pasa por el Centro de
+   Distribución, que lo traduce al entorno de quien lo recibe usando SU
+   proceso y SU vocabulario. Sin esa traducción, lo que llega es la jerga de
+   otro departamento y termina archivado sin que nadie lo entienda. */
+let encargos = [];
+async function cargarEncargos(){
+  try{
+    const r = await getBit(NODO_ENCARGOS);
+    encargos = Array.isArray(r) ? r : [];
+  }catch(e){ encargos = []; }
+}
+function encargosParaMi(){
+  return encargos.filter(e => e.para_rol === sesion.rolId &&
+    ["Entregado","Aceptado"].indexOf(e.estado) >= 0);
+}
+function encargosMios(){
+  return encargos.filter(e => e.de_rol === sesion.rolId &&
+    ["Hecho","Rechazado"].indexOf(e.estado) < 0);
+}
 /* Mismo flujo de estados que caja chica: la empresa ya lo tiene en la cabeza,
    no hace falta enseñarle uno nuevo. */
 const EST_MEJORA = ["Nueva","En análisis","Aceptada","Hecha","Descartada"];
@@ -815,6 +1059,8 @@ async function cargarTodo(){
   }catch(e){ console.error("[Oficina] bitacora:", e); state.bitErr = e.message; }
   await cargarProceso();
   await cargarMejoras();
+  await cargarPresencia();
+  await cargarEncargos();
   state.cargando = false;
 }
 
@@ -1089,6 +1335,27 @@ function generarTareas(){
         "En cero:\n" + bd.enCero.slice(0,25).map(p => "· " + p.clave).join("\n"),
         "¿Cuáles hay que reponer sí o sí y cuáles pueden esperar?");
   }
+
+  /* ---- Encargos que me llegaron de otras oficinas ---- */
+  encargosParaMi().forEach(function(e){
+    const de = (ROLES.find(r => r.id === e.de_rol) || {}).label || e.de_rol;
+    const t = { id:"enc-" + e.id, agente:"mejoras",
+      nivel: e.estado === "Aceptado" ? "info" : "warn",
+      titulo: (e.traduccion ? e.traduccion.titulo : e.texto_original).slice(0, 70),
+      detalle: "Encargo de " + de + (e.traduccion ? "" : " · SIN TRADUCIR"),
+      contexto:"", sugerencia:"", especial:"encargo",
+      estado:"abierta", conv:null, informe:null, pendiente:null, encargoId:e.id };
+    out.push(t);
+  });
+  const salieron = encargosMios();
+  if(salieron.length)
+    T("enc-mios","mejoras","info",
+      pl(salieron.length, "encargo tuyo", "encargos tuyos") + " en otras oficinas",
+      "Lo que mandaste y en qué va",
+      salieron.map(e => "· [" + e.estado + "] a " +
+        ((ROLES.find(r=>r.id===e.para_rol)||{}).label || e.para_rol) + ": " +
+        e.titulo_visible + (e.respuesta ? ("\n  respondió: " + e.respuesta) : "")).join("\n"),
+      "");
 
   /* ---- Departamento de Mejoras: lo ve todo el mundo ---- */
   const mias   = misMejoras();
@@ -1531,6 +1798,9 @@ function tareaDe(id){ return tareas.find(t => t.id === id); }
 /* --- 1. la tarea: contexto + el "entry" para Claude --- */
 function abrirTarea(t){
   const a = AG[t.agente];
+  /* Overcooked: el trabajo se hace yendo hasta la estación. */
+  if(vista === "oficina" && a) irAEstacion(t.agente);
+  if(t.especial === "encargo"){ verEncargo(t); return; }
   if(t.especial === "form-mejora"){ verFormMejora(); return; }
   if(t.id === "sin-proceso"){ verProceso(); return; }
   if(t.estado === "cocinando"){ verCocina(t); return; }
@@ -1740,6 +2010,215 @@ function verProceso(){
 }
 function pintarProcBtn(){
   document.getElementById("proc-btn").classList.toggle("avisa", !proceso);
+}
+
+/* =====================================================================
+   CENTRO DE DISTRIBUCIÓN
+   ---------------------------------------------------------------------
+   Un encargo entre oficinas no se entrega crudo. Cada departamento tiene su
+   jerga, sus pasos y sus tiempos: lo que para Ventas es "urgente para el
+   cliente", para Taller es un equipo con un código y un horómetro. El Centro
+   traduce el pedido al entorno de quien lo recibe, usando SU proceso y SU
+   vocabulario — los que esa persona cargó en MI PROCESO.
+
+   Si el que manda no tiene motor, el encargo igual se entrega, pero SIN
+   traducir y diciéndolo. Nunca se inventa la traducción.
+   ===================================================================== */
+async function procesoDe(rolId){
+  try{
+    const r = await getBit(NODO_PROCESOS + "/" + rolId);
+    return (r && Array.isArray(r.procesos)) ? r : null;
+  }catch(e){ return null; }
+}
+function systemCentro(procA, procB, rolB){
+  const etiqB = (ROLES.find(r => r.id === rolB) || {}).label || rolB;
+  return [
+"Sos el Centro de Distribución de la oficina virtual de Montasa.",
+"Tu único trabajo: traducir un encargo de un departamento al entorno de otro.",
+"",
+"QUIÉN MANDA: " + sesion.label + ".",
+(procA ? ("Así trabaja quien manda:\n" + JSON.stringify({ resumen:procA.resumen,
+   procesos:(procA.procesos||[]).map(p => p.nombre) })) : "Quien manda no cargó su proceso."),
+"",
+"QUIÉN RECIBE: " + etiqB + ".",
+(procB
+  ? ("Así trabaja quien recibe — usá SUS pasos, SUS palabras y SUS tiempos:\n" +
+     JSON.stringify(procB))
+  : "QUIEN RECIBE NO CARGÓ SU PROCESO. No sabés cómo trabaja: no inventes sus pasos. " +
+    "Traducí solo lo que se pueda y decilo en `avisos`."),
+"",
+"REGLAS:",
+"- No agregues pedidos que no estén en el texto original. Traducir no es ampliar.",
+"- Si el que manda pide algo que el otro no hace, decilo en `avisos` en vez de forzarlo.",
+"- Usá el vocabulario de quien recibe. Si dice \"vale\", escribí \"vale\".",
+"- Si algo del original es ambiguo, va en `avisos`, no en una suposición.",
+"",
+"Contestá SOLO con este objeto JSON, sin texto alrededor y sin ```:",
+'{\"titulo\":\"<una línea, en las palabras de quien recibe>\",\"por_que\":\"<para qué lo necesita quien manda, en una frase>\",\"que_necesita\":\"<qué tiene que hacer o entregar, concreto>\",\"pasos_sugeridos\":[\"<paso en el proceso de quien recibe>\"],\"datos\":[\"<nodo o app que va a tocar: data-cajachica, equipos, SAP...>\"],\"avisos\":[\"<lo que no se pudo traducir o quedó ambiguo>\"]}'
+  ].join("\n");
+}
+async function traducirEncargo(reg){
+  if(!motorListo()) return null;
+  const procB = await procesoDe(reg.para_rol);
+  const txt = await llamarClaude(
+    systemCentro(proceso, procB, reg.para_rol),
+    [{ role:"user", content:
+       "ENCARGO ORIGINAL, tal como lo escribió " + sesion.label + ":\n\n" + reg.texto_original +
+       "\n\nCONTEXTO DE LA OPERACIÓN AHORA:\n" + contextoGeneral() }],
+    null, null);
+  const t = txt.trim();
+  let crudo = t;
+  const f = t.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if(f) crudo = f[1].trim();
+  else { const a = crudo.indexOf("{"), b = crudo.lastIndexOf("}"); if(a>=0 && b>a) crudo = crudo.slice(a,b+1); }
+  try{
+    const o = JSON.parse(crudo);
+    return (o && o.titulo) ? o : null;
+  }catch(e){ return null; }
+}
+
+async function guardarEncargos(lista){
+  const put = await fetch(CC_FB + "/" + NODO_ENCARGOS + ".json", {
+    method:"PUT", headers:{"Content-Type":"application/json"}, body: JSON.stringify(lista) });
+  if(!put.ok) throw new Error("HTTP " + put.status);
+  encargos = lista;
+}
+
+/* --- la puerta de otra oficina --- */
+function verPuerta(rolId){
+  const rol = ROLES.find(r => r.id === rolId);
+  const dentro = estaEn(rolId), pr = presencia[rolId] || {};
+  const mio = (rolId === sesion.rolId);
+  const abiertos = encargos.filter(e => e.para_rol === rolId && e.de_rol === sesion.rolId &&
+                                        ["Hecho","Rechazado"].indexOf(e.estado) < 0);
+
+  abrir(dentro ? "ok" : "", "Puerta", rol.label + (mio ? " · tu oficina" : ""),
+    '<div class="ctx">' +
+      (dentro ? "<b>Está en su oficina.</b>" : "<b>No está.</b> Último ingreso: " + esc(haceCuanto(rolId))) +
+      "\nTareas entre manos: <b>" + (dentro ? (pr.trabajando || 0) : 0) + "</b>" +
+      (dentro && pr.cocinando ? ("\nAgentes trabajando ahora: <b>" + pr.cocinando + "</b>") : "") +
+    '</div>' +
+    '<div class="dim">Las oficinas son cerradas: desde acá se ve la puerta y su aviso, ' +
+    'no lo que hay adentro.</div>' +
+    (abiertos.length
+      ? '<label class="lab">Lo que ya le mandaste</label><div class="lst">' +
+        abiertos.map(e => '<div><i>' + esc(e.titulo_visible || e.texto_original) +
+          '</i><b>' + esc(e.estado) + '</b></div>').join("") + '</div>'
+      : '') +
+    (mio ? '' :
+      '<label class="lab" for="enc">Mandarle un encargo</label>' +
+      '<textarea id="enc" placeholder="Escribilo en TUS palabras. El Centro de Distribución lo traduce al entorno de ' +
+        esc(rol.label) + '."></textarea>' +
+      '<div class="acts"><button class="go" id="encgo">Mandar por el Centro</button></div>' +
+      (motorListo()
+        ? '<div class="dim">Pasa por el Centro de Distribución: se traduce a los pasos y las ' +
+          'palabras de ' + esc(rol.label) + ' antes de llegarle.</div>'
+        : '<div class="warn">Sin motor no hay traducción: le va a llegar tu texto tal cual, ' +
+          'marcado como <b>sin traducir</b>.</div>')));
+
+  const b = document.getElementById("encgo");
+  if(b) b.onclick = async function(){
+    const txt = document.getElementById("enc").value.trim();
+    if(!txt){ toast("Escribí qué necesitás."); return; }
+    b.disabled = true;
+    const reg = {
+      id: "enc_" + Date.now().toString(36),
+      fecha: new Date().toISOString(),
+      de_rol: sesion.rolId, de_persona: sesion.label,
+      para_rol: rolId,
+      texto_original: txt,
+      titulo_visible: txt.slice(0, 70),
+      traduccion: null, estado: "Sin traducir",
+      respuesta: null, cerradoEn: null
+    };
+    abrir("c", "Centro de Distribución", "Traduciendo el encargo",
+      '<div class="cook"><div class="cookbar"><i></i></div>' +
+      '<div class="think">Pasándolo al entorno de ' + esc(rol.label) + '…</div></div>', false);
+    try{
+      const tr = await traducirEncargo(reg);
+      if(tr){ reg.traduccion = tr; reg.estado = "Entregado"; reg.titulo_visible = tr.titulo; }
+      const arr = await getBit(NODO_ENCARGOS);
+      const lista = Array.isArray(arr) ? arr : [];
+      lista.push(reg);
+      await guardarEncargos(lista);
+      await anotarBitacora("Mundo", "Encargo a " + rol.label + ": " + reg.titulo_visible);
+      generarTareas(); pintarChips();
+      abrir(tr ? "ok" : "", "Centro de Distribución", tr ? "Entregado" : "Entregado sin traducir",
+        (tr
+          ? '<div class="informe"><b>' + esc(tr.titulo) + '</b>\n\n' + esc(tr.que_necesita || "") + '</div>' +
+            ((tr.pasos_sugeridos||[]).length ? '<div class="ctx">Pasos, en el proceso de ' +
+              esc(rol.label) + ':\n· ' + tr.pasos_sugeridos.map(esc).join("\n· ") + '</div>' : '') +
+            ((tr.avisos||[]).length ? '<div class="warn">· ' + tr.avisos.map(esc).join("\n· ") + '</div>' : '')
+          : '<div class="warn">No se pudo traducir, así que le llega tu texto tal cual y ' +
+            'marcado como <b>sin traducir</b>. Se entrega igual: retenerlo sería peor.</div>' +
+            '<div class="ctx">' + esc(txt) + '</div>') +
+        '<div class="dim">Vas a ver en qué va desde la puerta de ' + esc(rol.label) + '.</div>');
+      toast("Entregado · " + rol.label);
+    }catch(e){
+      toast("No se pudo mandar: " + e.message);
+      verPuerta(rolId);
+    }
+  };
+}
+
+/* --- un encargo que me llegó --- */
+function verEncargo(t){
+  const e = encargos.find(x => x.id === t.encargoId);
+  if(!e) return toast("Ese encargo ya no está.");
+  const tr = e.traduccion;
+  const deQuien = (ROLES.find(r => r.id === e.de_rol) || {}).label || e.de_rol;
+
+  abrir("c", "Centro de Distribución · de " + deQuien, tr ? tr.titulo : "Encargo sin traducir",
+    (tr
+      ? '<div class="informe">' + esc(tr.que_necesita || "") + '</div>' +
+        '<div class="ctx"><b>Para qué lo necesita</b>\n' + esc(tr.por_que || "—") +
+        ((tr.pasos_sugeridos||[]).length ? '\n\n<b>En tu proceso</b>\n· ' +
+           tr.pasos_sugeridos.map(esc).join("\n· ") : '') +
+        ((tr.datos||[]).length ? '\n\n<b>Toca</b>: ' + tr.datos.map(esc).join(", ") : '') + '</div>' +
+        ((tr.avisos||[]).length ? '<div class="warn">El Centro no pudo traducir todo:\n· ' +
+          tr.avisos.map(esc).join("\n· ") + '</div>' : '')
+      : '<div class="warn">Llegó <b>sin traducir</b>: es el texto tal cual lo escribió ' +
+        esc(deQuien) + '. Si no se entiende, rechazalo diciendo qué falta.</div>') +
+    '<div class="dim">Como lo escribió ' + esc(deQuien) + ':\n«' + esc(e.texto_original) + '»</div>' +
+    '<div class="acts">' +
+      (e.estado === "Entregado" ? '<button class="ok" id="eacep">Lo tomo</button>' : '') +
+      (e.estado === "Aceptado" ? '<button class="ok" id="ehecho">Ya está hecho</button>' : '') +
+      '<button class="no" id="erech">No lo tomo</button></div>' +
+    (tr ? '<div class="acts"><button class="go" id="eagente">Pasárselo a un agente</button></div>' : ''));
+
+  async function mover(estado, pedirNota){
+    let nota = null;
+    if(pedirNota){
+      nota = prompt("¿Por qué no lo tomás? (le llega a " + deQuien + ")", "");
+      if(nota === null) return;
+    }
+    try{
+      const arr = await getBit(NODO_ENCARGOS);
+      const lista = Array.isArray(arr) ? arr : [];
+      const i = lista.findIndex(x => x.id === e.id);
+      if(i === -1) throw new Error("ya no está");
+      lista[i].estado = estado;
+      if(nota != null) lista[i].respuesta = nota;
+      if(["Hecho","Rechazado"].indexOf(estado) >= 0) lista[i].cerradoEn = new Date().toISOString();
+      await guardarEncargos(lista);
+      await anotarBitacora("Mundo", "Encargo " + e.id + " → " + estado);
+      generarTareas(); pintarChips(); cerrar();
+      toast(estado);
+    }catch(err){ toast("No se pudo: " + err.message); }
+  }
+  const a1 = document.getElementById("eacep"), a2 = document.getElementById("ehecho"),
+        a3 = document.getElementById("erech"), a4 = document.getElementById("eagente");
+  if(a1) a1.onclick = function(){ mover("Aceptado", false); };
+  if(a2) a2.onclick = function(){ mover("Hecho", false); };
+  if(a3) a3.onclick = function(){ mover("Rechazado", true); };
+  if(a4) a4.onclick = function(){
+    const dest = tareas.find(x => x.id === "libre") || tareas[0];
+    if(!dest) return;
+    dest.estado = "abierta"; dest.conv = null; dest.informe = null;
+    dest.sugerencia = (tr.que_necesita || tr.titulo) + "\n\n(Encargo de " + deQuien +
+      ". Para qué: " + (tr.por_que || "—") + ")";
+    abrirTarea(dest);
+  };
 }
 
 /* --- Departamento de Mejoras: pedir y ver lo pedido --- */
@@ -2050,6 +2529,11 @@ async function abrirOficina(){
   if(!raf) bucle();
   await refrescar();
   setInterval(refrescar, 60000);
+  /* El latido de presencia: lo que hace que la puerta diga la verdad. */
+  latir(false);
+  setInterval(function(){ latir(false); }, LATIDO_MS);
+  window.addEventListener("pagehide", function(){ latir(true); });
+  window.addEventListener("beforeunload", function(){ latir(true); });
   document.addEventListener("visibilitychange", function(){ if(!document.hidden) refrescar(); });
 }
 async function refrescar(){
@@ -2059,8 +2543,18 @@ async function refrescar(){
   pintarChips();
   pintarProcBtn();
 }
+/* En el pasillo, las puertas se miran seguido: si no, el aviso miente. */
+setInterval(function(){ if(sesion && vista === "pasillo") cargarPresencia(); }, 15000);
+document.getElementById("pas-btn").onclick = function(){
+  vista = (vista === "oficina") ? "pasillo" : "oficina";
+  if(vista === "pasillo"){ camP.y = 0; cargarPresencia().then(function(){ medir(); }); }
+  document.getElementById("pas-btn").innerHTML = (vista === "pasillo") ? "&#8962;" : "&#9723;";
+  document.getElementById("pas-btn").title = (vista === "pasillo") ? "Mi oficina" : "Pasillo";
+  cerrar(); medir();
+};
 document.getElementById("proc-btn").onclick = verProceso;
-document.getElementById("salir").onclick = function(){
+document.getElementById("salir").onclick = async function(){
+  await latir(true);                       // apagar la luz de la puerta al salir
   try{ sessionStorage.removeItem("mundo_sesion"); }catch(e){}
   location.reload();
 };

@@ -195,6 +195,62 @@ se vuelve caro y deja de ser auditable. El agente solo puede repartir a
 agentes que ese rol ve: si Contabilidad no ve Almacén, tampoco puede
 consultarlo por la puerta de atrás.
 
+### El pasillo: puertas, presencia y quién está trabajando
+
+Las oficinas son cerradas: desde afuera no se ve adentro. Lo que sí se ve es
+**la puerta y su aviso** — el botón ▫ de la barra abre el pasillo con las
+once puertas.
+
+Cada puerta dice dos cosas que salen de un latido real, no de una animación:
+si la persona está (verde), y **cuántas tareas tiene entre manos**. Si sus
+agentes están cocinando, se ve la luz latir por debajo de la puerta. Si no
+está, dice hace cuánto entró por última vez.
+
+El latido se manda cada 20 s mientras la pestaña está abierta, y se apaga al
+salir. A los 90 s sin latir, la puerta dice que no está. Se guarda en
+`/bitacora/mundo-presencia/{rol}`.
+
+### Centro de Distribución: mandarle trabajo a otra oficina
+
+Al fondo del pasillo. Un encargo entre oficinas **no se entrega crudo**: cada
+departamento tiene su jerga, sus pasos y sus tiempos. Lo que para Ventas es
+"urgente para el cliente", para Taller es un equipo con un código y un
+horómetro.
+
+Escribís el encargo en **tus** palabras desde la puerta del otro. El Centro lo
+traduce al entorno de quien lo recibe usando **su** proceso y **su**
+vocabulario — los que esa persona cargó en MI PROCESO — y le llega a su
+bandeja como una tarea propia, con el `por qué` de quien lo pidió y los pasos
+en su propio proceso.
+
+```
+[vos, en tus palabras]  →  [Centro de Distribución]  →  [tarea nativa en su bandeja]
+                            usa el proceso de quien recibe
+```
+
+Reglas: traducir no es ampliar (no agrega pedidos que no estaban), lo ambiguo
+va a `avisos` en vez de a una suposición, y si quien recibe no cargó su
+proceso, el Centro lo dice en vez de inventarle pasos. **Sin motor no hay
+traducción**: el encargo se entrega igual, marcado *sin traducir* — retenerlo
+sería peor.
+
+Estados: `Sin traducir` → `Entregado` → `Aceptado` → `Hecho` / `Rechazado`.
+Se guarda en `/bitacora/mundo-encargos`.
+
+### El puente con Claude Code
+
+Cada quien puede enganchar **su propio Claude Code** a su oficina pegando
+[`claude-code/PUENTE.md`](claude-code/PUENTE.md). Su Claude levanta los
+encargos de su fila, los trabaja en su máquina, y devuelve el resultado. La
+puerta muestra **"+ Claude Code"** mientras esté prendido.
+
+Va en ese sentido —**el Claude sale a buscar, la oficina no entra**— por tres
+razones: el celular no llega a la laptop de nadie; una página HTTPS hablándole
+a un servidor local funciona *a veces* y "a veces" no sirve para operación; y
+si el puente dependiera de una conexión viva, un encargo que llega mientras
+almorzás se pierde. Así, no hace falta abrir ningún puerto y los encargos
+esperan en la fila.
+
 ### Departamento de Mejoras
 
 En el centro de cada oficina está **FORJA-1**, que no es un agente de la
