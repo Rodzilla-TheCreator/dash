@@ -305,6 +305,73 @@ que cualquiera puede editar. Primero se cierran las reglas.
 
 ---
 
+## El núcleo y las vistas
+
+```
+nucleo.js      reglas, datos, estado, el registro   ← la verdad
+oficina.html   dibujo, DOM, eventos                 ← una vista
+```
+
+`nucleo.js` **no dibuja nada y no toca el DOM**. Existe porque el mundo va a
+tener tres vistas —escritorio, celular y modo sobrio— y tres vistas que copian
+la lógica son tres versiones del mismo bug.
+
+Hablan por un bus, en un solo sentido:
+
+```js
+Mundo.on("tareas", pintarChips)      // el núcleo avisa, la vista dibuja
+Mundo.emit("tarea:listo", t)         // solo lo usa el núcleo
+```
+
+**El núcleo nunca llama a una función de la vista.** Si necesita que algo se
+vea, emite. Esa es la regla que hace que valga la pena haberlo separado — si se
+rompe, en un mes son otra vez dos archivos pegados.
+
+Sigue sin build ni bundler: `nucleo.js` es un archivo estático más, cargado con
+un `<script src>` antes del script de la vista.
+
+Lo que es del núcleo: datos, reglas de negocio, roles y permisos, estado,
+generación de tareas, el runtime de Claude, las herramientas, presencia,
+encargos, memoria y el registro. Lo que es de la vista: el canvas isométrico,
+dónde se para cada agente en la sala, los modales y el cableado de eventos.
+
+## El registro
+
+Un renglón por cada cosa que pasa, en `/bitacora/mundo-registro`, y **nunca se
+reescribe: se anexa** (`POST`, que es la primitiva de anexar de Firebase).
+
+Es una sola pieza y resuelve cuatro cosas que parecían distintas:
+
+| | |
+|---|---|
+| **Concurrencia** | Antes cada escritura traía la lista entera, cambiaba un renglón y la reescribía: dos personas guardando a la vez se pisaban sin enterarse. Anexando no hay nada que pisar. |
+| **Memoria** | Lo que el asistente recuerda sale de acá — decisiones que de verdad se tomaron, con fecha — y no de un resumen inventado. |
+| **Medición** | Cuántas decisiones se tomaron, cuántas tareas se abandonaron. Del sistema, **nunca de las personas**. |
+| **Costo** | Cada llamada anota los tokens que gastó. |
+
+Tipos de renglón: `decision`, `encargo`, `mejora`, `proceso`, `informe`,
+`herramienta`, `falla`, `gasto`, `olvido`.
+
+Los nodos del mundo (`mundo-mejoras`, `mundo-encargos`) dejaron de ser arreglos
+y son objetos con llave: se **anexa** con `POST` y se **parcha un renglón** con
+`PATCH`. `data-cajachica` sigue siendo un arreglo porque lo comparte la app de
+Bitácora SGI y no le podemos cambiar la forma — pero ahora se parcha por índice
+en vez de reescribir el arreglo entero.
+
+**Ninguna escritura de este módulo reescribe una lista completa.** Es la deuda
+que quedó anotada en la mesa redonda, y estaba pagada por la misma pieza que
+hacía falta para la memoria.
+
+### La memoria
+
+El asistente recibe las últimas decisiones de **su puesto** (no de la persona),
+con fecha, y con la instrucción de que sirven para ser consistente y no para
+repetir a ciegas: lo que era cierto hace meses puede no serlo hoy.
+
+Son decisiones de trabajo — qué se aprobó, qué se rechazó y por qué. Nunca
+conversaciones. `olvidarMemoria()` las marca como olvidadas y el registro
+conserva que se olvidaron.
+
 ## Cómo está hecho
 
 - **Canvas 2D, proyección isométrica 2:1.** Un tile mide 32 × 16 px a 1×.
