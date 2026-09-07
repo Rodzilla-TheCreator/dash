@@ -69,6 +69,7 @@
     background:var(--panel);color:var(--ink-dim);font-size:14px;line-height:1;
     display:flex;align-items:center;justify-content:center;text-decoration:none;}
   .icobtn:active{border-color:var(--amber);color:var(--amber);}
+  .icobtn.avisa{border-color:var(--amber);color:var(--amber);}
   .quien{min-width:0;}
   .quien b{display:block;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:17px;
     line-height:1;letter-spacing:.4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
@@ -188,6 +189,7 @@
     <a class="icobtn" href="index.html" title="Volver al mundo" aria-label="Volver al mundo">&#8592;</a>
     <div class="quien"><b id="quien-rol" class="display">—</b><span id="quien-sub">—</span></div>
     <div id="motor"><b id="motor-est">—</b><span id="motor-sub">—</span></div>
+    <button class="icobtn" id="proc-btn" title="Mi proceso" aria-label="Mi proceso">&#9776;</button>
     <button class="icobtn" id="salir" title="Cerrar sesión" aria-label="Cerrar sesión">&#9211;</button>
   </div>
 
@@ -379,6 +381,10 @@ const state = {
 };
 let tareas = [];             // tareas vivas (generadas de los datos)
 let resueltas = 0;
+/* El proceso REAL del empleado, levantado con su propio Claude usando
+   mundo/procesos/ENTREVISTA.md y guardado en /bitacora/mundo-procesos/{rol}.
+   null = todavía no lo cargó; los agentes trabajan con lo que supusimos. */
+let proceso = null;
 
 /* =====================================================================
    3. ACCESO
@@ -575,7 +581,13 @@ const AGENTES = [
     alcance:"equipos por estado: disponibles, en renta, en taller y en cliente" },
   { id:"radar",  nombre:"RADAR-X",   oficio:"Ventas y KPIs",
     gx:5.7, gy:4.3, col:"#4f8fe0", modulo:"all",
-    alcance:"lo que el mundo ya leyó de la operación; RADAR se consulta desde el dash" }
+    alcance:"lo que el mundo ya leyó de la operación; RADAR se consulta desde el dash" },
+  /* Enlace con el Departamento de Mejoras: no es un agente de la operación,
+     es la mesa desde la que cada oficina le habla al equipo que mantiene el
+     mundo. Por eso está al centro y la ve todo el mundo. */
+  { id:"mejoras", nombre:"FORJA-1",  oficio:"Departamento de Mejoras",
+    gx:2.8, gy:2.4, col:"#c9c6bd", modulo:"all",
+    alcance:"los pedidos de todas las oficinas sobre cómo funciona el mundo, y el estado del mundo mismo" }
 ];
 const AG = {}; AGENTES.forEach(a => AG[a.id] = a);
 /* estado visual de cada agente: apagado | libre | cocinando | espera | listo */
@@ -598,8 +610,7 @@ function pintar(){
   /* paredes del fondo */
   isoBox(0, -0.35, SALA.w, 0.35, 62, "#383c40", { line:"#454a4e" });
   isoBox(-0.35, 0, 0.35, SALA.h, 62, "#31363a", { line:"#454a4e" });
-  /* mesa central */
-  isoBox(2.7, 2.3, 2.5, 1.8, 20, "#4a4038", { line:"#5b5045" });
+  /* el centro de la sala lo ocupa la estación de Mejoras (FORJA-1) */
 
   const visibles = agentesVisibles();
   /* orden de pintado por profundidad, para que no se tapen mal */
@@ -745,6 +756,35 @@ cv.addEventListener("click", function(e){
 /* =====================================================================
    6. CARGA DE DATOS
    ===================================================================== */
+const NODO_PROCESOS = "mundo-procesos";
+const NODO_MEJORAS  = "mundo-mejoras";
+/* Mismo flujo de estados que caja chica: la empresa ya lo tiene en la cabeza,
+   no hace falta enseñarle uno nuevo. */
+const EST_MEJORA = ["Nueva","En análisis","Aceptada","Hecha","Descartada"];
+const TIPO_MEJORA = {
+  falla:      "Algo está mal / no funciona",
+  idea:       "Se me ocurre algo",
+  "dato-malo":"El mundo muestra un dato equivocado",
+  permiso:    "Necesito que mi agente pueda hacer algo más"
+};
+let mejoras = [];
+async function cargarMejoras(){
+  try{
+    const r = await getBit(NODO_MEJORAS);
+    mejoras = Array.isArray(r) ? r : [];
+  }catch(e){ console.warn("[Oficina] mejoras:", e.message); mejoras = []; }
+}
+function misMejoras(){ return mejoras.filter(m => m.rol === sesion.rolId); }
+/* Triar (mover de estado) es del administrador del SGI: es quien mantiene el
+   mundo. El resto pide; no decide sobre los pedidos de los demás. */
+function puedeTriar(){ return sesion && sesion.rolId === "admin"; }
+async function cargarProceso(){
+  try{
+    const r = await getBit(NODO_PROCESOS + "/" + sesion.rolId);
+    proceso = (r && typeof r === "object" && Array.isArray(r.procesos)) ? r : null;
+  }catch(e){ console.warn("[Oficina] proceso:", e.message); proceso = null; }
+}
+
 async function cargarTodo(){
   if(state.cargando) return;
   state.cargando = true;
@@ -773,6 +813,8 @@ async function cargarTodo(){
     state.almacen = Array.isArray(al) ? al : [];
     state.bitErr  = null;
   }catch(e){ console.error("[Oficina] bitacora:", e); state.bitErr = e.message; }
+  await cargarProceso();
+  await cargarMejoras();
   state.cargando = false;
 }
 
@@ -843,6 +885,105 @@ function resumenBodega(){
 }
 
 /* =====================================================================
+   6b. EL PROCESO DEL EMPLEADO
+   ---------------------------------------------------------------------
+   Se valida antes de guardar. Un bloque a medias es peor que ninguno: los
+   agentes lo tomarían como verdad. Si algo falta, se dice qué falta y no
+   se guarda nada.
+   ===================================================================== */
+const DONDE_OK = ["bitacora","firebase","sap","excel","whatsapp","correo","papel",
+                  "app-montacargas","radar","cabeza","otro"];
+
+function extraerBloque(txt){
+  /* la gente pega el markdown entero: se busca el bloque ```json */
+  const t = (txt || "").trim();
+  let crudo = t;
+  const f = t.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if(f) crudo = f[1].trim();
+  else{
+    const a = crudo.indexOf("{"), b = crudo.lastIndexOf("}");
+    if(a >= 0 && b > a) crudo = crudo.slice(a, b+1);
+  }
+  return crudo;
+}
+function validarProceso(txt){
+  const fallas = [];
+  let o;
+  try{ o = JSON.parse(extraerBloque(txt)); }
+  catch(e){ return { fallas:["No es JSON válido: " + e.message +
+    ". Pegá el bloque completo, desde la primera llave hasta la última."] }; }
+
+  if(!o || typeof o !== "object") return { fallas:["El bloque no es un objeto."] };
+  if(!ROLES.some(r => r.id === o.rol))
+    fallas.push("El campo \"rol\" no es uno de los 11 roles (llegó: " + JSON.stringify(o.rol) + ").");
+  if(o.rol && o.rol !== sesion.rolId)
+    fallas.push("Ese proceso es del rol \"" + o.rol + "\" y vos entraste como \"" +
+                sesion.rolId + "\". Cada quien carga el suyo.");
+  if(!Array.isArray(o.procesos) || !o.procesos.length)
+    fallas.push("No trae ningún proceso en \"procesos\".");
+  else o.procesos.forEach(function(pr, i){
+    const d = "proceso " + (i+1) + (pr && pr.nombre ? (" (" + pr.nombre + ")") : "");
+    if(!pr || typeof pr !== "object") return fallas.push(d + ": no es un objeto.");
+    if(!pr.id)     fallas.push(d + ": le falta \"id\".");
+    if(!pr.nombre) fallas.push(d + ": le falta \"nombre\".");
+    if(!Array.isArray(pr.pasos) || !pr.pasos.length) fallas.push(d + ": no tiene pasos.");
+    else pr.pasos.forEach(function(ps, k){
+      if(!ps || !ps.hace) fallas.push(d + ", paso " + (k+1) + ": le falta \"hace\".");
+      else if(ps.donde && DONDE_OK.indexOf(ps.donde) < 0)
+        fallas.push(d + ", paso " + (k+1) + ": \"donde\" dice \"" + ps.donde +
+                    "\" y tiene que ser uno de: " + DONDE_OK.join(", ") + ".");
+    });
+  });
+  if(fallas.length) return { fallas };
+
+  /* Avisos: no impiden guardar, pero se dicen. */
+  const avisos = [];
+  if(!Array.isArray(o.nunca_automatizar) || !o.nunca_automatizar.length)
+    avisos.push("No dice qué NO se debe automatizar. Sin eso, los agentes no " +
+                "tienen ninguna prohibición explícita tuya.");
+  if(!Array.isArray(o.huecos) || !o.huecos.length)
+    avisos.push("No quedó ningún hueco anotado. Suele significar que algo quedó " +
+                "a medias y no se escribió.");
+  return { ok:o, avisos };
+}
+
+/* Lo que ve el agente. Texto plano: es parte de su instrucción. */
+function procesoParaAgente(){
+  if(!proceso) return null;
+  const L = [];
+  L.push("PROCESO REAL DE " + (proceso.persona || sesion.label).toUpperCase() +
+         " (lo contó esta persona en una entrevista; actualizado " +
+         (proceso.actualizado || "sin fecha") + "):");
+  if(proceso.resumen) L.push(proceso.resumen);
+  proceso.procesos.forEach(function(pr){
+    L.push("");
+    L.push("· " + pr.nombre + " [" + (pr.frecuencia || "sin frecuencia") + "]" +
+           (pr.disparador ? (" — arranca: " + pr.disparador) : ""));
+    (pr.pasos||[]).forEach(function(ps){
+      L.push("   " + (ps.n || "-") + ". " + ps.hace +
+        (ps.donde ? ("  [" + ps.donde + (ps.dato ? "/" + ps.dato : "") + "]") : "") +
+        (ps.depende_de ? ("  depende de: " + ps.depende_de) : "") +
+        (ps.duele ? ("  DUELE: " + ps.duele) : ""));
+    });
+    if(pr.termina_cuando) L.push("   termina cuando: " + pr.termina_cuando);
+    if((pr.se_traba_por||[]).length) L.push("   se traba por: " + pr.se_traba_por.join(" · "));
+    if((pr.le_pediria_a_un_asistente||[]).length)
+      L.push("   te pediría: " + pr.le_pediria_a_un_asistente.join(" · "));
+  });
+  if((proceso.vocabulario||[]).length){
+    L.push("");
+    L.push("CÓMO HABLAN ACÁ: " + proceso.vocabulario
+      .map(v => "\"" + v.dice + "\" = " + v.significa).join(" · "));
+  }
+  if((proceso.huecos||[]).length){
+    L.push("");
+    L.push("HUECOS QUE ESTA PERSONA NO SUPO CONTESTAR (no los rellenes vos):");
+    proceso.huecos.forEach(h => L.push("- " + h));
+  }
+  return L.join("\n");
+}
+
+/* =====================================================================
    7. GENERADOR DE TAREAS
    ---------------------------------------------------------------------
    Las tareas SALEN DE LOS DATOS. Ninguna es decorativa: si no hay
@@ -859,8 +1000,8 @@ function generarTareas(){
 
   /* "1 equipos" queda feo y se nota; el plural se calcula. */
   function pl(n, sing, plur){ return n + " " + (n === 1 ? sing : plur); }
-  function T(id, agente, nivel, titulo, detalle, contexto, sugerencia){
-    out.push({ id, agente, nivel, titulo, detalle, contexto, sugerencia,
+  function T(id, agente, nivel, titulo, detalle, contexto, sugerencia, especial){
+    out.push({ id, agente, nivel, titulo, detalle, contexto, sugerencia, especial:especial||null,
                estado:"abierta", conv:null, informe:null, pendiente:null });
   }
 
@@ -949,6 +1090,46 @@ function generarTareas(){
         "¿Cuáles hay que reponer sí o sí y cuáles pueden esperar?");
   }
 
+  /* ---- Departamento de Mejoras: lo ve todo el mundo ---- */
+  const mias   = misMejoras();
+  const nuevas = mejoras.filter(m => m.estado === "Nueva");
+  const abiertasMias = mias.filter(m => ["Nueva","En análisis","Aceptada"].indexOf(m.estado) >= 0);
+
+  T("mejora-pedir","mejoras","info","Pedir una mejora del mundo",
+    "Algo que falla, algo que se te ocurre, un dato equivocado o un permiso que te falta",
+    "", "", "form-mejora");
+
+  if(abiertasMias.length)
+    T("mejora-mias","mejoras","info",
+      pl(abiertasMias.length, "pedido tuyo", "pedidos tuyos") + " en curso",
+      "Lo que pediste y en qué va", "", "", "form-mejora");
+
+  if(puedeTriar() && nuevas.length)
+    T("mejora-cola","mejoras", nuevas.length >= 5 ? "crit" : "warn",
+      pl(nuevas.length, "pedido sin revisar", "pedidos sin revisar"),
+      "Llegaron de las oficinas y nadie los ha triado",
+      colaMejoras(nuevas),
+      "Agrupá los que hablan de lo mismo y decime cuáles aceptarías, en qué orden y por qué.");
+
+  T("mejora-ronda","mejoras","info","Revisar el mundo y proponer mejoras",
+    "Una mirada al estado del mundo y a lo que pidieron las oficinas",
+    "PEDIDOS DE TODAS LAS OFICINAS (" + mejoras.length + "):\n" +
+      (mejoras.length ? colaMejoras(mejoras.slice(-30)) : "(todavía no hay ninguno)"),
+    "Mirá el estado del mundo y lo que pidió la gente, y decime las tres mejoras " +
+    "que más rendirían y por qué. Sé concreto: qué cambiaría y para quién.");
+
+  if(!proceso){
+    T("sin-proceso","radar","warn","Tus agentes no conocen tu proceso",
+      "Nadie cargó todavía cómo trabajás vos",
+      "Los agentes están usando procesos que supuso quien armó el módulo, no los tuyos.\n\n" +
+      "Se arregla en media hora y sin que nadie escriba código:\n" +
+      "1. Pedí el archivo ENTREVISTA.md (está en mundo/procesos/)\n" +
+      "2. Pegalo completo en tu propio Claude\n" +
+      "3. Te entrevista y te devuelve un bloque\n" +
+      "4. Tocá MI PROCESO acá arriba y pegalo",
+      "");
+  }
+
   /* Tarea libre: siempre disponible, para lo que no cae en ninguna alerta. */
   T("libre","radar","info","Consulta libre",
     "Preguntale a RADAR-X cualquier cosa sobre la operación cargada",
@@ -965,6 +1146,15 @@ function generarTareas(){
     return t;
   });
   sincronizarAgentes();
+}
+
+function colaMejoras(lista){
+  return lista.map(function(m){
+    return "· [" + m.estado + "] " + m.id + " · " + (TIPO_MEJORA[m.tipo] || m.tipo) +
+      " · pedido por " + (m.persona || m.rol) + " (" + (m.fecha||"").slice(0,10) + ")\n" +
+      "  " + m.titulo + (m.detalle ? ("\n  " + m.detalle) : "") +
+      (m.nota ? ("\n  nota: " + m.nota) : "");
+  }).join("\n");
 }
 
 /* El contexto general: lo que TODO agente ve de la operación. Se arma de
@@ -1000,13 +1190,24 @@ function contextoGeneral(){
     L.push("BODEGA: " + bd.prods.length + " productos · negativos " + bd.negativos.length +
            " · en cero " + bd.enCero.length);
   }
+  if(mejoras.length){
+    const porEst = {};
+    mejoras.forEach(m => { porEst[m.estado] = (porEst[m.estado]||0)+1; });
+    L.push("");
+    L.push("DEPARTAMENTO DE MEJORAS: " +
+      Object.keys(porEst).map(k => k + " " + porEst[k]).join(" · "));
+  }
   return L.join("\n");
 }
+
+/* Agentes ocupados por delegación (no por una tarea propia). */
+const delegados = {};
 
 /* El estado de cada agente sale de sus tareas: no es una animación suelta. */
 function sincronizarAgentes(){
   AGENTES.forEach(function(a){
     if(!motorListo()){ estadoAgente[a.id] = "apagado"; return; }
+    if(delegados[a.id]){ estadoAgente[a.id] = "cocinando"; return; }
     const mias = tareas.filter(t => t.agente === a.id);
     if(mias.some(t => t.estado === "cocinando")) estadoAgente[a.id] = "cocinando";
     else if(mias.some(t => t.estado === "espera")) estadoAgente[a.id] = "espera";
@@ -1038,6 +1239,13 @@ const HERRAMIENTAS = {
                   (a.motivo ? ("\nMotivo: " + a.motivo) : ""),
     ejecutar: ejecDecidirCaja
   },
+  triar_mejora: {
+    modulo: "mejoras",
+    descripcion: "Mover un pedido del Departamento de Mejoras a otro estado y dejarle una nota. " +
+                 "args: { id: string, estado: \"En análisis\"|\"Aceptada\"|\"Hecha\"|\"Descartada\", nota: string }",
+    resumir: a => "Pedido " + a.id + " → " + a.estado + (a.nota ? ("\nNota: " + a.nota) : ""),
+    ejecutar: ejecTriarMejora
+  },
   nota_bitacora: {
     modulo: "all",
     descripcion: "Dejar una nota en el historial de cambios (/bitacora/data-bitacora). " +
@@ -1051,6 +1259,7 @@ function herramientasDe(agente){
   return Object.keys(HERRAMIENTAS).filter(function(k){
     const h = HERRAMIENTAS[k];
     if(soloLectura()) return false;                    // gerencias miran, no escriben
+    if(h.modulo === "mejoras") return puedeTriar();
     return h.modulo === "all" || puedeModulo(h.modulo);
   });
 }
@@ -1058,6 +1267,24 @@ function herramientasDe(agente){
 function systemDe(tarea){
   const a = AG[tarea.agente];
   const libres = herramientasDe(tarea.agente);
+  const proc = procesoParaAgente();
+  /* A quién puede repartirle trabajo: solo agentes que este rol ve. */
+  const pares = agentesVisibles().filter(x => x.id !== a.id);
+  const bloqueDeleg = pares.length
+    ? ("PODÉS REPARTIR TRABAJO. En esta oficina hay otros agentes y trabajan EN PARALELO:\n" +
+       pares.map(x => "- " + x.id + " (" + x.nombre + "): " + x.alcance).join("\n") +
+       "\nDelegá cuando el pedido toca áreas distintas y las partes no dependen una de otra. " +
+       "Si es una sola cosa, hacela vos: repartir cuesta y no siempre rinde. " +
+       "Los que reciben NO pueden repartir a su vez ni escribir en la base: analizan y te contestan.")
+    : "";
+  /* Prohibiciones que escribió el propio empleado. Van con el mismo peso que
+     la regla de no inventar datos: el límite lo pone quien hace el trabajo. */
+  const veda = (proceso && Array.isArray(proceso.nunca_automatizar) && proceso.nunca_automatizar.length)
+    ? ["", "LO QUE " + sesion.label.toUpperCase() + " DIJO QUE NUNCA SE AUTOMATIZA. " +
+       "No lo propongas, ni siquiera con confirmación. Si el pedido lo requiere, " +
+       "decí que eso lo tiene que hacer una persona y por qué:"]
+      .concat(proceso.nunca_automatizar.map(x => "- " + x)).join("\n")
+    : "";
   const bloqueTools = libres.length
     ? ("HERRAMIENTAS QUE PODÉS PEDIR (siempre vía estado \"confirmacion\"):\n" +
        libres.map(k => "- " + k + ": " + HERRAMIENTAS[k].descripcion).join("\n"))
@@ -1074,11 +1301,21 @@ function systemDe(tarea){
 "REGLA QUE NO SE ROMPE: no inventes datos. Si algo no está en el contexto que te doy,",
 "decí que no está. Un número inventado en un tablero de operaciones es peor que un hueco,",
 "porque el hueco se ve y el invento no. Si te falta un dato para decidir, preguntá.",
+veda,
+"",
+(proc
+  ? (proc + "\n\nTrabajá SOBRE ese proceso: usá sus pasos, sus tiempos y sus palabras. " +
+     "Si lo que te piden se sale de ahí, decilo en vez de inventar un paso nuevo.")
+  : "ESTA PERSONA TODAVÍA NO CARGÓ SU PROCESO, así que no sabés cómo trabaja de verdad. " +
+    "No supongas pasos ni tiempos: preguntale cómo lo hace ella, y si el pedido depende " +
+    "de un procedimiento que no conocés, decilo."),
 "",
 bloqueTools,
 "",
+bloqueDeleg,
+"",
 "FORMATO DE RESPUESTA — contestá SIEMPRE con un solo objeto JSON, sin texto alrededor,",
-"sin ``` y sin comentarios. Estas son las tres formas válidas:",
+"sin ``` y sin comentarios. Estas son las formas válidas:",
 "",
 '{\"estado\":\"pregunta\",\"mensaje\":\"<lo que necesitás saber, 1-2 frases>\",\"opciones\":[\"<opción corta>\",\"<opción corta>\"]}',
 "   Usalo cuando te falta un dato o una decisión del empleado. `opciones` es opcional:",
@@ -1091,7 +1328,34 @@ bloqueTools,
 '{\"estado\":\"listo\",\"mensaje\":\"<resumen en una frase>\",\"informe\":\"<el resultado completo, texto plano con saltos de línea y viñetas con ·>\"}',
 "   Usalo cuando terminaste. El informe queda guardado en la oficina.",
 "",
+(pares.length
+  ? '{\"estado\":\"delegar\",\"mensaje\":\"<qué estás repartiendo y por qué>\",\"subtareas\":[{\"agente\":\"<id>\",\"pedido\":\"<qué tiene que averiguar, completo y sin depender de contexto que no tiene>\"}]}\n' +
+    "   Máximo 4 subtareas, y arrancan todas a la vez. Te vuelven las respuestas juntas\n" +
+    "   y seguís desde ahí. Cada `pedido` tiene que entenderse solo: el que lo recibe no ve\n" +
+    "   esta conversación."
+  : ""),
+"",
 "No uses markdown en `informe`: texto plano, viñetas con «· ». Nada de tablas."
+  ].filter(x => x !== "").join("\n");
+}
+
+/* El sub-agente: mismo oficio, pero sin herramientas y sin repartir. Contesta
+   texto plano, no sobre JSON: su respuesta es material para el líder. */
+function systemSub(agenteId, pedidoDe){
+  const a = AG[agenteId];
+  const proc = procesoParaAgente();
+  return [
+"Sos " + a.nombre + ", agente de IA en la oficina virtual de Montasa.",
+"Tu oficio: " + a.oficio + ". Tu alcance de datos: " + a.alcance + ".",
+"",
+"Te está consultando " + AG[pedidoDe].nombre + ", que está atendiendo a " + sesion.label + ".",
+"Contestá SOLO tu parte, en texto plano, breve y concreto. Nada de JSON, nada de markdown.",
+"",
+"REGLA QUE NO SE ROMPE: no inventes datos. Si algo no está en el contexto que te doy,",
+"decí que no está. Si tu parte no se puede contestar con lo que hay, decilo en una frase.",
+"",
+"No podés escribir en la base ni repartir trabajo a nadie: analizás y contestás.",
+(proc ? ("\n" + proc) : "")
   ].join("\n");
 }
 
@@ -1150,7 +1414,7 @@ function leerSobre(txt){
   let o = null;
   try{ o = JSON.parse(crudo); }catch(e){ return { estado:"crudo", texto:t }; }
   if(!o || typeof o !== "object" || !o.estado) return { estado:"crudo", texto:t };
-  if(["pregunta","confirmacion","listo"].indexOf(o.estado) < 0) return { estado:"crudo", texto:t };
+  if(["pregunta","confirmacion","listo","delegar"].indexOf(o.estado) < 0) return { estado:"crudo", texto:t };
   return o;
 }
 
@@ -1193,6 +1457,29 @@ async function ejecDecidirCaja(args){
   return "Hecho. El gasto " + id + " (" + (arr[i].concepto||"—") + ", " + fmtL(arr[i].monto) +
          ") quedó en estado \"" + arr[i].estado + "\", decidido por " + sesion.label + ".";
 }
+async function ejecTriarMejora(args){
+  if(!puedeTriar()) throw new Error("solo el administrador del SGI mueve pedidos de estado");
+  const id = args && args.id, est = args && args.estado;
+  if(!id) throw new Error("falta el id del pedido");
+  if(EST_MEJORA.indexOf(est) < 1) throw new Error("estado inválido: " + est);
+  const arr = await getBit(NODO_MEJORAS);
+  const lista = Array.isArray(arr) ? arr : [];
+  const i = lista.findIndex(x => x.id === id);
+  if(i === -1) throw new Error("pedido no encontrado: " + id);
+  const antes = lista[i].estado;
+  lista[i].estado      = est;
+  lista[i].nota        = args.nota || lista[i].nota || "";
+  lista[i].decididoPor = sesion.label;
+  lista[i].decididoEn  = new Date().toISOString();
+  const put = await fetch(CC_FB + "/" + NODO_MEJORAS + ".json", {
+    method:"PUT", headers:{"Content-Type":"application/json"}, body: JSON.stringify(lista) });
+  if(!put.ok) throw new Error("no se pudo guardar (HTTP " + put.status + ")");
+  mejoras = lista;
+  await anotarBitacora("Mundo", "Pedido de mejora " + id + ": " + antes + " → " + est);
+  return "Listo. El pedido " + id + " (\"" + (lista[i].titulo||"") + "\") pasó de " +
+         antes + " a " + est + ".";
+}
+
 async function ejecNotaBitacora(args){
   const d = args && args.descripcion;
   if(!d) throw new Error("falta la descripción");
@@ -1244,6 +1531,8 @@ function tareaDe(id){ return tareas.find(t => t.id === id); }
 /* --- 1. la tarea: contexto + el "entry" para Claude --- */
 function abrirTarea(t){
   const a = AG[t.agente];
+  if(t.especial === "form-mejora"){ verFormMejora(); return; }
+  if(t.id === "sin-proceso"){ verProceso(); return; }
   if(t.estado === "cocinando"){ verCocina(t); return; }
   if(t.estado === "espera"){ verPendiente(t); return; }
   if(t.estado === "listo"){ verInforme(t); return; }
@@ -1360,6 +1649,166 @@ function verInforme(t){
   };
 }
 
+/* --- MI PROCESO: ver, pegar y guardar el proceso propio --- */
+function verProceso(){
+  const cargado = !!proceso;
+  let cuerpo = "";
+
+  if(cargado){
+    const L = [];
+    L.push("<b>" + esc(proceso.persona || sesion.label) + "</b> · actualizado " +
+           esc(proceso.actualizado || "sin fecha"));
+    if(proceso.resumen) L.push(esc(proceso.resumen));
+    proceso.procesos.forEach(function(pr){
+      L.push("");
+      L.push("<b>" + esc(pr.nombre) + "</b>  [" + esc(pr.frecuencia || "—") + "]");
+      if(pr.disparador) L.push("  arranca: " + esc(pr.disparador));
+      (pr.pasos||[]).forEach(function(ps){
+        L.push("  " + (ps.n||"-") + ". " + esc(ps.hace) +
+          (ps.donde ? ("  [" + esc(ps.donde) + (ps.dato ? "/" + esc(ps.dato) : "") + "]") : "") +
+          (ps.duele ? ("\n       duele: " + esc(ps.duele)) : ""));
+      });
+    });
+    cuerpo += '<div class="ctx">' + L.join("\n") + '</div>';
+
+    if((proceso.nunca_automatizar||[]).length){
+      cuerpo += '<div class="accion" style="border-color:var(--red)"><b style="color:var(--red)">' +
+        'Nunca automatizar</b>' + proceso.nunca_automatizar.map(esc).join("\n· ").replace(/^/, "· ") +
+        '</div>';
+    }
+    if((proceso.huecos||[]).length){
+      cuerpo += '<div class="warn"><b>Quedó sin contestar</b>\n· ' +
+        proceso.huecos.map(esc).join("\n· ") + '</div>';
+    }
+    cuerpo += '<div class="dim">Tus agentes trabajan con esto. Revisalo de vez en cuando: ' +
+      'un proceso viejo es peor que ninguno, porque nadie lo nota.</div>';
+  }else{
+    cuerpo += '<div class="warn"><b>Todavía no cargaste tu proceso.</b> Tus agentes están ' +
+      'usando pasos que supuso quien armó el módulo, no los tuyos.</div>' +
+      '<div class="ctx">1. Pedí el archivo <b>ENTREVISTA.md</b> (mundo/procesos/)\n' +
+      '2. Pegalo completo en tu propio Claude\n' +
+      '3. Te entrevista 20 minutos y te devuelve un bloque\n' +
+      '4. Pegá ese bloque acá abajo</div>';
+  }
+
+  cuerpo += '<label class="lab" for="pjson">' + (cargado ? "Reemplazar por un bloque nuevo" : "Pegá el bloque que te dio tu Claude") + '</label>' +
+    '<textarea id="pjson" placeholder="Pegá acá, incluyendo los ```json si vinieron…"></textarea>' +
+    '<div class="acts"><button class="go" id="pguardar">Guardar mi proceso</button>' +
+    (cargado ? '<button class="no" id="pborrar">Borrar</button>' : '') + '</div>';
+
+  abrir(cargado ? "ok" : "", "Mi proceso", cargado ? "Así trabajás vos" : "Tus agentes no te conocen", cuerpo);
+
+  document.getElementById("pguardar").onclick = async function(){
+    const txt = document.getElementById("pjson").value;
+    if(!txt.trim()){ toast("Pegá el bloque primero."); return; }
+    const r = validarProceso(txt);
+    if(r.fallas){
+      abrir("bad", "Mi proceso", "El bloque tiene problemas",
+        '<div class="warn">No se guardó nada. Un proceso a medias es peor que ninguno: ' +
+        'los agentes lo tomarían como verdad.</div><div class="ctx">· ' +
+        r.fallas.map(esc).join("\n· ") + '</div>' +
+        '<div class="dim">Volvé a tu Claude, mostrale estos puntos y pedile el bloque corregido.</div>' +
+        '<div class="acts"><button class="go" id="pvolver">Volver a intentar</button></div>');
+      document.getElementById("pvolver").onclick = verProceso;
+      return;
+    }
+    try{
+      const res = await fetch(CC_FB + "/" + NODO_PROCESOS + "/" + sesion.rolId + ".json", {
+        method:"PUT", headers:{"Content-Type":"application/json"}, body: JSON.stringify(r.ok) });
+      if(!res.ok) throw new Error("HTTP " + res.status);
+      proceso = r.ok;
+      await anotarBitacora("Mundo", "Cargó su proceso (" + r.ok.procesos.length +
+        " procesos) desde la oficina virtual");
+      generarTareas(); pintarChips(); pintarProcBtn();
+      toast("Guardado · tus agentes ya trabajan con tu proceso");
+      if(r.avisos && r.avisos.length){
+        abrir("", "Mi proceso", "Guardado, con observaciones",
+          '<div class="warn">· ' + r.avisos.map(esc).join("\n· ") + '</div>' +
+          '<div class="dim">Se guardó igual. Si querés, pedile a tu Claude que complete ' +
+          'esos puntos y volvé a pegar el bloque.</div>');
+      }else verProceso();
+    }catch(e){ toast("No se pudo guardar: " + e.message); }
+  };
+  const pb = document.getElementById("pborrar");
+  if(pb) pb.onclick = async function(){
+    try{
+      await fetch(CC_FB + "/" + NODO_PROCESOS + "/" + sesion.rolId + ".json", { method:"DELETE" });
+      proceso = null; generarTareas(); pintarChips(); pintarProcBtn();
+      toast("Borrado"); verProceso();
+    }catch(e){ toast("No se pudo borrar: " + e.message); }
+  };
+}
+function pintarProcBtn(){
+  document.getElementById("proc-btn").classList.toggle("avisa", !proceso);
+}
+
+/* --- Departamento de Mejoras: pedir y ver lo pedido --- */
+const COL_EST_MEJORA = { "Nueva":"var(--amber)", "En análisis":"var(--blue)",
+  "Aceptada":"var(--green)", "Hecha":"var(--ink-dim)", "Descartada":"var(--red)" };
+let tipoElegido = "idea";
+
+function verFormMejora(){
+  const mias = misMejoras().slice().reverse();
+  const lista = mias.length
+    ? '<label class="lab">Lo que ya pediste</label><div class="lst">' + mias.slice(0,12).map(function(m){
+        return '<div><i>' + esc(m.titulo) + '</i><b style="color:' +
+          (COL_EST_MEJORA[m.estado]||"var(--ink)") + '">' + esc(m.estado) + '</b></div>' +
+          (m.nota ? '<div style="border:0;padding:0;margin-top:-2px"><i style="font-size:10px">' +
+            esc(m.nota) + '</i></div>' : '');
+      }).join("") + '</div>'
+    : '';
+
+  abrir("", "FORJA-1 · Departamento de Mejoras", "Pedir una mejora del mundo",
+    '<div class="ctx">Esto no va a un agente: va al equipo que <b>mantiene el mundo</b>. ' +
+    'Sirve para lo que falla, lo que falta, un dato que se ve mal, o un permiso que ' +
+    'necesitás y no tenés.</div>' +
+    '<label class="lab">¿De qué se trata?</label>' +
+    '<div class="ops" id="tipos">' + Object.keys(TIPO_MEJORA).map(function(k){
+      return '<button data-tipo="' + k + '"' +
+        (k === tipoElegido ? ' style="border-color:var(--amber);color:var(--amber)"' : '') +
+        '>' + esc(TIPO_MEJORA[k]) + '</button>'; }).join("") + '</div>' +
+    '<label class="lab" for="mtit">En una línea</label>' +
+    '<textarea id="mtit" style="min-height:44px" placeholder="Ej: el agente de caja debería ver también los viáticos"></textarea>' +
+    '<label class="lab" for="mdet">Contalo con detalle (opcional pero ayuda)</label>' +
+    '<textarea id="mdet" placeholder="Cuándo te pasa, qué esperabas que hiciera, qué hizo…"></textarea>' +
+    '<div class="acts"><button class="go" id="menviar">Mandar el pedido</button></div>' +
+    (puedeTriar()
+      ? '<div class="dim">Como administrador del SGI, además podés pedirle a FORJA-1 que ' +
+        'tría los pedidos de todos: está en la bandeja.</div>'
+      : '<div class="dim">Lo van a ver el administrador del SGI y FORJA-1. Vas a poder seguir ' +
+        'acá en qué va.</div>') +
+    lista);
+
+  [...sheet.querySelectorAll("[data-tipo]")].forEach(function(b){
+    b.onclick = function(){ tipoElegido = b.dataset.tipo; verFormMejora(); };
+  });
+  document.getElementById("menviar").onclick = async function(){
+    const tit = document.getElementById("mtit").value.trim();
+    if(!tit){ toast("Escribí al menos una línea."); return; }
+    const reg = {
+      id: "mej_" + Date.now().toString(36),
+      fecha: new Date().toISOString(),
+      rol: sesion.rolId, persona: sesion.label,
+      tipo: tipoElegido, titulo: tit,
+      detalle: document.getElementById("mdet").value.trim(),
+      estado: "Nueva", nota: "", decididoPor: null, decididoEn: null
+    };
+    try{
+      const arr = await getBit(NODO_MEJORAS);
+      const lista2 = Array.isArray(arr) ? arr : [];
+      lista2.push(reg);
+      const put = await fetch(CC_FB + "/" + NODO_MEJORAS + ".json", {
+        method:"PUT", headers:{"Content-Type":"application/json"}, body: JSON.stringify(lista2) });
+      if(!put.ok) throw new Error("HTTP " + put.status);
+      mejoras = lista2;
+      await anotarBitacora("Mundo", "Pedido de mejora: " + tit);
+      generarTareas(); pintarChips();
+      toast("Mandado · " + reg.id);
+      verFormMejora();
+    }catch(e){ toast("No se pudo mandar: " + e.message); }
+  };
+}
+
 /* =====================================================================
    11. EL CICLO DE TRABAJO
    ===================================================================== */
@@ -1424,6 +1873,10 @@ async function seguir(t){
     t.conv.push({ role:"assistant", content: txt });
     const sobre = leerSobre(txt);
 
+    if(sobre.estado === "delegar"){
+      await repartir(t, sobre);
+      return;
+    }
     if(sobre.estado === "pregunta" || sobre.estado === "confirmacion"){
       t.estado = "espera";
       t.pendiente = { tipo: sobre.estado, sobre: sobre };
@@ -1462,6 +1915,56 @@ function vencioSesion(){
     'para seguir.</div><div class="acts"><button class="go" id="revol">Volver a entrar</button></div>');
   const b = document.getElementById("revol");
   if(b) b.onclick = function(){ location.reload(); };
+}
+
+/* --- Reparto en paralelo -------------------------------------------------
+   El líder parte el trabajo y los sub-agentes arrancan TODOS a la vez. En la
+   sala se ve: varias estaciones encendidas al mismo tiempo. Las respuestas
+   vuelven juntas al líder, que sigue desde ahí. Profundidad 1 a propósito:
+   un sub-agente no puede volver a repartir, ni escribir en la base. Repartir
+   sin fondo se vuelve caro y deja de ser auditable. */
+const MAX_SUBTAREAS = 4;
+async function repartir(t, sobre){
+  const visibles = agentesVisibles().map(x => x.id);
+  const subs = (Array.isArray(sobre.subtareas) ? sobre.subtareas : [])
+    .filter(x => x && x.pedido && AG[x.agente] && x.agente !== t.agente && visibles.indexOf(x.agente) >= 0)
+    .slice(0, MAX_SUBTAREAS);
+
+  if(!subs.length){
+    t.conv.push({ role:"user", content:
+      "NO SE REPARTIÓ NADA: las subtareas venían vacías o nombraban agentes que no existen " +
+      "o que este rol no tiene. Agentes disponibles: " +
+      visibles.filter(x => x !== t.agente).join(", ") + ". Hacelo vos o pedí lo que te falte." });
+    return seguir(t);
+  }
+
+  t.estado = "cocinando"; t._pensado = (t._pensado || "") +
+    "\n\n— repartiendo a " + subs.map(x => AG[x.agente].nombre).join(", ") + " —\n";
+  subs.forEach(x => { delegados[x.agente] = true; });
+  sincronizarAgentes(); pintarChips();
+  if(modal.classList.contains("on")) verCocina(t);
+
+  const contexto = "CONTEXTO REAL (leído de la base hace instantes):\n" + contextoGeneral();
+  const hechos = await Promise.all(subs.map(async function(x){
+    try{
+      const txt = await llamarClaude(
+        systemSub(x.agente, t.agente),
+        [{ role:"user", content: contexto + "\n\nLO QUE TE PIDE " + AG[t.agente].nombre + ":\n" + x.pedido }],
+        function(frag){ t._pensado = (t._pensado||"") + frag; pintarPensado(t); },
+        null);
+      return { agente:x.agente, ok:true, texto:txt };
+    }catch(e){
+      return { agente:x.agente, ok:false, texto:"no pudo contestar: " + e.message };
+    }finally{
+      delegados[x.agente] = false; sincronizarAgentes();
+    }
+  }));
+
+  t.conv.push({ role:"user", content:
+    "RESPUESTAS DE LOS AGENTES A LOS QUE REPARTISTE:\n\n" +
+    hechos.map(h => "=== " + AG[h.agente].nombre + (h.ok ? "" : " (FALLÓ)") + " ===\n" + h.texto).join("\n\n") +
+    "\n\nSeguí desde acá. Si alguno falló, decilo en vez de suponer qué habría contestado." });
+  seguir(t);
 }
 
 function tocarAgente(id){
@@ -1554,7 +2057,9 @@ async function refrescar(){
   await cargarTodo();
   generarTareas();
   pintarChips();
+  pintarProcBtn();
 }
+document.getElementById("proc-btn").onclick = verProceso;
 document.getElementById("salir").onclick = function(){
   try{ sessionStorage.removeItem("mundo_sesion"); }catch(e){}
   location.reload();

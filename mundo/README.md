@@ -114,6 +114,7 @@ analizan pero no pueden proponer ninguna escritura.
 | `STOCK-9` | Bodega | `data-almacen` |
 | `RENTA-3` | Flota y rentas | equipos por estado |
 | `RADAR-X` | Ventas y KPIs | el estado general de la operación |
+| `FORJA-1` | Departamento de Mejoras | los pedidos de todas las oficinas sobre el mundo mismo |
 
 ### Las tareas salen de los datos
 
@@ -160,6 +161,61 @@ navegador y los agentes quedan sin energía — y la pantalla de acceso lo dice.
 Esto cierra el proxy, **no la base**: mientras las reglas de Firebase estén
 abiertas, alguien puede cambiar los hashes de `auth-config` sin pasar por
 ninguna puerta.
+
+### Los agentes trabajan con el proceso real de cada quien
+
+Los agentes arrancaron con procesos **supuestos**. Cada empleado los
+reemplaza por los suyos: pega [`procesos/ENTREVISTA.md`](procesos/README.md)
+en su propio Claude, lo entrevista 20 minutos, y pega el bloque que sale en
+**MI PROCESO** (el botón ☰ de la barra). Desde ahí sus agentes usan sus
+pasos, sus tiempos y sus palabras.
+
+Como todos en Montasa ya tienen Claude, este paso **no necesita API ni
+licencia extra**. Detalle completo en [`procesos/`](procesos/README.md).
+
+Dos campos del bloque pesan más que el resto:
+
+- **`nunca_automatizar`** entra en la instrucción del agente como
+  prohibición. Lo escribe el empleado, no nosotros: el límite lo pone quien
+  hace el trabajo.
+- **`huecos`** deja escrito lo que quedó sin contestar, en vez de maquillarlo.
+
+Sin proceso cargado el agente **lo dice** y pregunta cómo se hace, en lugar
+de suponer pasos.
+
+### Repartir trabajo entre agentes
+
+Un agente puede partir un pedido y mandárselo a otros, que arrancan **todos
+a la vez** — en la sala se ven varias estaciones encendidas al mismo tiempo.
+Las respuestas vuelven juntas al que repartió, que sigue desde ahí.
+
+Los límites son a propósito: máximo 4 subtareas, y **profundidad 1** — quien
+recibe no puede volver a repartir ni escribir en la base. Repartir sin fondo
+se vuelve caro y deja de ser auditable. El agente solo puede repartir a
+agentes que ese rol ve: si Contabilidad no ve Almacén, tampoco puede
+consultarlo por la puerta de atrás.
+
+### Departamento de Mejoras
+
+En el centro de cada oficina está **FORJA-1**, que no es un agente de la
+operación: es la mesa desde la que cada oficina le habla al equipo que
+mantiene el mundo.
+
+Cualquiera manda un pedido — algo que falla, una idea, un dato que se ve
+mal, un permiso que le falta — y sigue en qué va. Los estados son los mismos
+que la empresa ya tiene en la cabeza:
+
+```
+Nueva  →  En análisis  →  Aceptada  →  Hecha
+                    ↘  Descartada
+```
+
+FORJA-1 además tría: agrupa los que hablan de lo mismo y propone qué hacer,
+y tiene una tarea permanente de mirar el mundo y proponer mejoras. Mover un
+pedido de estado es del **administrador del SGI** — el resto pide, no decide
+sobre los pedidos ajenos.
+
+Se guarda en `/bitacora/mundo-mejoras`.
 
 ### El motor: hace falta desplegar un servidor
 

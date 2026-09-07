@@ -21,4 +21,7 @@ Se despliega con GitHub Pages. Refresca datos cada 60 s.
   datos reales. Las tareas salen de la base; ninguna escritura ocurre sin
   que el empleado la autorice en pantalla. Necesita el proxy de
   [`mundo/servidor/`](mundo/servidor/README.md) para tener motor.
+- `mundo/procesos/` — la entrevista que cada empleado corre en **su propio
+  Claude** para que sus agentes trabajen con su proceso real y no con uno
+  supuesto. No necesita API. Ver [`mundo/procesos/README.md`](mundo/procesos/README.md).
 - `bitacora/` — app SGI de control interno (fork de la de Christian).

@@ -1,0 +1,60 @@
+{
+  "rol": "almacen_sps",
+  "persona": "Ejemplo — reemplazar por el real",
+  "actualizado": "2026-09-07",
+  "resumen": "Recibe y despacha material en la bodega de SPS, y arma los gastos de caja chica de la sede.",
+  "procesos": [
+    {
+      "id": "gastos-semana",
+      "nombre": "Armar los gastos de la semana",
+      "disparador": "los viernes, o cuando se junta bastante vale",
+      "frecuencia": "semanal",
+      "pasos": [
+        {
+          "n": 1,
+          "hace": "Junta los vales y facturas que quedaron en la gaveta durante la semana",
+          "donde": "papel",
+          "dato": null,
+          "depende_de": "los muchachos que gastaron",
+          "duele": "hay vales sin factura y hay que ir a preguntar de quién fue"
+        },
+        {
+          "n": 2,
+          "hace": "Carga cada gasto en la app de Bitácora con su comprobante",
+          "donde": "bitacora",
+          "dato": "data-cajachica",
+          "depende_de": null,
+          "duele": "si el vale dice S/N igual lo carga y después se lo devuelven"
+        },
+        {
+          "n": 3,
+          "hace": "Manda todo a revisión de una sola vez",
+          "donde": "bitacora",
+          "dato": "data-cajachica",
+          "depende_de": null,
+          "duele": null
+        }
+      ],
+      "termina_cuando": "todos los gastos de la semana quedan en 'Enviado a revisión'",
+      "se_traba_por": [
+        "vales sin factura que nadie reclama",
+        "cuando contabilidad rechaza y hay que rearmar el paquete"
+      ],
+      "le_pediria_a_un_asistente": [
+        "que me diga cuáles gastos van a rebotar antes de mandarlos",
+        "que agrupe por responsable los que no tienen comprobante"
+      ]
+    }
+  ],
+  "vocabulario": [
+    { "dice": "vale", "significa": "papelito de un gasto que se hizo sin factura" },
+    { "dice": "reposición", "significa": "cuando gerencia devuelve la plata al fondo fijo" }
+  ],
+  "nunca_automatizar": [
+    "aprobar un gasto: eso lo tiene que ver una persona",
+    "borrar un movimiento ya cargado"
+  ],
+  "huecos": [
+    "no supo decir hasta qué monto se puede gastar sin autorización previa"
+  ]
+}
