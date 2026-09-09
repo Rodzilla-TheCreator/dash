@@ -694,8 +694,8 @@ function barraUrgencia(px, py, ev){
      EL EDIFICIO           todo lo que NO es montacargas — la gente, los
                            papeles, las decisiones.
 
-   El edificio tiene el BULLPEN al centro, y ahí adentro están JARVIS y
-   MAQUINÓN. Las siete oficinas lo rodean, cada una con su puerta mirando
+   El edificio tiene el BULLPEN al centro, y ahí adentro está JARVIS.
+   Las siete oficinas lo rodean, cada una con su puerta mirando
    al bullpen: esa es la conexión directa. Un pedido sale de una oficina,
    entra al bullpen, se procesa, y sale hacia otra.
    ===================================================================== */
@@ -753,10 +753,14 @@ DEPTOS.forEach(function(d){
   d.dist = "edificio"; d.piso = "#2c3032"; d.linea = "#3a3e41";
   ZONAS.push(d);
 });
-/* Los dos que viven en el bullpen. No son oficinas: son el centro. */
+/* El que vive en el bullpen. No es una oficina: es el centro.
+   Antes acá había DOS: JARVIS y MAQUINÓN, dibujados como IA pares. Estaba
+   mal y era justo lo que prohibe la regla 1: Maquinón no es una IA, es una
+   máquina — la PC de Rodz, WSL2 por ssh al puerto 2222, donde Jarvis todavía
+   ni corre (falta Node >= 20). Dibujarla como un segundo cerebro le enseñaba
+   a quien mira el mapa que hay dos. Hay uno. Ver docs/jarvis/README.md. */
 const CENTRALES = [
-  { id:"jarvis",   nombre:"JARVIS",   col:"#4f8fe0", dx:-2.0, dy:-0.6 },
-  { id:"maquinon", nombre:"MAQUINÓN", col:"#f5a524", dx: 2.0, dy: 0.6 }
+  { id:"jarvis", nombre:"JARVIS", col:"#4f8fe0", dx:0, dy:0 }
 ];
 const ZONA = {}; ZONAS.forEach(z => ZONA[z.id] = z);
 const DEPTO = {}; DEPTOS.forEach(d => DEPTO[d.id] = d);
@@ -991,21 +995,21 @@ function zonaEdificio(datos){
   });
   rotuloZona(z);
 
-  /* --- JARVIS y MAQUINÓN, en el centro del bullpen --- */
+  /* --- JARVIS, en el centro del bullpen --- */
   CENTRALES.forEach(function(c){
     const gx = EDIF.cx + c.dx - 0.9, gy = EDIF.cy + c.dy - 0.7;
     const p = w2s(gx + 0.9, gy + 0.7);
     push(gx, gy, function(){
       /* torre + pantalla encendida */
       isoBox(gx, gy, 1.8, 1.4, 20, "#2b3033", { line:"#454b4f", z:14 });
-      const f = 0.55 + 0.45*Math.sin((Date.now()-t0)/(c.id === "jarvis" ? 420 : 300));
+      const f = 0.55 + 0.45*Math.sin((Date.now()-t0)/420);
       isoBox(gx + 0.2, gy + 0.15, 1.4, 0.2, 13, shade(c.col, 0.3 + f*0.8), { z:20 });
       /* halo */
       ctx.save(); ctx.globalAlpha = 0.10 + 0.08*f; ctx.fillStyle = c.col;
       ctx.beginPath(); ctx.ellipse(p.x, p.y - 6, 34, 17, 0, 0, Math.PI*2); ctx.fill(); ctx.restore();
     }, { x:p.x-22, y:p.y-46, w:44, h:56 }, function(){ fichaCentral(c); });
     label(p.x, p.y - 50, c.nombre, { col:c.col, size:12, w:"800", fam:"disp", box:true });
-    label(p.x, p.y - 38, c.id === "jarvis" ? "IA central" : "IA central · el mundo",
+    label(p.x, p.y - 38, "asistente de voz · CLI de Claude Code",
           { col:"#8b9096", size:8, box:true });
   });
 
@@ -1251,19 +1255,27 @@ function dibujarPulsos(){
   });
 }
 
+/* La ficha de Jarvis. Antes decía "no pude leer el repo": ya se leyó
+   (Fabriziomont7/jarvis — CLAUDE.md en main, i3.md en la rama
+   rodz/firebase-y-rutas, que NO está mergeada a proposito). Lo que el mundo
+   necesita saber de él está resumido en docs/jarvis/README.md, y el catálogo
+   de lo que puede contestar en docs/jarvis/PREGUNTAS.md. */
 function fichaCentral(c){
-  const esJarvis = (c.id === "jarvis");
-  abrirFicha('<div class="kicker">Bullpen · IA central</div><h2 class="display">' + c.nombre + '</h2>' +
-    rows([["Dónde", "en el bullpen, al centro del edificio"],
-          ["Alcance", "las siete oficinas, por conexión directa"],
+  abrirFicha('<div class="kicker">Bullpen · asistente de voz</div><h2 class="display">' + c.nombre + '</h2>' +
+    rows([["Qué es", "un asistente de voz sobre el CLI de Claude Code"],
+          ["Dónde corre", "servidor Node propio: localhost:4545, y en Railway"],
+          ["Con qué habla", "esta misma base de Firebase, RADAR, Notion, Vercel"],
+          ["Permiso", "solo lectura — es el default y así se entrega"],
           ["Qué cruza por acá", pulsos.length + " mensajes ahora mismo"]]) +
-    (esJarvis
-      ? '<div class="note warn">Todavía no está cableado. Sé que existe y dónde va, pero no pude ' +
-        'leer el repo <b>Fabriziomont7/jarvis</b> desde esta sesión: solo tengo acceso a ' +
-        '<b>rodzilla-thecreator/dash</b>. Falta el <b>i3.md</b> y el <b>CLAUDE.md</b> para saber ' +
-        'qué hace y cómo se conecta.</div>'
-      : '<div class="note">Es el que mantiene el mundo: recibe los pedidos de mejora de todas las ' +
-        'oficinas, los tría y propone qué cambiar.</div>'));
+    '<div class="note">Le hablás y contesta en voz alta. Hereda lo que ya sabe tu Claude Code: ' +
+    'memoria, skills, servidores MCP y repos. El cerebro <b>es el CLI corriendo headless</b>, no ' +
+    'la API — a propósito, para usar la suscripción que ya se paga.</div>' +
+    '<div class="note warn"><b>No le da energía a estas oficinas.</b> Los agentes de cada oficina ' +
+    'necesitan la API (una organización del Developer Platform); Jarvis usa la suscripción por el ' +
+    'CLI. Son dos caminos de cobro distintos y no se sustituyen.</div>' +
+    '<div class="note">Antes acá al lado se dibujaba a <b>MAQUINÓN</b> como una segunda IA. ' +
+    'No lo es: es una <b>máquina</b> — la PC donde Jarvis todavía ni corre. Salió del bullpen ' +
+    'porque un cerebro inventado es exactamente lo que prohíbe la regla 1.</div>');
 }
 
 function fichaDepto(d, datos){

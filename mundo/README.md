@@ -40,15 +40,20 @@ todo lo que es montacargas   todo lo que no lo es
 
 TALLER · PATIO · CAMPO       [FABRIZIO] [OMAR] [HR·Elia]
                              [VENTAS]  BULLPEN  [COMPRAS]
-                                    JARVIS · MAQUINÓN
+                                        JARVIS
                              [FINANZAS] [MI OFICINA] [ALMACÉN]
 ```
 
 ### El edificio
 
-**El bullpen está al centro y adentro viven JARVIS y MAQUINÓN**, las dos IA
-centrales. Las siete oficinas lo rodean y **cada puerta da directo al
-bullpen**: esa es la conexión.
+**El bullpen está al centro y adentro vive JARVIS.** Las siete oficinas lo
+rodean y **cada puerta da directo al bullpen**: esa es la conexión.
+
+Hasta hace poco ahí se dibujaban **dos** figuras, JARVIS y MAQUINÓN, como si
+fueran dos IA pares. Estaba mal: **Maquinón no es una IA, es una máquina** — la
+PC de Rodz, WSL2 por ssh, donde Jarvis ni siquiera corre todavía. Un cerebro
+inventado es justo lo que prohíbe la regla 1, así que salió del bullpen.
+Ver `docs/jarvis/README.md`.
 
 Una nota de geometría que costó descubrir: en isométrico un anillo mide
 **4·k tiles de ancho** en pantalla — el doble de lo que mide de alto. Por eso
@@ -91,11 +96,19 @@ puedan tener cada una la suya, especializada en lo suyo.
 
 ### Jarvis
 
-Está en el bullpen, al lado de Maquinón, con su nombre y su lugar — pero
-**sin cablear**. No pude leer `Fabriziomont7/jarvis` desde esta sesión: el
-acceso de GitHub está limitado a `rodzilla-thecreator/dash` y `add_repo` no
-acepta repos de otro dueño. Falta el `i3.md` y el `CLAUDE.md` para saber qué
-hace y cómo se conecta. Su ficha en el mundo lo dice así, sin disimularlo.
+Está en el bullpen, solo, y **ya está cableado**: su ficha dice lo que Jarvis
+realmente es. Es un **asistente de voz sobre el CLI de Claude Code** — le
+hablás, contesta en voz alta, y hereda memoria, skills, MCP y repos de tu
+Claude Code. Corre en un servidor Node propio (`localhost:4545` y Railway) y
+lee **esta misma base de Firebase**, además de RADAR, Notion y Vercel.
+
+**No le da energía a estas oficinas**, y conviene no confundirse: los agentes
+de cada oficina necesitan la **API** (Developer Platform), mientras que Jarvis
+usa la **suscripción** vía el CLI. Son dos caminos de cobro distintos.
+
+Lo que el mundo necesita saber de él está en **`docs/jarvis/README.md`**, y el
+catálogo de lo que puede contestar — con la fuente exacta de cada respuesta y
+qué está hueco — en **`docs/jarvis/PREGUNTAS.md`**.
 
 ## Las seis zonas
 

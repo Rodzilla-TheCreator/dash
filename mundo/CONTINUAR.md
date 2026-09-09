@@ -1,8 +1,9 @@
 # CONTINUAR ACÁ
 
 **Para el próximo Claude Code que agarre este proyecto.**
-Leé este archivo completo antes de tocar nada. Al final hay una tarea
-concreta que hay que ir a buscar a **otro repo**.
+Leé este archivo completo antes de tocar nada. Las nueve reglas de la
+sección 4 no se rompen: salieron de dos mesas redondas y sin ese contexto se
+rompen sin querer.
 
 ---
 
@@ -35,6 +36,8 @@ dash/
     CONTINUAR.md              este archivo
     README.md                 cómo está hecho, en detalle
     docs/MESA-REDONDA.md      las 15 decisiones de diseño y por qué
+    docs/jarvis/README.md     qué es Jarvis y por qué Maquinón no va en el bullpen
+    docs/jarvis/PREGUNTAS.md  qué puede contestar, con la fuente de cada respuesta
     procesos/ENTREVISTA.md    lo que cada empleado pega en SU Claude
     claude-code/PUENTE.md     lo que cada empleado pega en SU Claude Code
     servidor/                 sesion.js + claude-proxy.js (sin desplegar)
@@ -57,13 +60,14 @@ todo lo que es montacargas   todo lo que no lo es
 
 TALLER · PATIO · CAMPO       [FABRIZIO] [OMAR] [HR·Elia]
                              [VENTAS]  BULLPEN  [COMPRAS]
-                                    JARVIS · MAQUINÓN
+                                        JARVIS
                              [FINANZAS] [MI OFICINA] [ALMACÉN]
 ```
 
-- El **bullpen** está al centro; adentro viven **JARVIS y MAQUINÓN**, las dos
-  IA centrales. Las siete oficinas lo rodean y cada puerta da directo al
-  bullpen.
+- El **bullpen** está al centro; adentro vive **JARVIS**. Las siete oficinas lo
+  rodean y cada puerta da directo al bullpen. (Antes también se dibujaba ahí a
+  MAQUINÓN, como si fuera una segunda IA. No lo es: es una **máquina**. Salió.
+  Ver `docs/jarvis/README.md`.)
 - Los **puntos que cruzan** son registros reales viajando: oficina → bullpen
   (se procesa) → otra oficina. Azul = encargos, ámbar = gastos esperando
   decisión, hueso = pedidos de mejora. Si no hay nada pendiente, no cruza nada.
@@ -141,7 +145,9 @@ vas a romper una, leé primero por qué existe.
 
 **Anda sin tocar nada:** el mapa completo, el login con el código de Bitácora
 (modo local), las tareas generadas de datos reales, el pasillo con presencia,
-pedir mejoras, mandar encargos entre oficinas con traducción.
+pedir mejoras, mandar encargos entre oficinas con traducción. **Jarvis ya está
+cableado en el bullpen** (sección 6) — cableado como *ficha*, que es lo que
+había que hacer: el mundo todavía no lo llama.
 
 **Anda pero apagado:** los agentes salen *SIN ENERGÍA*. Falta desplegar
 `mundo/servidor/` (dos funciones, ~5 min en Vercel) y pegar la URL en
@@ -160,45 +166,70 @@ profesionaliza después. Queda anotado, no para insistir.
 
 ---
 
-## 6. LO QUE TENÉS QUE IR A BUSCAR
+## 6. Jarvis: hecho, y lo que quedó abierto
 
-Esta es la tarea. **Jarvis está en el bullpen con su nombre y su lugar, pero
-sin cablear.**
+**Esta sección era una tarea. Ya está hecha** — se leyó `Fabriziomont7/jarvis`
+y Jarvis quedó cableado en el bullpen. Se deja el resultado, no el encargo.
 
-Yo no pude leerlo: el acceso de GitHub de mi sesión estaba limitado a
-`rodzilla-thecreator/dash`, y `add_repo` no acepta repos de otro dueño. La
-cuenta de Rodz sí tiene acceso (`can_push: true`), así que **vos probablemente
-sí podés**.
+### Lo que se encontró
 
-### Andá a `Fabriziomont7/jarvis` y leé, en este orden:
+- **Jarvis es un asistente de voz sobre el CLI de Claude Code.** Le hablás,
+  contesta en voz alta, y hereda memoria, skills, MCP y repos de tu Claude
+  Code. El cerebro es el **CLI headless** (`claude -p`), no la API — a
+  propósito, para usar la suscripción que ya se paga.
+- **Corre** en un servidor Node propio: `localhost:4545` y Railway. No es
+  serverless.
+- **Habla con esta misma base de Firebase** (por `bin/firebase-lectura`, GET
+  clavado), con RADAR/Supabase en solo lectura, Notion y Vercel.
+- **No resuelve el *SIN ENERGÍA* de las oficinas.** Los agentes del mundo
+  necesitan la **API** (Developer Platform); Jarvis usa la **suscripción** por
+  el CLI. Dos caminos de cobro distintos, no se sustituyen.
 
-1. **`CLAUDE.md`** — es la base del proyecto. Qué es Jarvis, para qué existe,
-   cómo está armado.
-2. **`i3.md`** — referencia lo que Rodz ya hizo. Es el puente entre los dos
-   proyectos.
-3. Después, lo que haga falta del repo para contestar las preguntas de abajo.
+### Maquinón no era una IA
 
-### Las preguntas que hay que contestar con eso
+Era el error que había que encontrar. **Maquinón es una máquina** — la PC de
+Rodz, WSL2 por `ssh maquinon` al puerto 2222, donde Jarvis **ni siquiera corre
+todavía** (falta Node ≥ 20). Estaba dibujado en el bullpen como una segunda IA
+par de Jarvis: un cerebro inventado, justo lo que prohíbe la **regla 1**.
 
-- **¿Qué es Jarvis?** ¿Un agente que corre en algún lado, una capa sobre RADAR,
-  una app, otra cosa?
-- **¿Dónde corre?** ¿Tiene servidor propio, es local, es serverless?
-- **¿Con qué habla?** ¿Toca la misma base de Firebase? ¿RADAR? ¿SAP?
-- **¿Qué relación tiene con Maquinón?** Esta es la que más importa. Hoy los
-  puse como pares en el bullpen. Puede que esté mal: puede que Maquinón sea una
-  pieza de Jarvis, o al revés, o que sean dos cosas que ni se tocan.
-- **¿Qué se puede reusar?** Si Jarvis ya resuelve algo que acá está pendiente
-  (el que piensa solo, la memoria, un motor), no lo dupliques.
+**Salió del bullpen.** Queda Jarvis solo. En `docs/MESA-REDONDA.md` "Maquinón"
+sigue figurando como participante — eso es un acta y se deja como está: era la
+sesión de Claude Code corriendo en esa máquina.
 
-### Después de eso
+### Dónde quedó todo
 
-Cableá Jarvis en el bullpen de `mundo/index.html`. Hoy su ficha
-(`fichaCentral`) dice explícitamente que no se pudo leer el repo — **reemplazá
-ese texto por lo que Jarvis realmente es**. Está en `CENTRALES` y en
-`fichaCentral()`.
+- `docs/jarvis/README.md` — qué es, dónde corre, con qué habla, qué se puede
+  reusar, y por qué Maquinón no va en el bullpen.
+- `docs/jarvis/PREGUNTAS.md` — **el catálogo**: cada pregunta con su fuente
+  exacta y su estado (contesta hoy / falta guion / hueco de datos / necesita
+  permiso). Incluye las **preguntas trampa**, que son las que miden si es
+  honesto.
+- `mundo/index.html` — `CENTRALES` y `fichaCentral()` ya cableados.
 
-Y traé al repo lo que haga falta para que esto no se vuelva a perder: copiá o
-resumí en `mundo/docs/jarvis/` lo que el mundo necesita saber de él.
+### Dos cosas que aparecieron al medir la base
+
+Ninguna la causó este trabajo, pero cambian lo que se puede prometer:
+
+1. **De las 14 claves de `bitacora/` que documenta el esquema, en Firebase
+   existen 3**: `auth-config`, `data-bitacora`, `data-cajachica`. El esquema
+   describe la **Google Sheet original**; la migración va por la tercera parte.
+   `data-viajes` nunca se creó — por eso el KPI de viáticos sale vacío.
+2. **Caja chica lleva seis semanas sin un registro nuevo** (los 15 que hay son
+   todos de Choloma, todos liquidados, todos de julio). "¿Qué espera mi
+   aprobación?" contesta *ninguna*, y es correcto — pero lo que hay que contar
+   es lo otro.
+
+### Lo que sigue con Jarvis
+
+Está ordenado al final de `docs/jarvis/PREGUNTAS.md`. Lo primero no es un
+guion nuevo: es **la memoria de empresa**. Hoy Jarvis carga la memoria
+*personal* de Fabrizio, y un cerebro de empresa necesita saber qué significa
+`MAL ESTADO` o que `honduras` en RADAR es Monhaco. **Es la diferencia entre un
+asistente y el cerebro.**
+
+Y sigue pendiente, sin ser técnico: **preguntarle a Omar qué quiso decir con
+"cotizar"**. Son tres cosas distintas con tres permisos distintos, y cinco
+minutos de conversación deciden semanas de trabajo.
 
 ---
 
