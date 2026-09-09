@@ -1,5 +1,9 @@
 # Mundo Montasa
 
+> **¿Sos un Claude Code que recién agarra este proyecto?**
+> Leé primero **[`CONTINUAR.md`](CONTINUAR.md)**: tiene el estado, las reglas
+> que no se rompen, y la tarea pendiente que hay que ir a buscar a otro repo.
+
 Un **mundo isométrico pixel-art** que muestra la operación real de Montasa /
 Monhaco / Monhagro como un lugar recorrible, en vez de tiles de números.
 
