@@ -26,6 +26,73 @@ apagado colgado de la pared.
 
 ---
 
+## El mundo son dos cosas separadas
+
+Son dos negocios distintos y el mapa no los mezcla:
+
+```
+DISTRITO DE EQUIPOS          EL EDIFICIO
+todo lo que es montacargas   todo lo que no lo es
+
+TALLER · PATIO · CAMPO       [FABRIZIO] [OMAR] [HR·Elia]
+                             [VENTAS]  BULLPEN  [COMPRAS]
+                                    JARVIS · MAQUINÓN
+                             [FINANZAS] [MI OFICINA] [ALMACÉN]
+```
+
+### El edificio
+
+**El bullpen está al centro y adentro viven JARVIS y MAQUINÓN**, las dos IA
+centrales. Las siete oficinas lo rodean y **cada puerta da directo al
+bullpen**: esa es la conexión.
+
+Una nota de geometría que costó descubrir: en isométrico un anillo mide
+**4·k tiles de ancho** en pantalla — el doble de lo que mide de alto. Por eso
+`EDIF.k` está en 10 y no en 13: con 13 el edificio se salía de un celular por
+los costados. Mover el edificio entero es mover `EDIF.cx`, `cy` y `k`.
+
+| Oficina | Quiénes | Qué muestra |
+|---|---|---|
+| **OMAR** | Omar | los KPIs colgados |
+| **FABRIZIO** | Fabrizio | estado de RADAR |
+| **HR** | Elia | roles con acceso |
+| **VENTAS** | dos, sin nombre aún | flota en renta y disponible |
+| **COMPRAS** | dos, sin nombre aún | *todavía nada — la oficina existe, está vacía* |
+| **FINANZAS** | dos, sin nombre aún | caja chica y viáticos |
+| **ALMACÉN** | dos, sin nombre aún | existencias de bodega |
+
+El octavo lugar del anillo es la **entrada**: de ahí se pasa a `oficina.html`,
+que es donde se trabaja. El mapa es para mirar.
+
+### Los mensajes que cruzan
+
+**No son adorno.** Cada punto que viaja es un registro real: sale de la oficina
+de quien lo pidió, entra al bullpen, ahí late mientras se procesa, y sigue
+hacia la oficina que le toca.
+
+| Color | Qué es | De dónde sale |
+|---|---|---|
+| azul | encargo entre oficinas | `mundo-encargos` |
+| ámbar | gasto esperando decisión | `data-cajachica` en revisión |
+| hueso | pedido de mejora | `mundo-mejoras` |
+
+Si no hay nada pendiente, no cruza nada. Un edificio quieto significa que no
+hay nada esperando, no que el mapa se rompió.
+
+### Un modelo de IA por oficina
+
+Cada depto tiene un campo `modelo`. **Está declarado pero no cableado**: el
+mundo lo muestra, no lo llama. La idea es que Finanzas, Almacén y Ventas
+puedan tener cada una la suya, especializada en lo suyo.
+
+### Jarvis
+
+Está en el bullpen, al lado de Maquinón, con su nombre y su lugar — pero
+**sin cablear**. No pude leer `Fabriziomont7/jarvis` desde esta sesión: el
+acceso de GitHub está limitado a `rodzilla-thecreator/dash` y `add_repo` no
+acepta repos de otro dueño. Falta el `i3.md` y el `CLAUDE.md` para saber qué
+hace y cómo se conecta. Su ficha en el mundo lo dice así, sin disimularlo.
+
 ## Las seis zonas
 
 | Zona | Qué muestra | De dónde sale |
@@ -35,7 +102,7 @@ apagado colgado de la pared.
 | **CAMPO / CLIENTES** | Equipos `EN RENTA`, agrupados por cliente en sitios con nave | `{empresa}/equipos` + RADAR `flota.ingresos_renta_mes` |
 | **CONTABILIDAD** | Las 4 estaciones del flujo + papelera; cada registro es una hoja | `/bitacora/data-cajachica`, `/bitacora/data-viajes` |
 | **BODEGA** | Estanterías; cajas = existencia neta por producto y sede | `/bitacora/data-almacen` |
-| **OFICINA** | Los 51 KPIs del catálogo como objetos que se cuelgan de la pared, y **la puerta a la oficina virtual** | `KPI_GROUPS` + `localStorage["dash_kpis"]` |
+| *(las tres de abajo se mudaron adentro del edificio: OFICINA → Omar, CONTABILIDAD → Finanzas, BODEGA → Almacén)* | | |
 
 ### Barra de urgencia (taller)
 

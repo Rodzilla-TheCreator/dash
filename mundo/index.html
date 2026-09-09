@@ -378,6 +378,7 @@ const state = {
   equipos:{}, preventivos:{}, correctivos:{},
   caja:null, viajes:null, almacen:null,     // null = sin cargar, "error" = fallo
   radar:null, fxHNL:null, conn:false,
+  encargos:[], mejoras:[],                   // lo que cruza el edificio
   stamp:0                                    // sube en cada refresco (invalida cache)
 };
 /* Cache de evaluarEquipo entre refrescos (spec 4: rendimiento). */
@@ -412,6 +413,13 @@ async function cargarFlota(){
     console.error("[Mundo] flota:", e.message);
     state.flotaErr = e.message;
   }
+}
+/* Los nodos del mundo pasaron a ser objetos con llave (ver nucleo.js); acá
+   se leen igual, y un arreglo viejo también se entiende. */
+function comoLista(o){
+  if(Array.isArray(o)) return o.filter(Boolean);
+  if(o && typeof o === "object") return Object.keys(o).map(k => o[k]).filter(Boolean);
+  return [];
 }
 async function cargarBitacora(key){
   try{
@@ -600,6 +608,53 @@ function papel(tint){
   ]);
 }
 
+/* =====================================================================
+   LA GENTE
+   ---------------------------------------------------------------------
+   Sprites de 12 x 20. Tres tienen nombre porque tienen oficina propia:
+   Omar (camisa cuadriculada manga larga, siempre), Fabrizio y Elia. En las
+   demás oficinas van dos personas sin nombre todavía.
+   ===================================================================== */
+const PIEL = { omar:"#c69a72", fabri:"#b8865c", elia:"#d3a67f", gen:"#a8825f", gen2:"#8d6a48" };
+const PELO = { omar:"#9aa0a4", fabri:"#241c19", elia:"#3b2016", gen:"#332b28", gen2:"#4a3a2c" };
+
+function persona(tipo){
+  const key = "pj_" + tipo;
+  if(SPR[key]) return SPR[key];
+  const piel = PIEL[tipo] || PIEL.gen, pelo = PELO[tipo] || PELO.gen;
+  const ops = [];
+  /* pelo y cabeza */
+  ops.push([3,0,6,2,pelo], [3,1,1,3,pelo], [8,1,1,3,pelo]);
+  if(tipo === "elia"){ ops.push([2,2,1,7,pelo], [9,2,1,7,pelo]); }   // pelo largo
+  ops.push([4,2,4,5,piel]);
+  ops.push([4,4,1,1,"#101213"], [7,4,1,1,"#101213"]);               // ojos
+  ops.push([5,7,2,1,piel]);                                         // cuello
+
+  if(tipo === "omar"){
+    /* Camisa cuadriculada manga larga, pantalón y zapatos. No negocia. */
+    ops.push([3,8,6,7,"#8c4a42"], [2,8,1,6,"#8c4a42"], [9,8,1,6,"#8c4a42"]);
+    for(let y=8;y<15;y+=2) for(let x=2;x<10;x+=2)
+      if(((x+y)/2) % 2 === 0) ops.push([x,y,1,1,"#b56a5e"]);
+    for(let y=9;y<15;y+=2) ops.push([2,y,8,1,"#6f3a34"]);            // rayas del cuadro
+    ops.push([5,8,2,2,"#eae7e0"]);                                   // cuello de camisa
+    ops.push([4,15,2,4,"#2f3439"], [6,15,2,4,"#2f3439"]);            // pantalón
+    ops.push([3,19,3,1,"#17191a"], [6,19,3,1,"#17191a"]);            // zapatos
+  }else{
+    const ropa = { fabri:"#2f4f6d", elia:"#7a3f6b", gen:"#4a5054", gen2:"#3f4a44" }[tipo] || "#4a5054";
+    ops.push([3,8,6,7,ropa], [2,8,1,5,ropa], [9,8,1,5,ropa]);
+    ops.push([3,8,6,1,shade(ropa,1.25)]);
+    ops.push([2,13,1,1,piel], [9,13,1,1,piel]);                      // manos
+    if(tipo === "elia"){
+      ops.push([3,14,6,5,shade(ropa,0.8)]);                          // falda
+      ops.push([4,19,2,1,"#17191a"], [7,19,2,1,"#17191a"]);
+    }else{
+      ops.push([4,15,2,4,"#333a3e"], [6,15,2,4,"#333a3e"]);
+      ops.push([3,19,3,1,"#17191a"], [6,19,3,1,"#17191a"]);
+    }
+  }
+  return makeSprite(key, 12, 20, ops);
+}
+
 /* Barra de urgencia sobre un equipo (spec 3.1). */
 const COL_URG = { ok:"#3ecf7e", warn:"#f5a524", crit:"#e5534b", nodata:"#565b5f" };
 function barraUrgencia(px, py, ev){
@@ -629,18 +684,86 @@ function barraUrgencia(px, py, ev){
    item guarda su profundidad (gx+gy) para el orden de pintado, y su caja
    en pantalla para el tap.
    ===================================================================== */
+/* =====================================================================
+   EL MUNDO SE PARTE EN DOS
+   ---------------------------------------------------------------------
+   Son dos negocios distintos y no se mezclan:
+
+     DISTRITO DE EQUIPOS   todo lo que es montacargas — taller, patio y
+                           los que están en cliente. Fierro.
+     EL EDIFICIO           todo lo que NO es montacargas — la gente, los
+                           papeles, las decisiones.
+
+   El edificio tiene el BULLPEN al centro, y ahí adentro están JARVIS y
+   MAQUINÓN. Las siete oficinas lo rodean, cada una con su puerta mirando
+   al bullpen: esa es la conexión directa. Un pedido sale de una oficina,
+   entra al bullpen, se procesa, y sale hacia otra.
+   ===================================================================== */
 const ZONAS = [
-  { id:"taller",  nombre:"TALLER",           x:0,  y:0,  w:12, d:10, piso:"#2a2d2f", linea:"#34383b" },
-  { id:"patio",   nombre:"PATIO",            x:16, y:0,  w:18, d:12, piso:"#25282a", linea:"#31353800" },
-  { id:"campo",   nombre:"CAMPO / CLIENTES", x:38, y:0,  w:22, d:13, piso:"#1f2426", linea:"#2a2f3100" },
-  { id:"oficina", nombre:"OFICINA",          x:0,  y:14, w:14, d:14, piso:"#2d3032", linea:"#3a3e41" },
-  { id:"conta",   nombre:"CONTABILIDAD",     x:18, y:16, w:24, d:11, piso:"#2b2e30", linea:"#3a3e41" },
-  { id:"bodega",  nombre:"BODEGA",           x:46, y:20, w:17, d:20, piso:"#282b2d", linea:"#35393c" }
+  /* --- distrito de equipos (montacargas) --- */
+  { id:"taller",  nombre:"TALLER",           dist:"equipos", x:0,  y:0,  w:12, d:10, piso:"#2a2d2f", linea:"#34383b" },
+  { id:"patio",   nombre:"PATIO",            dist:"equipos", x:16, y:0,  w:18, d:12, piso:"#25282a", linea:"#31353800" },
+  { id:"campo",   nombre:"CAMPO / CLIENTES", dist:"equipos", x:38, y:0,  w:22, d:13, piso:"#1f2426", linea:"#2a2f3100" },
+  /* --- el edificio (todo lo demás) --- */
+  { id:"bullpen", nombre:"BULLPEN",          dist:"edificio", x:20, y:37, w:12, d:10, piso:"#2f3335", linea:"#3c4144" }
+];
+
+/* El centro del edificio y el radio del anillo de oficinas. Todo lo demás
+   se calcula de acá: mover el edificio es mover estos tres números. */
+/* Ojo con `k`: en isométrico el anillo mide 4·k tiles de ancho en pantalla
+   (el doble de lo que mide de alto). Subirlo de 10 saca el edificio de un
+   celular por los costados. */
+const EDIF = { cx:26, cy:42, k:10, ow:8, od:6 };
+
+/* En isométrico, "alrededor" no es obvio: para subir en pantalla hay que
+   bajar gx+gy, y para ir a la derecha hay que subir gx-gy. Estas ocho
+   posiciones son las que dan un anillo que se VE como un anillo. */
+const ANCLAS = {
+  N:  [-1,-1], NE:[ 0,-1], E:[ 1,-1], SE:[ 1, 0],
+  S:  [ 1, 1], SW:[ 0, 1], W:[-1, 1], NW:[-1, 0]
+};
+
+/* Las siete oficinas. `modelo` es con qué IA trabaja esa oficina: todavía
+   no está cableado (lo lee el edificio para mostrarlo, no para llamarlo),
+   pero la idea es que cada oficina pueda tener la suya especializada. */
+const DEPTOS = [
+  { id:"omar",     nombre:"OMAR",     sub:"Gerencia",        ancla:"N",  col:"#f5a524",
+    gente:[{n:"Omar",  tipo:"omar"}],  modelo:"por definir", muestra:"kpis" },
+  { id:"fabri",    nombre:"FABRIZIO", sub:"Sistemas / RADAR",ancla:"NW", col:"#4f8fe0",
+    gente:[{n:"Fabrizio", tipo:"fabri"}], modelo:"por definir", muestra:"radar" },
+  { id:"hr",       nombre:"HR",       sub:"Elia",            ancla:"NE", col:"#c77dd1",
+    gente:[{n:"Elia",  tipo:"elia"}],  modelo:"por definir", muestra:"gente" },
+  { id:"ventas",   nombre:"VENTAS",   sub:"",                ancla:"W",  col:"#3ecf7e",
+    gente:[{tipo:"gen"},{tipo:"gen"}], modelo:"por definir", muestra:"renta" },
+  { id:"compras",  nombre:"COMPRAS",  sub:"",                ancla:"E",  col:"#5DBBE8",
+    gente:[{tipo:"gen"},{tipo:"gen"}], modelo:"por definir", muestra:"nada" },
+  { id:"finanzas", nombre:"FINANZAS", sub:"Caja chica y viáticos", ancla:"SW", col:"#a78bfa",
+    gente:[{tipo:"gen"},{tipo:"gen"}], modelo:"por definir", muestra:"caja" },
+  { id:"almacen",  nombre:"ALMACÉN",  sub:"Bodega",          ancla:"SE", col:"#a9741f",
+    gente:[{tipo:"gen"},{tipo:"gen"}], modelo:"por definir", muestra:"bodega" }
+];
+/* Cada depto pasa a ser también una zona navegable. */
+DEPTOS.forEach(function(d){
+  const a = ANCLAS[d.ancla];
+  d.cx = EDIF.cx + a[0]*EDIF.k;
+  d.cy = EDIF.cy + a[1]*EDIF.k;
+  d.x  = d.cx - EDIF.ow/2;
+  d.y  = d.cy - EDIF.od/2;
+  d.w  = EDIF.ow; d.d = EDIF.od;
+  d.dist = "edificio"; d.piso = "#2c3032"; d.linea = "#3a3e41";
+  ZONAS.push(d);
+});
+/* Los dos que viven en el bullpen. No son oficinas: son el centro. */
+const CENTRALES = [
+  { id:"jarvis",   nombre:"JARVIS",   col:"#4f8fe0", dx:-2.0, dy:-0.6 },
+  { id:"maquinon", nombre:"MAQUINÓN", col:"#f5a524", dx: 2.0, dy: 0.6 }
 ];
 const ZONA = {}; ZONAS.forEach(z => ZONA[z.id] = z);
+const DEPTO = {}; DEPTOS.forEach(d => DEPTO[d.id] = d);
 function centroZona(z){ const p = w2s(z.x + z.w/2, z.y + z.d/2); return p; }
 
 let scene = { items:[], labels:[] };
+const t0 = Date.now();          // reloj de las animaciones del mapa
 let dirty = true;
 
 function push(gx, gy, draw, hit, tap){
@@ -820,6 +943,343 @@ function zonaCampo(mant){
   });
 }
 
+/* =====================================================================
+   EL EDIFICIO: bullpen al centro, siete oficinas alrededor
+   ===================================================================== */
+function vecUnit(dx, dy){
+  const m = Math.hypot(dx, dy) || 1;
+  return { x:dx/m, y:dy/m };
+}
+/* La puerta de una oficina mira SIEMPRE al bullpen: es la conexión directa. */
+function puertaDe(d){
+  const v = vecUnit(EDIF.cx - d.cx, EDIF.cy - d.cy);
+  return { gx: d.cx + v.x * (EDIF.ow/2), gy: d.cy + v.y * (EDIF.od/2), v:v };
+}
+/* Dónde toca el corredor el borde del bullpen. */
+function bocaBullpen(d){
+  const v = vecUnit(d.cx - EDIF.cx, d.cy - EDIF.cy);
+  const z = ZONA.bullpen;
+  return { gx: EDIF.cx + v.x * (z.w/2 - 0.5), gy: EDIF.cy + v.y * (z.d/2 - 0.5) };
+}
+
+function zonaEdificio(datos){
+  const z = ZONA.bullpen;
+
+  /* --- corredores: se dibujan primero, por debajo de todo --- */
+  DEPTOS.forEach(function(d){
+    const a = bocaBullpen(d), b = puertaDe(d);
+    push(Math.min(a.gx,b.gx), Math.min(a.gy,b.gy) - 0.2, function(){
+      const pasos = 14;
+      for(let i=0;i<=pasos;i++){
+        const t = i/pasos;
+        const gx = a.gx + (b.gx-a.gx)*t, gy = a.gy + (b.gy-a.gy)*t;
+        tile(Math.round(gx*2)/2, Math.round(gy*2)/2, "#31363a", null);
+      }
+    });
+  });
+
+  /* --- el bullpen --- */
+  push(z.x, z.y, function(){
+    floor(z.x, z.y, z.w, z.d, z.piso, z.linea);
+    /* borde elevado: se ve que es un pozo central y no un cuarto más */
+    isoBox(z.x - 0.3, z.y - 0.3, z.w + 0.6, 0.3, 7, "#3a4044", { line:"#474d51" });
+    isoBox(z.x - 0.3, z.y + z.d, z.w + 0.6, 0.3, 7, "#3a4044", { line:"#474d51" });
+    isoBox(z.x - 0.3, z.y, 0.3, z.d, 7, "#343a3e", { line:"#474d51" });
+    isoBox(z.x + z.w, z.y, 0.3, z.d, 7, "#343a3e", { line:"#474d51" });
+    /* mesa larga del bullpen */
+    isoBox(EDIF.cx - 3.6, EDIF.cy - 1.2, 7.2, 2.4, 14, "#4a4038", { line:"#5b5045" });
+  });
+  rotuloZona(z);
+
+  /* --- JARVIS y MAQUINÓN, en el centro del bullpen --- */
+  CENTRALES.forEach(function(c){
+    const gx = EDIF.cx + c.dx - 0.9, gy = EDIF.cy + c.dy - 0.7;
+    const p = w2s(gx + 0.9, gy + 0.7);
+    push(gx, gy, function(){
+      /* torre + pantalla encendida */
+      isoBox(gx, gy, 1.8, 1.4, 20, "#2b3033", { line:"#454b4f", z:14 });
+      const f = 0.55 + 0.45*Math.sin((Date.now()-t0)/(c.id === "jarvis" ? 420 : 300));
+      isoBox(gx + 0.2, gy + 0.15, 1.4, 0.2, 13, shade(c.col, 0.3 + f*0.8), { z:20 });
+      /* halo */
+      ctx.save(); ctx.globalAlpha = 0.10 + 0.08*f; ctx.fillStyle = c.col;
+      ctx.beginPath(); ctx.ellipse(p.x, p.y - 6, 34, 17, 0, 0, Math.PI*2); ctx.fill(); ctx.restore();
+    }, { x:p.x-22, y:p.y-46, w:44, h:56 }, function(){ fichaCentral(c); });
+    label(p.x, p.y - 50, c.nombre, { col:c.col, size:12, w:"800", fam:"disp", box:true });
+    label(p.x, p.y - 38, c.id === "jarvis" ? "IA central" : "IA central · el mundo",
+          { col:"#8b9096", size:8, box:true });
+  });
+
+  /* --- las siete oficinas --- */
+  DEPTOS.forEach(function(d){ oficinaDepto(d, datos); });
+}
+
+function oficinaDepto(d, datos){
+  const pu = puertaDe(d);
+  push(d.x, d.y, function(){
+    floor(d.x, d.y, d.w, d.d, d.piso, d.linea);
+    /* paredes bajas alrededor, con el color del depto en el canto */
+    isoBox(d.x - 0.25, d.y - 0.25, d.w + 0.5, 0.25, 30, "#383d41", { line:"#464c50" });
+    isoBox(d.x - 0.25, d.y, 0.25, d.d, 30, "#31363a", { line:"#464c50" });
+    isoBox(d.x - 0.25, d.y - 0.25, d.w + 0.5, 0.25, 3, d.col, { z:30 });
+    /* la puerta, mirando al bullpen */
+    isoBox(pu.gx - 0.6, pu.gy - 0.3, 1.2, 0.3, 22, "#22262a", { line:d.col });
+  });
+
+  /* rótulo arriba de la oficina */
+  const c = centroZona(d);
+  const alto = (d.w + d.d) * HH / 2 + 42;
+  d._ytit = c.y - alto;
+  label(c.x, d._ytit, d.nombre, { col:d.col, size:12, w:"800", fam:"disp", box:true });
+  if(d.sub) label(c.x, d._ytit + 12, d.sub, { col:"#8b9096", size:8.5, box:true });
+
+  /* la gente */
+  d.gente.forEach(function(g, i){
+    const gx = d.x + 1.4 + i * 2.4, gy = d.y + d.d - 1.7;
+    const p = w2s(gx, gy);
+    const sx = Math.round(p.x - 6), sy = Math.round(p.y + HH - 20);
+    push(gx, gy, function(){
+      sombra(gx, gy, 7);
+      ctx.drawImage(persona(g.tipo === "gen" && i ? "gen2" : (g.tipo || "gen")), sx, sy);
+    }, { x:sx-4, y:sy-4, w:20, h:28 }, function(){ fichaDepto(d, datos); });
+    if(g.n) label(p.x, sy - 7, g.n.toUpperCase(), { col:"#8b9096", size:8, box:true });
+  });
+
+  /* lo que esa oficina muestra de verdad */
+  contenidoDepto(d, datos);
+
+  /* toda la oficina es tappable por su piso */
+  const cc = w2s(d.x + d.w/2, d.y + d.d/2);
+  push(d.x + d.w/2, d.y + d.d/2, function(){}, { x:cc.x-40, y:cc.y-10, w:80, h:30 },
+       function(){ fichaDepto(d, datos); });
+}
+
+/* Cada oficina muestra sus propios datos. Si no tiene fuente todavía, lo
+   dice: la oficina existe pero está vacía, y eso se ve. */
+function contenidoDepto(d, datos){
+  const c = centroZona(d);
+  /* debajo del título, no debajo de la oficina: abajo está el bullpen */
+  const bajo = (d._ytit || (c.y - 60)) + (d.sub ? 24 : 13);
+  const filas = [];
+
+  if(d.muestra === "caja"){
+    const P = datos.papeles;
+    if(P.err) filas.push(["no se pudo leer", "#e5534b"]);
+    else if(P.sinSede) filas.push(["sin sede asignada", "#565b5f"]);
+    else {
+      filas.push([P.por.rev.length + " esperando decisión", P.por.rev.length ? "#f5a524" : "#565b5f"]);
+      filas.push([P.por.pend.length + " pendientes · " + P.por.liq.length + " liquidados", "#8b9096"]);
+    }
+    /* escritorios con papeles: la versión chica de las cuatro estaciones */
+    ESTACIONES.slice(0,4).forEach(function(st, i){
+      const gx = d.x + 0.8 + (i%2)*3.2, gy = d.y + 0.7 + Math.floor(i/2)*1.9;
+      const n = (datos.papeles.por[st.id] || []).length;
+      push(gx, gy, function(){
+        isoBox(gx, gy, 2.0, 1.2, 11, "#3a3f43", { line:"#4a5054", topCol: shade(MESA[st.id], 0.34) });
+        for(let k=0;k<Math.min(n,4);k++){
+          const pp = w2s(gx + 0.4 + k*0.45, gy + 0.4);
+          ctx.drawImage(papel(MESA[st.id]), Math.round(pp.x-4), Math.round(pp.y+HH-23));
+        }
+      });
+    });
+  }
+  else if(d.muestra === "bodega"){
+    const B = datos.bodega;
+    if(B.err) filas.push(["no se pudo leer", "#e5534b"]);
+    else{
+      const negs = B.sedes.reduce((a,s)=>a + s.productos.filter(p=>p.neto<0).length, 0);
+      const prods = B.sedes.reduce((a,s)=>a + s.productos.length, 0);
+      filas.push([prods + " productos", "#8b9096"]);
+      filas.push([negs + " en negativo", negs ? "#e5534b" : "#565b5f"]);
+    }
+    for(let i=0;i<3;i++){
+      const gx = d.x + 0.7 + i*2.4, gy = d.y + 0.8;
+      push(gx, gy, function(){
+        isoBox(gx, gy, 0.22, 1.1, 30, "#5b5045", { line:"#6b5e50" });
+        isoBox(gx+2.1, gy, 0.22, 1.1, 30, "#5b5045", { line:"#6b5e50" });
+        isoBox(gx, gy, 2.32, 1.1, 2, "#4a4038", { z:2,  line:"#6b5e50" });
+        isoBox(gx, gy, 2.32, 1.1, 2, "#4a4038", { z:16, line:"#6b5e50" });
+        for(let k=0;k<2;k++) isoBox(gx+0.4+k*0.9, gy+0.2, 0.7, 0.7, 9, "#a9741f", { z:18, line:"#101213" });
+      });
+    }
+  }
+  else if(d.muestra === "kpis"){
+    filas.push([selected.size + " de 51 KPIs colgados", "#8b9096"]);
+    filas.push([FIX_IDS.size + " sin energía", "#e5534b"]);
+    /* pared de cuadros, versión chica */
+    [...selected].slice(0, 8).forEach(function(id, i){
+      const gx = d.x + 0.8 + (i%4)*1.7, gy = d.y + 0.6 + Math.floor(i/4)*1.4;
+      const p = w2s(gx, gy);
+      push(gx, gy, function(){
+        objetoKpi(Math.round(p.x-9), Math.round(p.y+HH-30), "cuadro", FIX_IDS.has(id), true);
+      });
+    });
+    isoBoxDepto(d, 3.6, 3.8, 3.0, 1.6, 13, "#4a4038");
+  }
+  else if(d.muestra === "renta"){
+    const f = datos.flota;
+    filas.push([f.renta + " equipos en renta", f.renta ? "#4f8fe0" : "#565b5f"]);
+    filas.push([f.patio.length + " disponibles para vender/rentar", "#3ecf7e"]);
+    isoBoxDepto(d, 0.8, 0.8, 2.8, 1.6, 13, "#4a4038");
+    isoBoxDepto(d, 4.4, 0.8, 2.6, 1.6, 13, "#4a4038");
+  }
+  else if(d.muestra === "radar"){
+    const rd = state.radar;
+    const ok = rd && typeof rd === "object";
+    filas.push([ok ? "RADAR responde" : "RADAR sin conectar", ok ? "#3ecf7e" : "#e5534b"]);
+    if(ok && rd.cache_edad_seg != null) filas.push(["caché de " + rd.cache_edad_seg + " s", "#8b9096"]);
+    isoBoxDepto(d, 0.9, 0.9, 3.4, 1.8, 14, "#3a3f43");
+    isoBoxDepto(d, 5.0, 0.9, 2.0, 1.8, 22, "#2b3033");
+  }
+  else if(d.muestra === "gente"){
+    filas.push([ROLES_MUNDO + " roles con acceso", "#8b9096"]);
+    filas.push(["la oficina de Elia", "#c77dd1"]);
+    isoBoxDepto(d, 0.9, 0.9, 3.0, 1.8, 13, "#4a4038");
+  }
+  else{
+    filas.push(["sin fuente de datos todavía", "#565b5f"]);
+    filas.push(["la oficina existe, está vacía", "#565b5f"]);
+    isoBoxDepto(d, 0.9, 0.9, 3.0, 1.8, 13, "#4a4038");
+  }
+
+  filas.forEach(function(f, i){
+    label(c.x, bajo + i*11, f[0], { col:f[1], size:8.5, box:true });
+  });
+}
+/* El octavo lugar del anillo queda libre: es la entrada. De acá se pasa a
+   tu propia oficina, la de oficina.html, que es donde se trabaja. */
+function entradaEdificio(){
+  const a = ANCLAS.S;
+  const gx = EDIF.cx + a[0]*EDIF.k - 1.2, gy = EDIF.cy + a[1]*EDIF.k - 0.4;
+  const p = w2s(gx + 1.2, gy + 0.4);
+  const sx = Math.round(p.x - 16), sy = Math.round(p.y + HH - 52);
+  push(gx, gy, function(){
+    floor(gx - 1.4, gy - 1.2, 5, 3.4, "#2c3032", "#3a3e41");
+    isoBox(gx, gy, 2.4, 0.35, 44, "#3a3f43", { line:"#f5a524" });
+    isoBox(gx + 0.2, gy + 0.03, 2.0, 0.3, 38, "#1d2022", { line:"#a9741f" });
+    ctx.fillStyle = "#f5a524";
+    ctx.fillRect(Math.round(p.x - 5), Math.round(p.y + HH - 50), 10, 2);
+  }, { x:sx, y:sy, w:32, h:58 }, function(){
+    abrirFicha('<div class="kicker">Entrada del edificio</div><h2 class="display">MI OFICINA</h2>' +
+      rows([["Quién entra","cada empleado, con su código"],
+            ["Código","el mismo de la app de Bitácora SGI"],
+            ["Qué hay adentro","agentes de IA en sus estaciones"],
+            ["Las tareas","salen de los datos, no son de adorno"]]) +
+      '<div class="acts"><button id="entrar-of">Entrar a mi oficina</button></div>' +
+      '<div class="note">Este mapa es para mirar. Adentro se trabaja: ninguna escritura ocurre ' +
+      'sin que la autorices en pantalla.</div>');
+    document.getElementById("entrar-of").onclick = function(){ location.href = "oficina.html"; };
+  });
+  label(p.x, sy - 8, "MI OFICINA", { col:"#f5a524", size:11, w:"700", fam:"disp", box:true });
+}
+
+function isoBoxDepto(d, ox, oy, w, dd, h, col){
+  const gx = d.x + ox, gy = d.y + oy;
+  push(gx, gy, function(){ isoBox(gx, gy, w, dd, h, col, { line:shade(col,1.3) }); });
+}
+const ROLES_MUNDO = 11;
+/* El color de cada estación del flujo de caja chica. Se usa en la oficina de
+   Finanzas, que es donde ese flujo vive ahora. */
+const MESA = { pend:"#57606a", rev:"#f5a524", aprob:"#3ecf7e", liq:"#4f8fe0", rech:"#e5534b" };
+
+/* =====================================================================
+   LOS MENSAJES QUE CRUZAN EL EDIFICIO
+   ---------------------------------------------------------------------
+   No son adorno: cada punto que viaja es un registro real. Sale de la
+   oficina de quien lo pidió, entra al bullpen, ahí se procesa, y sigue
+   hacia la oficina que le toca. Si no hay nada pendiente, no cruza nada.
+   ===================================================================== */
+const ROL_DEPTO = {
+  contabilidad:"finanzas", almacen_sps:"almacen", almacen_choloma:"almacen",
+  ventas1:"ventas", ventas2:"ventas", ventas3:"ventas", ventas4:"ventas",
+  gerente_general:"omar", gerente_comercial:"ventas", rrhh:"hr", admin:"fabri"
+};
+const COL_MSG = { encargo:"#4f8fe0", aprobacion:"#f5a524", mejora:"#c9c6bd" };
+let pulsos = [];
+
+function computePulsos(datos){
+  const out = [];
+  const vivos = ["Sin traducir","Entregado","Aceptado"];
+  (state.encargos || []).forEach(function(e){
+    const de = ROL_DEPTO[e.de_rol], a = ROL_DEPTO[e.para_rol];
+    if(!DEPTO[de] || !DEPTO[a] || vivos.indexOf(e.estado) < 0) return;
+    out.push({ de:de, a:a, tipo:"encargo", texto:(e.titulo_visible || "encargo") });
+  });
+  (state.mejoras || []).forEach(function(m){
+    const de = ROL_DEPTO[m.rol];
+    if(!DEPTO[de] || m.estado !== "Nueva") return;
+    out.push({ de:de, a:"fabri", tipo:"mejora", texto:(m.titulo || "pedido de mejora") });
+  });
+  /* los gastos esperando decisión: de finanzas al bullpen y de ahí a gerencia */
+  const rev = (datos.papeles.por && datos.papeles.por.rev) ? datos.papeles.por.rev : [];
+  rev.slice(0, 6).forEach(function(r){
+    out.push({ de:"finanzas", a:"omar", tipo:"aprobacion",
+               texto:(r.concepto || "gasto") + " · " + fmtL(r.monto) });
+  });
+  out.forEach(function(p, i){ p.off = (i * 0.37) % 1; });
+  return out.slice(0, 24);
+}
+
+const CICLO_MS = 5200;
+function dibujarPulsos(){
+  if(!pulsos.length) return;
+  const ahora = Date.now();
+  pulsos.forEach(function(p){
+    const d1 = DEPTO[p.de], d2 = DEPTO[p.a];
+    if(!d1 || !d2) return;
+    const f = (((ahora / CICLO_MS) + p.off) % 1);
+    const A = puertaDe(d1), C = { gx:EDIF.cx, gy:EDIF.cy }, B = puertaDe(d2);
+    let gx, gy, brillo = 1;
+    if(f < 0.42){                                  // oficina -> bullpen
+      const t = f / 0.42;
+      gx = A.gx + (C.gx - A.gx) * t; gy = A.gy + (C.gy - A.gy) * t;
+    }else if(f < 0.58){                            // se procesa en el centro
+      gx = C.gx; gy = C.gy;
+      brillo = 0.45 + 0.55 * Math.abs(Math.sin((f - 0.42) * 28));
+    }else{                                         // bullpen -> la otra oficina
+      const t = (f - 0.58) / 0.42;
+      gx = C.gx + (B.gx - C.gx) * t; gy = C.gy + (B.gy - C.gy) * t;
+    }
+    const w = w2s(gx, gy);
+    const col = COL_MSG[p.tipo] || "#8b9096";
+    ctx.save();
+    ctx.globalAlpha = 0.22 * brillo; ctx.fillStyle = col;
+    ctx.beginPath(); ctx.ellipse(w.x, w.y - 10, 9, 5, 0, 0, Math.PI*2); ctx.fill();
+    ctx.globalAlpha = brillo;
+    ctx.fillStyle = "#101213"; ctx.fillRect(Math.round(w.x-3), Math.round(w.y-14), 6, 6);
+    ctx.fillStyle = col;       ctx.fillRect(Math.round(w.x-2), Math.round(w.y-13), 4, 4);
+    ctx.restore();
+  });
+}
+
+function fichaCentral(c){
+  const esJarvis = (c.id === "jarvis");
+  abrirFicha('<div class="kicker">Bullpen · IA central</div><h2 class="display">' + c.nombre + '</h2>' +
+    rows([["Dónde", "en el bullpen, al centro del edificio"],
+          ["Alcance", "las siete oficinas, por conexión directa"],
+          ["Qué cruza por acá", pulsos.length + " mensajes ahora mismo"]]) +
+    (esJarvis
+      ? '<div class="note warn">Todavía no está cableado. Sé que existe y dónde va, pero no pude ' +
+        'leer el repo <b>Fabriziomont7/jarvis</b> desde esta sesión: solo tengo acceso a ' +
+        '<b>rodzilla-thecreator/dash</b>. Falta el <b>i3.md</b> y el <b>CLAUDE.md</b> para saber ' +
+        'qué hace y cómo se conecta.</div>'
+      : '<div class="note">Es el que mantiene el mundo: recibe los pedidos de mejora de todas las ' +
+        'oficinas, los tría y propone qué cambiar.</div>'));
+}
+
+function fichaDepto(d, datos){
+  const gente = d.gente.map(g => g.n || "sin nombre todavía").join(" · ");
+  abrirFicha('<div class="kicker">Edificio · oficina</div><h2 class="display">' + esc(d.nombre) + '</h2>' +
+    rows([["Quiénes", gente],
+          ["Puerta", "da directo al bullpen"],
+          ["Modelo de IA", d.modelo],
+          ["Muestra", { caja:"caja chica y viáticos", bodega:"existencias de bodega",
+                        kpis:"los KPIs colgados", renta:"flota en renta y disponible",
+                        radar:"estado de RADAR", gente:"roles con acceso",
+                        nada:"todavía nada" }[d.muestra] || "—"]]) +
+    '<div class="note">Cada oficina puede tener su propio modelo de IA, especializado en lo suyo. ' +
+    'Hoy el campo está declarado pero no cableado: el mundo lo muestra, no lo llama.</div>');
+}
+
 /* --------- zonas sin datos: apagada / en construccion --------- */
 function zonaApagada(z, msg){
   const c = centroZona(z);
@@ -846,213 +1306,9 @@ function enConstruccion(z, msg){
   label(c.x, c.y - 16, msg, { col:"#8b9096", size:9, box:true });
 }
 
-/* --------- ZONA 4: CONTABILIDAD (las cuatro estaciones + papelera) -----
-   Cada registro de data-cajachica / data-viajes es UNA HOJA parada en la
-   estacion que le toca segun su campo "estado". El papel no se mueve
-   porque una animacion lo diga: se mueve porque el registro cambio de
-   estado en Firebase (spec 2).
-   ----------------------------------------------------------------------- */
-const MESA = { pend:"#57606a", rev:"#f5a524", aprob:"#3ecf7e", liq:"#4f8fe0", rech:"#e5534b" };
-
-function zonaConta(papeles){
-  const z = ZONA.conta;
-  push(z.x, z.y, function(){
-    floor(z.x, z.y, z.w, z.d, z.piso, z.linea);
-    isoBox(z.x, z.y-0.4, z.w, 0.4, 24, "#33373a", { line:"#41464a" });
-  });
-  rotuloZona(z);
-
-  if(papeles.err){ zonaApagada(z, "No se pudo leer la bitácora"); return; }
-  if(papeles.sinSede){
-    const c = centroZona(z);
-    label(c.x, c.y, "SIN SEDE ASIGNADA", { col:"#565b5f", size:11, w:"700", fam:"disp" });
-    label(c.x, c.y+13, "esta empresa no tiene sede en caja chica", { col:"#565b5f", size:8.5 });
-    return;
-  }
-
-  ESTACIONES.forEach(function(st, i){
-    const esPapelera = (st.id === "rech");
-    const ex = esPapelera ? (z.x + 8.6) : (z.x + 1.4 + i*5.4);
-    const ey = esPapelera ? (z.y + 7.0) : (z.y + 1.6);
-    const items = papeles.por[st.id] || [];
-
-    push(ex, ey, function(){
-      /* mesa de trabajo: cuerpo gris, tapa con el color de la estacion */
-      isoBox(ex, ey, 3, 2.2, 14, "#3a3f43", { line:"#4a5054", topCol: shade(MESA[st.id], 0.34) });
-      if(esPapelera){ isoBox(ex+1.05, ey+0.65, 0.9, 0.9, 12, "#4a3230", { z:14, line:"#e5534b" }); }
-      /* flecha al siguiente puesto */
-      if(!esPapelera && i < 3){
-        const a = w2s(ex+3.3, ey+1.1), b = w2s(ex+5.2, ey+1.1);
-        ctx.strokeStyle = "#41464a"; ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.moveTo(a.x, a.y-8); ctx.lineTo(b.x, b.y-8); ctx.stroke();
-        ctx.fillStyle = "#41464a";
-        ctx.beginPath(); ctx.moveTo(b.x, b.y-8); ctx.lineTo(b.x-5, b.y-11); ctx.lineTo(b.x-5, b.y-5); ctx.fill();
-      }
-    });
-
-    /* rotulos: bien por encima de la mesa y de los papeles */
-    const cab = w2s(ex+1.5, ey+1.1);
-    const ctop = cab.y - (3 + 2.2) * HH / 2 - 46;
-    label(cab.x, ctop, st.titulo, { col: items.length ? "#eae7e0" : "#565b5f",
-          size:11, w:"700", fam:"disp", box:true });
-    label(cab.x, ctop + 12, st.sub + " · " + items.length,
-          { col: items.length ? MESA[st.id] : "#565b5f", size:8.5, box:true });
-
-    /* las hojas: hasta 8 visibles, el resto se cuenta (nunca se inventan) */
-    const vis = items.slice(0, 8);
-    vis.forEach(function(r, k){
-      const px = ex + 0.35 + (k % 4) * 0.72, py = ey + 0.4 + Math.floor(k/4) * 0.85;
-      const p  = w2s(px, py);
-      const sx = Math.round(p.x - 4), sy = Math.round(p.y + HH - 26);
-      push(px, py, function(){
-        /* si este registro acaba de cambiar de estado, entra deslizandose
-           hacia su nueva estacion (el movimiento lo manda el dato, no el reloj) */
-        const a = animOf(r.id);
-        const img = papel(r._viaje ? "#4f8fe0" : MESA[st.id]);
-        if(a){ ctx.save(); ctx.globalAlpha = Math.max(0.25, 1 - a/40); }
-        ctx.drawImage(img, sx - Math.round(a * 1.6), sy - Math.round(a * 0.5));
-        if(a) ctx.restore();
-      }, { x:sx-4, y:sy-4, w:17, h:20 }, function(){ fichaPapel(r, st); });
-    });
-    const cbot = cab.y + (3 + 2.2) * HH / 2 - 2;
-    if(items.length > vis.length){
-      label(cab.x, cbot, "+" + (items.length - vis.length) + " más", { col:"#8b9096", size:8, box:true });
-    }
-    const suma = items.reduce(function(a,r){ return a + (aNumero(r.monto) || 0); }, 0);
-    if(items.length) label(cab.x, cbot + 12, fmtL(suma), { col:"#8b9096", size:8.5, box:true });
-  });
-}
-
-/* --------- ZONA 5: BODEGA --------- */
-function zonaBodega(bod){
-  const z = ZONA.bodega;
-  push(z.x, z.y, function(){
-    floor(z.x, z.y, z.w, z.d, z.piso, z.linea);
-    isoBox(z.x, z.y-0.4, z.w, 0.4, 28, "#32363a", { line:"#41464a" });
-  });
-  rotuloZona(z);
-
-  if(bod.err){ zonaApagada(z, "No se pudo leer data-almacen"); return; }
-  if(!bod.sedes.length){
-    const c = centroZona(z);
-    label(c.x, c.y, "BODEGA VACÍA", { col:"#565b5f", size:11, w:"700", fam:"disp" });
-    return;
-  }
-  let oy = z.y + 1.4;
-  bod.sedes.forEach(function(sd){
-    /* rotulo justo encima del vertice mas alto del bloque de esta sede */
-    const cab = { x: w2s(z.x + 1 + (3*4.6)/2, oy + 0.6 + 2.15).x,
-                  y: w2s(z.x + 1, oy + 0.6).y };
-    const cy  = cab.y - 34;
-    label(cab.x, cy, "SEDE " + sd.sede.toUpperCase(),
-          { col:"#f5a524", size:11, w:"700", fam:"disp", box:true });
-    label(cab.x, cy + 12, "semana: +" + sd.entSem + " entradas / -" + sd.salSem + " salidas",
-          { col:"#8b9096", size:8.5, box:true });
-
-    sd.productos.slice(0, 6).forEach(function(pr, i){
-      const bx = z.x + 1 + (i % 3) * 4.6, by = oy + 0.6 + Math.floor(i/3) * 3.0;
-      push(bx, by, function(){
-        /* estanteria: dos parales y dos entrepaños */
-        isoBox(bx,       by, 0.22, 1.3, 40, "#5b5045", { line:"#6b5e50" });
-        isoBox(bx + 3.2, by, 0.22, 1.3, 40, "#5b5045", { line:"#6b5e50" });
-        isoBox(bx, by, 3.42, 1.3, 2, "#4a4038", { z:2,  line:"#6b5e50" });
-        isoBox(bx, by, 3.42, 1.3, 2, "#4a4038", { z:20, line:"#6b5e50" });
-        /* cajas = existencia neta (entradas - salidas). Tope visual 6:
-           el numero exacto va en el rotulo, la pila no miente por encima. */
-        const n = Math.max(0, Math.min(6, Math.round(pr.neto)));
-        const col = pr.neto > 0 ? "#a9741f" : "#57606a";
-        for(let k=0;k<n;k++){
-          const nivel = (k < 3 ? 22 : 4);
-          isoBox(bx + 0.35 + (k % 3) * 1.0, by + 0.25, 0.85, 0.85, 11, col,
-                 { z:nivel, line:"#101213" });
-        }
-        if(n === 0){
-          /* sin existencia: hueco marcado, no una caja inventada */
-          const p = w2s(bx + 1.7, by + 0.65);
-          ctx.save(); ctx.globalAlpha = 0.55; ctx.strokeStyle = "#e5534b";
-          ctx.lineWidth = 1; ctx.setLineDash([2,2]);
-          ctx.strokeRect(Math.round(p.x-9), Math.round(p.y-30), 18, 13); ctx.restore();
-        }
-      }, null, null);
-      const lp = w2s(bx + 1.7, by + 0.65);
-      label(lp.x, lp.y - 58, pr.producto.slice(0, 18), { col:"#eae7e0", size:8.5, box:true });
-      label(lp.x, lp.y - 47, (pr.neto >= 0 ? "+" : "") + pr.neto + " " + (pr.unidad || ""),
-            { col: pr.neto > 0 ? "#3ecf7e" : (pr.neto < 0 ? "#e5534b" : "#565b5f"), size:8.5, box:true });
-    });
-    oy += 8.6;
-  });
-}
-
-/* --------- ZONA 6: OFICINA (el catalogo de KPIs como objetos) ---------
-   Tocar un objeto lo cuelga o lo descuelga de la pared. Escribe en la
-   MISMA llave de localStorage que usa el dash ("dash_kpis"), asi que
-   decidir aca cambia los tiles de alla.
-   ----------------------------------------------------------------------- */
+/* Colores de los objetos donde cuelgan los KPIs, en la oficina de Omar. */
 const KIND_COL = { cuadro:"#4f8fe0", pizarra:"#3ecf7e", carpeta:"#a9741f",
                    corcho:"#8a6a44", semaforo:"#f5a524" };
-
-function zonaOficina(){
-  const z = ZONA.oficina;
-  push(z.x, z.y, function(){
-    floor(z.x, z.y, z.w, z.d, z.piso, z.linea);
-    /* dos paredes al fondo */
-    isoBox(z.x, z.y-0.4, z.w, 0.4, 46, "#383c40", { line:"#454a4e" });
-    isoBox(z.x-0.4, z.y, 0.4, z.d, 46, "#31363a", { line:"#454a4e" });
-    /* escritorio */
-    isoBox(z.x+8.5, z.y+9, 4, 2.4, 16, "#4a4038", { line:"#5b5045" });
-  });
-  rotuloZona(z);
-
-  const todos = [];
-  KPI_GROUPS.forEach(function(g){
-    g.items.forEach(function(it){ todos.push({ id:it[0], label:it[1], grupo:g.n, gTitle:g.title }); });
-  });
-  todos.forEach(function(k, i){
-    const meta = KPI_OBJETO[k.grupo] || { kind:"cuadro" };
-    const gx = z.x + 0.9 + (i % 6) * 2.15;
-    const gy = z.y + 0.9 + Math.floor(i / 6) * 1.35;
-    const fix = FIX_IDS.has(k.id);
-    const on  = selected.has(k.id);
-    const p   = w2s(gx, gy);
-    const sx  = Math.round(p.x - 9), sy = Math.round(p.y + HH - 34);
-    push(gx, gy, function(){
-      objetoKpi(sx, sy, meta.kind, fix, on);
-    }, { x:sx-3, y:sy-3, w:24, h:26 }, function(){ fichaKpi(k, meta, fix); });
-    label(p.x, sy - 4, k.id, { size:7.5, col: fix ? "#565b5f" : (on ? "#f5a524" : "#565b5f") });
-  });
-
-  /* --- LA PUERTA: entrada a la oficina virtual del empleado (oficina.html).
-     Es el unico enlace del mundo hacia el modulo con login. --- */
-  const px = z.x + 10.5, py = z.y + 11.5;
-  const pp = w2s(px, py);
-  const psx = Math.round(pp.x - 14), psy = Math.round(pp.y + HH - 46);
-  push(px, py, function(){
-    isoBox(px, py, 2.2, 0.3, 40, "#3a3f43", { line:"#f5a524" });
-    isoBox(px + 0.15, py, 1.9, 0.25, 34, "#1d2022", { line:"#a9741f" });
-    /* luz encendida sobre el marco */
-    ctx.fillStyle = "#f5a524";
-    ctx.fillRect(Math.round(pp.x - 4), Math.round(pp.y + HH - 44), 8, 2);
-  }, { x:psx, y:psy, w:28, h:52 }, function(){
-    abrirFicha('<div class="kicker">Puerta</div><h2 class="display">MI OFICINA</h2>' +
-      rows([["Quién entra","cada empleado, con su código"],
-            ["Código","el mismo de la app de Bitácora SGI"],
-            ["Qué hay adentro","agentes de IA en sus estaciones"],
-            ["Las tareas","salen de los datos, no son de adorno"]]) +
-      '<div class="acts"><button id="entrar-of">Entrar a mi oficina</button></div>' +
-      '<div class="note">Adentro, los agentes trabajan con Claude sobre estos mismos datos. ' +
-      'Ninguno escribe en la base sin que vos lo autorices en pantalla.</div>');
-    document.getElementById("entrar-of").onclick = function(){ location.href = "oficina.html"; };
-  });
-  label(pp.x, psy - 8, "MI OFICINA", { col:"#f5a524", size:10, w:"700", fam:"disp", box:true });
-
-  const c = centroZona(z);
-  const yBajo = c.y + (z.w + z.d) * HH / 2 + 16;
-  label(c.x, yBajo,
-        selected.size + " de " + todos.length + " colgados · " + FIX_IDS.size + " sin energía",
-        { col:"#8b9096", size:9.5, box:true });
-  label(c.x, yBajo + 13,
-        "tocá un objeto para colgarlo o descolgarlo", { col:"#565b5f", size:8.5, box:true });
-}
 
 /* Un objeto de la oficina. fix = RADAR aun no lo calcula -> SIN ENERGIA:
    monitor apagado, foco fundido, marco vacio (spec 3.6). */
@@ -1207,12 +1463,16 @@ function buildScene(){
   const bodega  = computeBodega();
   lastFlota = flota; lastPapeles = papeles;
 
+  const datos = { flota:flota, papeles:papeles, bodega:bodega };
+
+  /* distrito de equipos: todo lo que es montacargas */
   zonaTaller(flota);
   zonaPatio(flota);
   zonaCampo(flota);
-  zonaOficina();
-  zonaConta(papeles);
-  zonaBodega(bodega);
+  /* el edificio: todo lo que no lo es */
+  zonaEdificio(datos);
+  entradaEdificio();
+  pulsos = computePulsos(datos);
 
   /* "Otros / interno": no tienen zona propia en el spec, pero tampoco
      pueden desaparecer. Van al fondo del patio, en ambar. */
@@ -1248,6 +1508,7 @@ function draw(){
     if(p.x < v.x0 - 120 || p.x > v.x1 + 120 || p.y < v.y0 - 140 || p.y > v.y1 + 140) continue;
     it.draw();
   }
+  dibujarPulsos();
   drawLabels();
 }
 function drawLabels(){
@@ -1285,6 +1546,7 @@ function loop(){
   }
   /* animacion del papel que cambio de estacion */
   if(animState.t > 0){ animState.t -= 1.4; if(animState.t <= 0){ animState.t = 0; animState.id = null; } dirty = true; }
+  if(pulsos.length) dirty = true;      // mientras algo cruza, el mundo late
   if(dirty){ draw(); dirty = false; }
   raf = requestAnimationFrame(loop);
 }
@@ -1366,18 +1628,26 @@ function irAZona(id){
 }
 function renderZoneNav(flota, papeles, bodega){
   const nav = document.getElementById("zones");
+  const hayFlota = !!NODO_EMPRESA[activeCompany];
+  const negs = bodega.err ? "!" : bodega.sedes.reduce((a,s)=>a + s.productos.filter(p=>p.neto<0).length, 0);
   const cont = {
-    taller:  { n: NODO_EMPRESA[activeCompany] ? flota.taller.length : "—", alerta: flota.taller.some(function(x){ return x.ev.color === "crit" || x.ev.color === "nodata"; }) },
-    patio:   { n: NODO_EMPRESA[activeCompany] ? flota.patio.length : "—" },
-    campo:   { n: NODO_EMPRESA[activeCompany] ? flota.renta : "—" },
-    oficina: { n: selected.size },
-    conta:   { n: papeles.err ? "!" : (papeles.por.rev ? papeles.por.rev.length : 0), alerta: !papeles.err && papeles.por.rev.length > 0 },
-    bodega:  { n: bodega.err ? "!" : bodega.sedes.length }
+    taller:  { n: hayFlota ? flota.taller.length : "—", alerta: flota.taller.some(function(x){ return x.ev.color === "crit" || x.ev.color === "nodata"; }) },
+    patio:   { n: hayFlota ? flota.patio.length : "—" },
+    campo:   { n: hayFlota ? flota.renta : "—" },
+    bullpen: { n: pulsos.length },
+    omar:    { n: selected.size },
+    fabri:   { n: (state.radar && typeof state.radar === "object") ? "ok" : "—" },
+    hr:      { n: ROLES_MUNDO },
+    ventas:  { n: hayFlota ? flota.renta : "—" },
+    compras: { n: "—" },
+    finanzas:{ n: papeles.err ? "!" : (papeles.por.rev ? papeles.por.rev.length : 0), alerta: !papeles.err && papeles.por.rev.length > 0 },
+    almacen: { n: negs, alerta: negs > 0 }
   };
   nav.innerHTML = ZONAS.map(function(z){
     const c = cont[z.id] || { n:"" };
+    const sep = (z.id === "bullpen") ? ' style="border-left:2px solid var(--amber-dim);margin-left:5px"' : "";
     return '<button class="zbtn' + (z.id === zonaActiva ? " active" : "") + (c.alerta ? " alert" : "") +
-      '" data-zona="' + z.id + '">' + z.nombre.split(" / ")[0] + ' <b>' + c.n + '</b></button>';
+      '" data-zona="' + z.id + '"' + sep + '>' + z.nombre.split(" / ")[0] + ' <b>' + c.n + '</b></button>';
   }).join("");
   [...nav.querySelectorAll(".zbtn")].forEach(function(b){
     b.onclick = function(){ irAZona(b.dataset.zona); };
@@ -1560,6 +1830,12 @@ async function refrescar(){
       cargarBitacora("data-almacen")
     ]);
     state.caja = caja; state.viajes = viajes; state.almacen = almacen;
+    /* lo que cruza el edificio sale de acá; si falla, no cruza nada */
+    const [enc, mej] = await Promise.all([
+      cargarBitacora("mundo-encargos"), cargarBitacora("mundo-mejoras")
+    ]);
+    state.encargos = comoLista(enc);
+    state.mejoras  = comoLista(mej);
     await cargarRadar();
     if(!state.fxHNL) await cargarFx();
     const hayAlgo = (!state.flotaErr) || caja !== "error";
@@ -1594,8 +1870,8 @@ async function cambiarEmpresa(key){
 /* boot */
 resize();
 cam.scale = baseScale();
-renderZoneNav({ taller:[], patio:[], renta:0 }, { err:false, por:{ rev:[] } }, { err:false, sedes:[] });
-irAZona("taller");
+renderZoneNav({ taller:[], patio:[], renta:0, disp:[] }, { err:false, por:{ rev:[] } }, { err:false, sedes:[] });
+irAZona("bullpen");
 loop();
 refrescar();
 setInterval(refrescar, 60000);
