@@ -162,6 +162,27 @@ profesionaliza después. Queda anotado, no para insistir.
 
 ## 6. LO QUE TENÉS QUE IR A BUSCAR
 
+> ### ✅ HECHO el 2026-09-14 — no lo repitas
+>
+> Ya se leyó `Fabriziomont7/jarvis` y las cinco preguntas de abajo están
+> contestadas en **`docs/jarvis/README.md`**. El protocolo de conexión (cómo
+> entra cada empleado y cómo su Jarvis le cuenta al Mundo lo que pasa) está en
+> **`CONEXION.md`**.
+>
+> **Lo que quedó pendiente de esta tarea, y sigue siendo trabajo real:**
+>
+> - La ficha del bullpen (`CENTRALES` y `fichaCentral()` en `index.html`)
+>   todavía dice que no se pudo leer el repo. **Hay que reemplazar ese texto**
+>   con lo que Jarvis realmente es.
+> - **Maquinón está dibujado como par de Jarvis y está mal: no es una IA, es
+>   una computadora** — la ASUS donde corre el trabajo pesado. La relación
+>   correcta es anfitrión, no par. Lo más fiel es dibujarlo como una casa con
+>   Jarvis adentro, que además es como se va a ver cada empleado enlazado.
+> - Mapear los seis tipos de evento de `CONEXION.md` §3 a los puntos que ya
+>   cruzan el bullpen. `nucleo.js` ya lee el registro; falta el dibujo.
+>
+> Lo de abajo queda como quedó escrito, para que se entienda de dónde salió.
+
 Esta es la tarea. **Jarvis está en el bullpen con su nombre y su lugar, pero
 sin cablear.**
 
