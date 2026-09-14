@@ -51,6 +51,31 @@
     font:inherit;font-size:11px;letter-spacing:1px;padding:3px 10px;margin-left:12px;
     text-decoration:none;white-space:nowrap;}
   .mundo-link:hover{background:var(--amber);color:#1a1a1a;border-color:var(--amber);}
+  /* Pastilla binaria de vista (Oficina / Taller). Va donde antes decia
+     "BIENVENIDO OMAR": el saludo no informaba nada y ese es el lugar mas
+     visible del dash. Usa el mismo lenguaje visual que la pastilla de empresa
+     de abajo para que se lean como un solo sistema, pero mas grande porque
+     es la decision de mas arriba: que dashboard estas viendo. */
+  .vista-switch{display:flex;width:max-content;border:1px solid var(--panel-line);background:var(--panel);}
+  .vista-pill{background:transparent;border:0;border-right:1px solid var(--panel-line);color:var(--ink-dim);
+    font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:clamp(20px,2.6vw,28px);
+    letter-spacing:2px;text-transform:uppercase;padding:6px 30px;cursor:pointer;line-height:1.1;
+    transition:background .15s,color .15s;}
+  .vista-pill:last-child{border-right:0;}
+  .vista-pill:hover{color:var(--ink);}
+  .vista-pill.active{background:var(--amber);color:#1a1a1a;}
+  .vista-pill:focus-visible{outline:2px solid var(--amber);outline-offset:2px;}
+  /* Listas de ranking del taller (tiempos por servicio, ordenes por tecnico...).
+     Fila simple con la etiqueta a la izquierda y el numero a la derecha; el
+     'n=' dice con cuantas ordenes se calculo, porque una mediana de dos
+     ordenes no es un estandar y hay que poder verlo de un vistazo. */
+  .rank{display:flex;flex-direction:column;gap:5px;font-size:12px;width:100%;}
+  .rank-row{display:flex;align-items:baseline;gap:8px;}
+  .rank-row .et{flex:1;min-width:0;color:var(--ink-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .rank-row .vl{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap;}
+  .rank-row .nn{color:var(--ink-faint);font-size:10px;white-space:nowrap;}
+  .rank-row.flojo .vl{color:var(--ink-dim);}
+  .rank-barra{height:3px;background:var(--amber-dim);margin-top:2px;}
   .company-switch{display:flex;width:max-content;margin:0 auto 26px;border:1px solid var(--panel-line);background:var(--panel);}
   .company-pill{background:transparent;border:0;border-right:1px solid var(--panel-line);color:var(--ink-dim);font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14px;letter-spacing:1.5px;text-transform:uppercase;padding:10px 26px;cursor:pointer;transition:background .15s,color .15s;}
   .company-pill:last-child{border-right:0;}
@@ -176,8 +201,11 @@
   <div class="brand">
     <div class="brand-mark"><span>M</span></div>
     <div>
-      <h1 class="display">BIENVENIDO OMAR</h1>
-      <div class="brand-sub">Montasa · Operaciones</div>
+      <div class="vista-switch" role="tablist" aria-label="Seleccionar vista">
+        <button class="vista-pill active" data-vista="oficina" role="tab" aria-selected="true">Oficina</button>
+        <button class="vista-pill" data-vista="taller" role="tab" aria-selected="false">Taller</button>
+      </div>
+      <div class="brand-sub" id="vista-sub">Montasa · Operaciones</div>
     </div>
   </div>
   <div class="status-line">
@@ -329,6 +357,9 @@ function evaluarEquipo(eq, ultimoDeHistorial){
 let activeCompany = "montasa";
 const state = {
   equipos:{}, preventivos:{}, correctivos:{},   // Firebase flota/mant
+  // Solo los carga la vista Taller: en Oficina serian dos peticiones al pedo
+  // cada 60 segundos. Ver cargarTaller().
+  ordenesCerradas:{}, solicitudes:{}, repuestos:{},
   cajaPend:null,     // arreglo de gastos "Enviado a revisión" | "error" | null
   viajesPend:null,   // numero de viaticos "Enviado a revisión" | null
   conn:false
@@ -592,8 +623,354 @@ const KPI_GROUPS = [
     ["10.3","Panel de semáforos","fb"] ]}
 ];
 const DEFAULT_SEL = ["5.1","5.2","6.1","4.4","4.5","10.3"];
+const KPI_GROUPS_TALLER = [
+  { n:"T1", title:"Estado del taller", items:[
+    ["T1.1","Órdenes abiertas ahora","fb"],["T1.2","Órdenes cerradas este mes","fb"],
+    ["T1.3","Equipos en mal estado","fb"],["T1.4","Órdenes por prioridad","fb"] ]},
+  { n:"T2", title:"Cuánto tarda cada trabajo", items:[
+    ["T2.1","Tiempo típico por servicio","fb"],["T2.2","Tiempo típico por sistema","fb"],
+    ["T2.3","Días en cerrar una orden","fb"],["T2.4","Órdenes abiertas hace más de 7 días","fb"] ]},
+  { n:"T3", title:"Carga por técnico", items:[
+    ["T3.1","Órdenes por técnico","fb"],["T3.2","Horas trabajadas por técnico","fb"],
+    ["T3.3","Órdenes abiertas por técnico","fb"] ]},
+  { n:"T4", title:"Fallas y reincidencia", items:[
+    ["T4.1","Sistemas que más fallan","fb"],["T4.2","Equipos con más correctivos","fb"],
+    ["T4.3","Fallas más repetidas","fb"] ]},
+  { n:"T5", title:"Preventivos", items:[
+    ["T5.1","Completados vs pendientes","fb"],["T5.2","Equipos con preventivo vencido","fb"],
+    ["T5.3","Próximos preventivos","fb"] ]},
+  { n:"T6", title:"Repuestos", items:[
+    ["T6.1","Solicitudes pendientes","fb"],["T6.2","Repuestos más pedidos","fb"],
+    ["T6.3","Solicitudes por técnico","fb"] ]},
+  { n:"T7", title:"Viáticos y viajes", items:[
+    ["T7.1","Viáticos registrados","fb"],["T7.2","Desglose de viáticos","fb"],
+    ["T7.3","Destinos más frecuentes","fb"],["T7.4","Kilómetros recorridos","fb"] ]},
+  { n:"T8", title:"Calidad de los datos", items:[
+    ["T8.1","Órdenes sin tiempo registrado","fb"],["T8.2","Órdenes con fechas inconsistentes","fb"],
+    ["T8.3","Equipos sin horómetro","fb"] ]}
+];
+const DEFAULT_SEL_TALLER = ["T1.1","T1.3","T2.1","T3.1","T4.1","T5.2"];
+
 let selected = (function(){ try{ const s=JSON.parse(localStorage.getItem("dash_kpis")); if(Array.isArray(s)) return new Set(s); }catch(e){} return new Set(DEFAULT_SEL); })();
-function saveSel(){ try{ localStorage.setItem("dash_kpis", JSON.stringify([...selected])); }catch(e){} }
+
+/* Cada vista guarda SU propia seleccion, en su propia llave. Si compartieran
+   una, prender un indicador de taller apagaria el dash de oficina al volver. */
+let selectedTaller = (function(){ try{ const s=JSON.parse(localStorage.getItem("dash_kpis_taller")); if(Array.isArray(s)) return new Set(s); }catch(e){} return new Set(DEFAULT_SEL_TALLER); })();
+let vista = (function(){ try{ return localStorage.getItem("dash_vista")==="taller"?"taller":"oficina"; }catch(e){ return "oficina"; } })();
+
+function enTaller(){ return vista==="taller"; }
+function catalogoActual(){ return enTaller() ? KPI_GROUPS_TALLER : KPI_GROUPS; }
+function seleccionActual(){ return enTaller() ? selectedTaller : selected; }
+function saveSel(){
+  try{
+    localStorage.setItem(enTaller()?"dash_kpis_taller":"dash_kpis",
+      JSON.stringify([...seleccionActual()]));
+  }catch(e){}
+}
+
+/* =====================================================================
+   VISTA TALLER
+   =====================================================================
+   El dash de Oficina contesta "¿cómo va el negocio?" y vive sobre todo de
+   RADAR. Éste contesta "¿cómo va el taller?" y vive ENTERO de la base de
+   Miguel, que ya estábamos leyendo y de la que sólo usábamos flota y
+   mantenimientos. Todo lo de acá sale de datos que ya existen: no hay ningún
+   indicador que dependa de que alguien empiece a capturar algo nuevo.
+
+   Lo que NO está y no está por olvido: cualquier cosa con precio. Se revisaron
+   las 170 órdenes y las 131 solicitudes y no hay un solo campo de dinero —
+   ni costo, ni tarifa, ni precio de repuesto. El taller registra QUÉ se hizo
+   y CUÁNTO TARDÓ, no cuánto costó. Por eso los indicadores son de tiempo,
+   carga y reincidencia.
+   ===================================================================== */
+/* --- Herramientas de tiempo -------------------------------------------
+   EL DESFASE DE SEIS HORAS. 63 de 170 órdenes tienen fechaInicio DESPUÉS de
+   fechaFin, o sea duración negativa. No es ruido: restándole 6 horas al
+   inicio, 59 de esas 63 vuelven a durar algo normal. Honduras es UTC-6, así
+   que fechaInicio se guarda en UTC mientras fechaFin se guarda en hora local.
+   Se verificó contra MH-0084, que además trae sus propias marcas de trabajo.
+   Acá se compensa AL LEER y se cuenta cuántas se corrigieron (indicador T8.2).
+   El arreglo de verdad es en la app de Miguel, no acá. */
+function minDeTexto(t){
+  t=String(t==null?"":t).trim(); if(!t) return null;
+  const h=t.match(/(\d+)\s*h/), m=t.match(/(\d+)\s*min/);
+  if(!h&&!m) return null;
+  return (h?parseInt(h[1],10)*60:0)+(m?parseInt(m[1],10):0);
+}
+function momento(t){
+  t=String(t==null?"":t).trim(); if(t.length<10) return null;
+  let mm=t.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
+  if(mm) return new Date(+mm[1],+mm[2]-1,+mm[3],+mm[4],+mm[5]);
+  mm=t.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})/);
+  if(mm) return new Date(+mm[3],+mm[2]-1,+mm[1],+mm[4],+mm[5]);
+  mm=t.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if(mm) return new Date(+mm[1],+mm[2]-1,+mm[3]);
+  return null;
+}
+const TOPE_MIN = 24*60;   // más que esto es orden olvidada abierta, no trabajo largo
+function duracionMin(o){
+  let a=momento(o.inicioTrabajo), b=momento(o.finTrabajo);
+  if(a&&b&&(b-a)>=0) return { min:Math.round((b-a)/60000), fuente:"marcas" };
+  const m=minDeTexto(o.horasTrab);
+  if(m!=null) return { min:m, fuente:"horasTrab" };
+  a=momento(o.fechaInicio); b=momento(o.fechaFin);
+  if(a&&b){
+    const crudo=Math.round((b-a)/60000);
+    if(crudo<0){
+      const corr=Math.round((b-(a-6*3600000))/60000);
+      if(corr>=0&&corr<=TOPE_MIN) return { min:corr, fuente:"fechas(-6h)" };
+    }
+    return { min:crudo, fuente:"fechas" };
+  }
+  return { min:null, fuente:null };
+}
+function duracionUtil(o){ const d=duracionMin(o); return (d.min!=null&&d.min>=0&&d.min<=TOPE_MIN)?d.min:null; }
+function hhmm(min){
+  if(min==null) return "—";
+  const h=Math.floor(min/60), m=Math.round(min%60);
+  return h? h+"h "+String(m).padStart(2,"0")+"min" : m+"min";
+}
+function mediana(a){ if(!a.length) return null; const s=[...a].sort((x,y)=>x-y), k=s.length>>1;
+  return s.length%2 ? s[k] : Math.round((s[k-1]+s[k])/2); }
+
+/* --- Acceso a las órdenes --------------------------------------------- */
+function ordenesTaller(){
+  const out=[];
+  [["correctivos",state.correctivos],["preventivos",state.preventivos],
+   ["ordenesCerradas",state.ordenesCerradas]].forEach(([nodo,obj])=>{
+    Object.values(obj||{}).forEach(o=>{ if(o&&typeof o==="object") out.push(Object.assign({_nodo:nodo},o)); });
+  });
+  return out;
+}
+function estaCerrada(o){
+  if(o.completado===true) return true;
+  if(o._nodo==="ordenesCerradas") return true;
+  const e=String(o.estado||"").trim().toLowerCase();
+  return e==="completado"||e==="cerrado"||e==="finalizado";
+}
+function solicitudesTaller(){
+  return Object.values(state.solicitudes||{}).filter(s=>s&&typeof s==="object");
+}
+/* Cuenta ocurrencias de un campo y devuelve el top ordenado. */
+function topN(lista, campo, n){
+  const c={};
+  lista.forEach(x=>{ const v=String((typeof campo==="function"?campo(x):x[campo])||"").trim(); if(v) c[v]=(c[v]||0)+1; });
+  return Object.entries(c).sort((a,b)=>b[1]-a[1]).slice(0,n||6);
+}
+/* Medianas de duración agrupadas por un campo, con el n de cada grupo. */
+function medianasPor(campo){
+  const g={};
+  ordenesTaller().forEach(o=>{
+    const k=String(o[campo]||"").trim(); if(!k) return;
+    const m=duracionUtil(o); if(m==null) return;
+    (g[k]=g[k]||[]).push(m);
+  });
+  return Object.entries(g).map(([k,v])=>({et:k,med:mediana(v),n:v.length}))
+    .sort((a,b)=>b.n-a.n);
+}
+function filasRank(filas){
+  if(!filas.length) return null;
+  return '<div class="rank">'+filas.map(f=>
+    '<div class="rank-row'+(f.flojo?' flojo':'')+'"><span class="et">'+f.et+'</span>'
+    +'<span class="vl">'+f.vl+'</span>'+(f.nn?'<span class="nn">'+f.nn+'</span>':'')+'</div>').join("")+'</div>';
+}
+function numGrande(valor, sub, color){
+  return '<div class="center-num"><div class="big-num"'+(color?' style="color:var('+color+')"':'')
+    +'>'+valor+'</div><div class="big-sub">'+sub+'</div></div>';
+}
+
+/* --- Viáticos ---------------------------------------------------------
+   Los viáticos NO están en bitacora/data-viajes (ese nodo no existe, por eso
+   el indicador 4.5 de Oficina sale vacío). Están DENTRO de las órdenes de
+   taller, en un campo `viaticos` con combustible, peaje, hospedaje y un
+   arreglo `facturas[]` con monto. Más un campo `vales` con las comidas. */
+function viaticosDe(o){
+  const v=o.viaticos; if(!v||typeof v!=="object") return null;
+  const num=x=>{ const n=aNumero(x); return n==null?0:n; };
+  const facturas=(Array.isArray(v.facturas)?v.facturas:[]).reduce((a,f)=>a+num(f&&f.monto),0);
+  const vales=(Array.isArray(o.vales)?o.vales:[]).reduce((a,x)=>a+num(x&&x.monto),0);
+  return {
+    combustible:num(v.combustible), peaje:num(v.costo_peaje), hospedaje:num(v.hospedaje),
+    facturas, vales, destino:String(v.destino||"").trim(),
+    total:num(v.combustible)+num(v.costo_peaje)+num(v.hospedaje)+facturas+vales
+  };
+}
+function todosLosViaticos(){ return ordenesTaller().map(viaticosDe).filter(Boolean); }
+
+/* ===================== CUERPO DE CADA TILE (TALLER) ===================== */
+function tileBodyTaller(id){
+  const ords=ordenesTaller();
+  const cerradas=ords.filter(estaCerrada), abiertas=ords.filter(o=>!estaCerrada(o));
+  const eq=Object.values(state.equipos||{}).filter(x=>x&&typeof x==="object");
+
+  if(!ords.length && !eq.length)
+    return { nav:false, body: pend("Sin datos de taller para esta empresa") };
+
+  switch(id){
+    case "T1.1":
+      return { nav:true, body: numGrande(abiertas.length,"órdenes sin cerrar",
+        abiertas.length>10?"--red":(abiertas.length>5?"--amber":"--green")) };
+    case "T1.2": {
+      const ahora=new Date(), mes=ahora.getMonth(), anio=ahora.getFullYear();
+      const n=cerradas.filter(o=>{ const f=momento(o.fechaCierre||o.fechaCompletado||o.fecha);
+        return f&&f.getMonth()===mes&&f.getFullYear()===anio; }).length;
+      return { nav:false, body: numGrande(n,"cerradas en "+ahora.toLocaleDateString("es-HN",{month:"long"})) };
+    }
+    case "T1.3": {
+      const mal=eq.filter(e=>String(e.estado||"").trim().toUpperCase()==="MAL ESTADO");
+      if(!eq.length) return { nav:true, body: pend("Sin equipos en esta empresa") };
+      const pct=Math.round(mal.length*100/eq.length);
+      return { nav:true, body: numGrande(mal.length,pct+"% de "+eq.length+" equipos",
+        pct>=30?"--red":(pct>=15?"--amber":"--green")) };
+    }
+    case "T1.4": {
+      const t=topN(ords,"prioridad",5);
+      const body=filasRank(t.map(([k,n])=>({et:k,vl:n})));
+      return { nav:false, body: body||pend("Ninguna orden trae prioridad") };
+    }
+
+    case "T2.1": {
+      const f=medianasPor("servicio").filter(x=>x.med!=null);
+      const body=filasRank(f.slice(0,7).map(x=>({et:x.et,vl:hhmm(x.med),nn:"n="+x.n,flojo:x.n<5})));
+      return { nav:false, body: body||pend("Ninguna orden trae servicio y tiempo") };
+    }
+    case "T2.2": {
+      const f=medianasPor("sistema").filter(x=>x.med!=null);
+      const body=filasRank(f.slice(0,8).map(x=>({et:x.et,vl:hhmm(x.med),nn:"n="+x.n,flojo:x.n<5})));
+      return { nav:false, body: body||pend("Ninguna orden trae sistema y tiempo") };
+    }
+    case "T2.3": {
+      const dias=cerradas.map(o=>{ const a=momento(o.fecha), b=momento(o.fechaCierre||o.fechaCompletado);
+        return (a&&b)?Math.round((b-a)/86400000):null; }).filter(d=>d!=null&&d>=0&&d<365);
+      const med=mediana(dias);
+      return { nav:false, body: med==null? pend("Sin fechas de cierre utilizables")
+        : numGrande(med+(med===1?" día":" días"),"mediana para cerrar (n="+dias.length+")",
+            med>7?"--red":(med>3?"--amber":"--green")) };
+    }
+    case "T2.4": {
+      const hoy=Date.now();
+      const viejas=abiertas.filter(o=>{ const f=momento(o.fecha); return f&&(hoy-f)/86400000>7; });
+      return { nav:false, body: numGrande(viejas.length,"abiertas hace más de una semana",
+        viejas.length>0?"--amber":"--green") };
+    }
+
+    case "T3.1": {
+      const body=filasRank(topN(ords,"tecnico",7).map(([k,n])=>({et:k,vl:n})));
+      return { nav:false, body: body||pend("Ninguna orden trae técnico") };
+    }
+    case "T3.2": {
+      const g={};
+      ords.forEach(o=>{ const t=String(o.tecnico||"").trim(); const m=duracionUtil(o);
+        if(t&&m!=null) g[t]=(g[t]||0)+m; });
+      const f=Object.entries(g).sort((a,b)=>b[1]-a[1]).slice(0,7);
+      const body=filasRank(f.map(([k,v])=>({et:k,vl:hhmm(v)})));
+      return { nav:false, body: body||pend("Sin horas atribuibles a un técnico") };
+    }
+    case "T3.3": {
+      const body=filasRank(topN(abiertas,"tecnico",7).map(([k,n])=>({et:k,vl:n})));
+      return { nav:false, body: body||pend("Sin órdenes abiertas con técnico","0") };
+    }
+
+    case "T4.1": {
+      const body=filasRank(topN(ords,"sistema",7).map(([k,n])=>({et:k,vl:n})));
+      return { nav:false, body: body||pend("Ninguna orden trae sistema") };
+    }
+    case "T4.2": {
+      const corr=ords.filter(o=>o._nodo==="correctivos"||String(o.tipo||"").toLowerCase()==="correctivo");
+      const body=filasRank(topN(corr,o=>o.equipo||o.equipoId||o.serie,7).map(([k,n])=>({et:k,vl:n+"×"})));
+      return { nav:false, body: body||pend("Sin correctivos con equipo identificado") };
+    }
+    case "T4.3": {
+      const body=filasRank(topN(ords,"falla",6).map(([k,n])=>({et:k,vl:n+"×"})));
+      return { nav:false, body: body||pend("Ninguna orden describe la falla") };
+    }
+
+    case "T5.1": {
+      const prev=Object.values(state.preventivos||{}).filter(x=>x&&typeof x==="object");
+      if(!prev.length) return { nav:true, body: pend("Sin preventivos registrados") };
+      const ok=prev.filter(p=>p.completado===true).length;
+      return { nav:true, body:'<div class="flota-grid">'
+        +'<div class="flota-cell c-disp"><span class="n">'+ok+'</span><span class="l">Completados</span></div>'
+        +'<div class="flota-cell c-mant"><span class="n">'+(prev.length-ok)+'</span><span class="l">Pendientes</span></div></div>' };
+    }
+    case "T5.2": case "T5.3": {
+      const m=computeMant();
+      if(!m.hay) return { nav:true, body: pend("Sin datos de mantenimiento") };
+      if(id==="T5.2") return { nav:true, body: numGrande(m.crit,"con preventivo vencido",
+        m.crit>0?"--red":"--green") };
+      const body=filasRank(m.lista.slice(0,7).map(v=>({et:v.codigo,vl:v.etiqueta})));
+      return { nav:true, body: body||pend("Nada por vencer") };
+    }
+
+    case "T6.1": {
+      const s=solicitudesTaller();
+      if(!s.length) return { nav:false, body: pend("Sin solicitudes de repuesto") };
+      const pend_=s.filter(x=>{ const e=String(x.estado||"").toLowerCase();
+        return e!=="entregado"&&e!=="completado"&&e!=="cerrado"; });
+      return { nav:false, body: numGrande(pend_.length,"de "+s.length+" solicitudes sin entregar",
+        pend_.length>10?"--amber":"--green") };
+    }
+    case "T6.2": {
+      const items=[];
+      Object.values(state.repuestos||{}).forEach(r=>{ if(r&&Array.isArray(r.items)) items.push(...r.items); });
+      solicitudesTaller().forEach(s=>{ if(Array.isArray(s.items)) items.push(...s.items); });
+      const body=filasRank(topN(items,x=>x&&x.desc,7).map(([k,n])=>({et:k,vl:n+"×"})));
+      return { nav:false, body: body||pend("Las solicitudes no detallan repuestos todavía") };
+    }
+    case "T6.3": {
+      const body=filasRank(topN(solicitudesTaller(),x=>x.tecnicoNombre||x.tecnico,7).map(([k,n])=>({et:k,vl:n})));
+      return { nav:false, body: body||pend("Sin solicitudes con técnico") };
+    }
+
+    case "T7.1": {
+      const v=todosLosViaticos();
+      if(!v.length) return { nav:false, body: pend("Ninguna orden trae viáticos","0") };
+      const tot=v.reduce((a,x)=>a+x.total,0);
+      return { nav:false, body: numGrande(fmtL(tot),"en "+v.length+" viaje(s) con viáticos","--amber") };
+    }
+    case "T7.2": {
+      const v=todosLosViaticos();
+      if(!v.length) return { nav:false, body: pend("Ninguna orden trae viáticos") };
+      const s=(k)=>v.reduce((a,x)=>a+x[k],0);
+      const filas=[["Combustible",s("combustible")],["Peaje",s("peaje")],
+                   ["Hospedaje",s("hospedaje")],["Facturas",s("facturas")],["Vales",s("vales")]]
+        .filter(([,m])=>m>0).map(([k,m])=>({et:k,vl:fmtL(m)}));
+      return { nav:false, body: filasRank(filas)||pend("Viáticos sin montos") };
+    }
+    case "T7.3": {
+      const body=filasRank(topN(todosLosViaticos(),"destino",6).map(([k,n])=>({et:k,vl:n+" viaje"+(n>1?"s":"")})));
+      return { nav:false, body: body||pend("Los viáticos no traen destino") };
+    }
+    case "T7.4": {
+      let km=0, n=0;
+      ords.forEach(o=>{ const a=aNumero(o.kmSalida), b=aNumero(o.kmRetorno);
+        if(a!=null&&b!=null&&b>a){ km+=b-a; n++; } });
+      return { nav:false, body: n? numGrande(km.toLocaleString("es-HN")+" km","en "+n+" viaje(s) con odómetro")
+        : pend("Sin pares de kilometraje salida/retorno") };
+    }
+
+    case "T8.1": {
+      const sin=ords.filter(o=>duracionMin(o).min==null).length;
+      return { nav:false, body: numGrande(sin,"de "+ords.length+" órdenes sin tiempo",
+        sin>ords.length*0.2?"--amber":"--green") };
+    }
+    case "T8.2": {
+      const corr=ords.filter(o=>duracionMin(o).fuente==="fechas(-6h)").length;
+      const rotas=ords.filter(o=>{ const d=duracionMin(o); return d.min!=null&&(d.min<0||d.min>TOPE_MIN); }).length;
+      return { nav:false, body:'<div style="display:flex;flex-direction:column;gap:9px;font-size:12px;justify-content:center;flex:1">'
+        +'<div><b style="color:var(--amber)">'+corr+'</b> con el inicio en UTC y el fin en hora local</div>'
+        +'<div><b style="color:var(--red)">'+rotas+'</b> que igual quedan fuera de rango</div>'
+        +'<div style="color:var(--ink-faint);font-size:11px;line-height:1.4">El dash lo compensa al leer restando 6 h. El arreglo va en la app.</div></div>' };
+    }
+    case "T8.3": {
+      if(!eq.length) return { nav:true, body: pend("Sin equipos en esta empresa") };
+      const sin=eq.filter(e=>aNumero(e.horometro)==null).length;
+      return { nav:true, body: numGrande(sin,"de "+eq.length+" equipos sin horómetro",
+        sin>eq.length*0.3?"--amber":"--green") };
+    }
+  }
+  return { nav:false, body: pend("—") };
+}
 
 /* ===================== CUERPO DE CADA TILE ===================== */
 function pend(msg, big){ return '<div class="tile-pending"><div class="dash">'+(big||"—")+'</div><div>'+msg+'</div></div>'; }
@@ -663,15 +1040,17 @@ function tileBody(id, src){
 /* ===================== RENDER: catalogo (izq) + tiles (der) ===================== */
 function renderCatalog(){
   const cat=document.getElementById("kpi-catalog");
-  const total=KPI_GROUPS.reduce((a,g)=>a+g.items.length,0);
-  cat.innerHTML='<div class="cat-head"><span class="cat-title">Indicadores</span><span class="cat-count">'+selected.size+'/'+total+' activos</span></div>'
-    + KPI_GROUPS.map(g=>'<div class="kpi-group"><h3>'+g.n+'. '+g.title+'</h3>'
-        + g.items.map(([id,label,src])=>{ const fix=FIX_IDS.has(id); return '<label class="kpi-opt"><input type="checkbox" data-id="'+id+'"'+(selected.has(id)?' checked':'')+'>'
+  const grupos=catalogoActual(), sel=seleccionActual();
+  const total=grupos.reduce((a,g)=>a+g.items.length,0);
+  cat.innerHTML='<div class="cat-head"><span class="cat-title">'+(enTaller()?"Taller":"Indicadores")+'</span><span class="cat-count">'+sel.size+'/'+total+' activos</span></div>'
+    + grupos.map(g=>'<div class="kpi-group"><h3>'+g.n+'. '+g.title+'</h3>'
+        + g.items.map(([id,label,src])=>{ const fix=FIX_IDS.has(id); return '<label class="kpi-opt"><input type="checkbox" data-id="'+id+'"'+(sel.has(id)?' checked':'')+'>'
             +'<span class="txt">'+id+' '+label+'</span><span class="src '+(fix?"fix":"live")+'">'+(fix?"fix":"live")+'</span></label>'; }).join("")
       +'</div>').join("");
   cat.querySelectorAll('input[type=checkbox]').forEach(cb=>{
     cb.addEventListener("change",()=>{
-      if(cb.checked) selected.add(cb.dataset.id); else selected.delete(cb.dataset.id);
+      const s=seleccionActual();
+      if(cb.checked) s.add(cb.dataset.id); else s.delete(cb.dataset.id);
       saveSel(); renderCatalog(); renderTiles();
     });
   });
@@ -679,11 +1058,11 @@ function renderCatalog(){
 function renderTiles(){
   updateRadarBtn();
   const grid=document.getElementById("kpi-grid");
-  const order=[];
-  KPI_GROUPS.forEach(g=>g.items.forEach(([id,label,src])=>{ if(selected.has(id)) order.push({id,label,src}); }));
+  const order=[], sel=seleccionActual();
+  catalogoActual().forEach(g=>g.items.forEach(([id,label,src])=>{ if(sel.has(id)) order.push({id,label,src}); }));
   if(order.length===0){ grid.innerHTML='<div class="kpi-empty">Elegí indicadores en la lista de la izquierda para que aparezcan aquí.</div>'; return; }
   grid.innerHTML=order.map(k=>{
-    const t=tileBody(k.id,k.src);
+    const t=enTaller()?tileBodyTaller(k.id):tileBody(k.id,k.src);
     return '<div class="tile '+(FIX_IDS.has(k.id)?"fix":"live")+(t.nav?' nav':'')+'" data-id="'+k.id+'" data-nav="'+(t.nav?1:0)+'">'
       +'<div class="tile-head"><span class="tile-title">'+k.label+'</span><span class="tile-id">'+k.id+'</span></div>'
       +'<div class="tile-body">'+t.body+'</div></div>';
@@ -723,12 +1102,57 @@ async function refrescar(){
   } else {
     setConn(true); state.equipos={}; state.preventivos={}; state.correctivos={};   // monhagro: sin nodo de flota
   }
+  await cargarTaller();
   await cargarCajaChica();
   await cargarViajes();
-  await cargarRadar();
-  await cargarFx();
+  // RADAR y el tipo de cambio solo alimentan indicadores de Oficina. En Taller
+  // seria pegarle al endpoint de Fabri cada 60s para nada.
+  if(!enTaller()){ await cargarRadar(); await cargarFx(); }
   renderTiles();
 }
+
+/* Los nodos que solo usa la vista Taller. Se piden aparte y solo cuando hace
+   falta: ordenesCerradas son ~85 registros por empresa y no los mira nadie
+   desde Oficina. Si alguno falla, el resto de la vista sigue funcionando. */
+async function cargarTaller(){
+  if(!enTaller()){ state.ordenesCerradas={}; state.solicitudes={}; state.repuestos={}; return; }
+  const nodo=NODO_EMPRESA[activeCompany];
+  if(!nodo){ state.ordenesCerradas={}; state.solicitudes={}; state.repuestos={}; return; }
+  const [oc,so,re]=await Promise.all([
+    getJSON(nodo+"/ordenesCerradas").catch(()=>({})),
+    getJSON(nodo+"/solicitudes").catch(()=>({})),
+    getJSON(nodo+"/repuestos").catch(()=>({}))
+  ]);
+  state.ordenesCerradas=oc||{}; state.solicitudes=so||{}; state.repuestos=re||{};
+  console.log("[Dash] taller:",Object.keys(state.ordenesCerradas).length,"cerradas |",
+    Object.keys(state.solicitudes).length,"solicitudes |",Object.keys(state.repuestos).length,"repuestos");
+}
+
+/* Solo la interfaz: pastilla, subtitulo, boton de RADAR y catalogo. Va aparte
+   del refresco para que el arranque no dispare dos cargas en paralelo (una de
+   aca y otra de cargarEmpresa) peleandose por el mismo `state`. */
+function pintarVista(){
+  try{ localStorage.setItem("dash_vista", vista); }catch(e){}
+  document.querySelectorAll(".vista-pill").forEach(p=>{
+    const on=p.dataset.vista===vista;
+    p.classList.toggle("active",on); p.setAttribute("aria-selected",on?"true":"false");
+  });
+  const sub=document.getElementById("vista-sub");
+  if(sub) sub.textContent = enTaller() ? "Montasa · Taller y mantenimiento" : "Montasa · Operaciones";
+  const btn=document.getElementById("radar-btn");
+  if(btn) btn.style.display = enTaller() ? "none" : "";   // RADAR no alimenta Taller
+  renderCatalog();
+}
+async function cambiarVista(v){
+  const nueva = (v==="taller") ? "taller" : "oficina";
+  if(nueva===vista) return;
+  vista = nueva;
+  pintarVista();
+  await refrescar();
+}
+document.querySelectorAll(".vista-pill").forEach(p=>{
+  p.addEventListener("click", ()=> cambiarVista(p.dataset.vista));
+});
 async function cargarEmpresa(key){
   activeCompany=key;
   document.querySelectorAll(".company-pill").forEach(p=>{ const on=p.dataset.company===key; p.classList.toggle("active",on); p.setAttribute("aria-selected",on?"true":"false"); });
@@ -768,9 +1192,11 @@ function updateRadarBtn(){
   else { b.textContent="RADAR ✓"+(rd.cache_edad_seg!=null?(" "+rd.cache_edad_seg+"s"):"")+(rd.degradado?" (degradado)":""); b.style.color="var(--green)"; b.style.borderColor="rgba(62,207,126,.4)"; }
 }
 
-/* arranque */
-renderCatalog();
+/* arranque. cambiarVista() deja la pastilla como quedo la ultima vez (vive en
+   localStorage), pinta el catalogo que corresponda y dispara el primer
+   refresco; cargarEmpresa arranca el temporizador de 60s. */
 setupRadarBtn();
+pintarVista();
 cargarEmpresa("montasa");
 </script>
 </body>
