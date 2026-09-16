@@ -694,8 +694,8 @@ function barraUrgencia(px, py, ev){
      EL EDIFICIO           todo lo que NO es montacargas — la gente, los
                            papeles, las decisiones.
 
-   El edificio tiene el BULLPEN al centro, y ahí adentro están JARVIS y
-   MAQUINÓN. Las siete oficinas lo rodean, cada una con su puerta mirando
+   El edificio tiene el BULLPEN al centro, y ahí adentro está JARVIS.
+   Las siete oficinas lo rodean, cada una con su puerta mirando
    al bullpen: esa es la conexión directa. Un pedido sale de una oficina,
    entra al bullpen, se procesa, y sale hacia otra.
    ===================================================================== */
@@ -753,10 +753,13 @@ DEPTOS.forEach(function(d){
   d.dist = "edificio"; d.piso = "#2c3032"; d.linea = "#3a3e41";
   ZONAS.push(d);
 });
-/* Los dos que viven en el bullpen. No son oficinas: son el centro. */
+/* El que vive en el bullpen. No es una oficina: es el centro.
+   Acá estaba también MAQUINÓN, y se sacó: no es una IA, es una computadora —
+   la máquina donde corre el trabajo pesado. Dibujarlo como par de Jarvis
+   decía algo falso del mundo. Cuando tenga un papel propio, vuelve; por ahora
+   el centro es uno solo. dx/dy en cero para que quede centrado de verdad. */
 const CENTRALES = [
-  { id:"jarvis",   nombre:"JARVIS",   col:"#4f8fe0", dx:-2.0, dy:-0.6 },
-  { id:"maquinon", nombre:"MAQUINÓN", col:"#f5a524", dx: 2.0, dy: 0.6 }
+  { id:"jarvis",   nombre:"JARVIS",   col:"#4f8fe0", dx: 0, dy: 0 }
 ];
 const ZONA = {}; ZONAS.forEach(z => ZONA[z.id] = z);
 const DEPTO = {}; DEPTOS.forEach(d => DEPTO[d.id] = d);
@@ -991,7 +994,7 @@ function zonaEdificio(datos){
   });
   rotuloZona(z);
 
-  /* --- JARVIS y MAQUINÓN, en el centro del bullpen --- */
+  /* --- JARVIS, en el centro del bullpen --- */
   CENTRALES.forEach(function(c){
     const gx = EDIF.cx + c.dx - 0.9, gy = EDIF.cy + c.dy - 0.7;
     const p = w2s(gx + 0.9, gy + 0.7);
@@ -1252,18 +1255,24 @@ function dibujarPulsos(){
 }
 
 function fichaCentral(c){
-  const esJarvis = (c.id === "jarvis");
   abrirFicha('<div class="kicker">Bullpen · IA central</div><h2 class="display">' + c.nombre + '</h2>' +
-    rows([["Dónde", "en el bullpen, al centro del edificio"],
+    rows([["Qué es", "un asistente de voz: le hablás y te contesta"],
+          ["Su cerebro", "el CLI de Claude Code, headless"],
+          ["Dónde corre", "en Railway, y en la compu de quien lo instale"],
+          ["Qué lee", "RADAR y SAP · la base de flota y taller · Notion"],
+          ["Qué escribe", "nada"],
           ["Alcance", "las siete oficinas, por conexión directa"],
           ["Qué cruza por acá", pulsos.length + " mensajes ahora mismo"]]) +
-    (esJarvis
-      ? '<div class="note warn">Todavía no está cableado. Sé que existe y dónde va, pero no pude ' +
-        'leer el repo <b>Fabriziomont7/jarvis</b> desde esta sesión: solo tengo acceso a ' +
-        '<b>rodzilla-thecreator/dash</b>. Falta el <b>i3.md</b> y el <b>CLAUDE.md</b> para saber ' +
-        'qué hace y cómo se conecta.</div>'
-      : '<div class="note">Es el que mantiene el mundo: recibe los pedidos de mejora de todas las ' +
-        'oficinas, los tría y propone qué cambiar.</div>'));
+    '<div class="note">Su cerebro es el CLI de Claude Code corriendo headless, no una API ' +
+    'aparte. Eso no es un detalle técnico: significa que corre con la <b>suscripción de ' +
+    'quien lo arranca</b>, y por eso cada empleado puede tener el suyo en su máquina sin ' +
+    'que le cueste nada más a la empresa.</div>' +
+    '<div class="note warn">Hoy Jarvis <b>lee y cuenta, no escribe</b> — ni en la base de ' +
+    'Miguel, ni en RADAR, ni en SAP. Corre sin pantalla donde pedir permiso, así que en vez ' +
+    'de pedirlo no tiene con qué. Lo que se escribe, se escribe desde una oficina, con ' +
+    'alguien confirmando.</div>' +
+    '<div class="note">Cómo se conecta cada persona: <b>mundo/CONEXION.md</b>. ' +
+    'Qué es en detalle: <b>mundo/docs/jarvis/</b>.</div>');
 }
 
 function fichaDepto(d, datos){
