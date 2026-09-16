@@ -628,10 +628,15 @@ function persona(tipo){
   if(tipo === "elia"){ ops.push([2,2,1,7,pelo], [9,2,1,7,pelo]); }   // pelo largo
   ops.push([4,2,4,5,piel]);
   if(tipo === "rodz"){
-    /* Anteojos en vez de ojos: montura oscura de sien a sien y lentes
-       ambarinos. Son parte de como trabaja, no un accesorio. */
-    ops.push([3,4,6,1,"#15171a"]);                                  // montura y patillas
-    ops.push([4,4,1,1,"#c9962f"], [7,4,1,1,"#c9962f"]);             // lentes
+    /* Anteojos en vez de ojos. La primera version tenia montura oscura con
+       lentes de un pixel adentro, y a la escala del mundo no se veia NADA: el
+       marco oscuro se fundia con el pelo de los costados y los lentes quedaban
+       perdidos entre negro. Un sprite de 12x20 que se dibuja a ~25px de alto no
+       aguanta un detalle de un pixel rodeado de su mismo tono.
+       Asi que los lentes son UNA BANDA AMBAR de sien a sien, con el mismo
+       amarillo que el mundo ya usa para destacar. A cualquier tamano se lee. */
+    ops.push([3,4,6,1,"#f5a524"]);                                  // los anteojos
+    ops.push([4,5,1,1,shade(piel,0.82)], [7,5,1,1,shade(piel,0.82)]); // sombra que apoya la montura
     ops.push([5,6,2,1,pelo]);                                       // bigote
   }else{
     ops.push([4,4,1,1,"#101213"], [7,4,1,1,"#101213"]);             // ojos
@@ -1179,8 +1184,14 @@ function contenidoDepto(d, datos){
     label(c.x, bajo + i*11, f[0], { col:f[1], size:8.5, box:true });
   });
 }
-/* El octavo lugar del anillo queda libre: es la entrada. De acá se pasa a
-   tu propia oficina, la de oficina.html, que es donde se trabaja. */
+/* YA NO SE DIBUJA. El octavo lugar del anillo era la entrada, pero ahí vive
+   ahora la oficina de AI PLANNING y las dos se pisaban en pantalla.
+   Además el modelo cambió: la oficina de cada quien es la de SU área — los de
+   contaduría comparten una, como en la vida real — así que una puerta genérica
+   "MI OFICINA" ya no representa nada.
+   Se deja el código porque `oficina.html` sigue existiendo y hoy solo se llega
+   escribiendo la URL. Cuando se decida desde dónde se entra (lo natural es que
+   cada departamento tenga su propio "entrar"), esto es el molde. */
 function entradaEdificio(){
   const a = ANCLAS.S;
   const gx = EDIF.cx + a[0]*EDIF.k - 1.2, gy = EDIF.cy + a[1]*EDIF.k - 0.4;
@@ -1512,7 +1523,11 @@ function buildScene(){
   zonaCampo(flota);
   /* el edificio: todo lo que no lo es */
   zonaEdificio(datos);
-  entradaEdificio();
+  /* La entrada generica "MI OFICINA" ya no se dibuja: ocupaba el ancla S, que
+     ahora es la oficina de AI PLANNING, y las dos se pisaban en pantalla.
+     Tampoco tiene sentido en el modelo nuevo — la oficina de cada quien es la
+     de SU area, no una puerta aparte. La funcion queda por si hace falta
+     recuperar la entrada en otro lado; ver el comentario en entradaEdificio(). */
   pulsos = computePulsos(datos);
 
   /* "Otros / interno": no tienen zona propia en el spec, pero tampoco
