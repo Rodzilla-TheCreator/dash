@@ -627,29 +627,16 @@ function persona(tipo){
   ops.push([3,0,6,2,pelo], [3,1,1,3,pelo], [8,1,1,3,pelo]);
   if(tipo === "elia"){ ops.push([2,2,1,7,pelo], [9,2,1,7,pelo]); }   // pelo largo
   ops.push([4,2,4,5,piel]);
-  if(tipo === "rodz"){
-    /* Anteojos en vez de ojos. La primera version tenia montura oscura con
-       lentes de un pixel adentro, y a la escala del mundo no se veia NADA: el
-       marco oscuro se fundia con el pelo de los costados y los lentes quedaban
-       perdidos entre negro. Un sprite de 12x20 que se dibuja a ~25px de alto no
-       aguanta un detalle de un pixel rodeado de su mismo tono.
-       Asi que los lentes son UNA BANDA AMBAR de sien a sien, con el mismo
-       amarillo que el mundo ya usa para destacar. A cualquier tamano se lee. */
-    ops.push([3,4,6,1,"#f5a524"]);                                  // los anteojos
-    ops.push([4,5,1,1,shade(piel,0.82)], [7,5,1,1,shade(piel,0.82)]); // sombra que apoya la montura
-    ops.push([5,6,2,1,pelo]);                                       // bigote
-  }else{
-    ops.push([4,4,1,1,"#101213"], [7,4,1,1,"#101213"]);             // ojos
-  }
+  ops.push([4,4,1,1,"#101213"], [7,4,1,1,"#101213"]);               // ojos
   ops.push([5,7,2,1,piel]);                                         // cuello
 
   if(tipo === "rodz"){
-    /* Rodrigo. Chaqueta amarilla abierta sobre camiseta negra, jeans y
-       anteojos ambarinos. En el antebrazo izquierdo lleva un bracer negro
-       con una luz: es el aparato con el que trabaja, y los anteojos
-       conversan con él. Ojo: se dibuja en la columna x=9, que es la
-       izquierda DEL PERSONAJE — el sprite mira al frente, así que al
-       espectador le queda a la derecha. */
+    /* Rodrigo. La cara es la misma de todos: dos ojos y nada más. Lo que lo
+       distingue es la ropa — chaqueta amarilla abierta sobre camiseta negra y
+       jeans — y el bracer negro con una luz en el antebrazo, que es el aparato
+       con el que trabaja. Ojo: el bracer va en la columna x=9, que es la
+       izquierda DEL PERSONAJE; el sprite mira al frente, así que al espectador
+       le queda a la derecha. */
     const AMARILLO = "#f2c230", NEGRO = "#15171a", JEAN = "#2f4f8a";
     ops.push([3,8,6,7,AMARILLO]);                                    // chaqueta
     ops.push([2,8,1,5,AMARILLO], [9,8,1,5,AMARILLO]);                // mangas
