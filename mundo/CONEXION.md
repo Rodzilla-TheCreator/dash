@@ -109,16 +109,16 @@ firme*, que es justo lo que en una oficina real no se ve.
 **No se escribe el contenido. Nunca.** Ni la pregunta, ni la respuesta, ni nombres de
 archivo, ni nombres de clientes, ni teléfonos, ni números de identidad o de cuenta.
 
-Dos razones, y cada una alcanza sola:
+La razón es dura y alcanza sola: **ese nodo lo lee cualquiera.** Las reglas de Firebase
+están abiertas, así que todo lo que se escriba ahí es público para quien tenga la URL. No
+es una precaución de estilo — es que **no hay dónde guardar un secreto en este canal.**
+Una pregunta puede traer el nombre de un cliente, un monto o un número de parte.
 
-1. **Ese nodo lo lee cualquiera.** Las reglas de Firebase están abiertas. Todo lo que se
-   escriba ahí es público para quien tenga la URL. No es una precaución: es que **no hay
-   dónde guardar un secreto en este canal.**
-2. **La regla 3 dice que la puerta no juzga.** Un mundo donde se puede mirar qué preguntó
-   cada quien no es un mapa, es vigilancia — y se muere solo, porque nadie se enlaza a una
-   herramienta que lo delata.
+El Mundo muestra **que** algo se movió, **entre dónde** y **cuánto tardó**. Nunca qué decía.
 
-El Mundo muestra **que** algo se movió y **entre dónde**. Nunca qué decía.
+> Ojo que esto **no** es lo mismo que no medir. La actividad por persona sí se acumula
+> (`CONTINUAR.md` regla 3): se sabe quién trabajó, cuándo y cuánto. Lo que no viaja es el
+> texto.
 
 > Si algún día hace falta el detalle para depurar, va a un lugar con permisos, no a este
 > nodo. No se resuelve poniéndolo acá "por ahora".

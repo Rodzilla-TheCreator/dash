@@ -35,10 +35,16 @@ que hay algo esperando, y el botón dice «esto se firma en la computadora». No
 limitación técnica: es decisión. Además evita que una conexión cortada a la
 mitad se lleve la lista entera.
 
-**4. La puerta no juzga.** *(Mateo)*
+**4. La puerta no juzga.** *(Mateo)* — ~~REVOCADA el 2026-09-16~~
 La presencia es para coordinar, nunca para vigilar. Quien no usa el mundo tiene
 una puerta que dice «trabaja fuera del mundo», no «no está». Nunca un acumulado
 de ausencias, ni ranking, ni historial de quién entró cuánto.
+
+> **Revocada por Rodz el 2026-09-16.** Salió de esta mesa, no del dueño del
+> proyecto, y Omar quiere medir productividad de toda la empresa, no solo de los
+> mecánicos. El Mundo **sí** acumula actividad por persona. Queda escrita acá
+> porque esto es el acta de lo que se dijo ese día, y el acta no se reescribe —
+> pero no rige. La lista que rige es la de `CONTINUAR.md`.
 
 **5. Nadie tiene que pegar un bloque.** *(Fati, Toni, Don Omar)*
 La ruta principal para cargar un proceso es **acompañada**: alguien se sienta 20

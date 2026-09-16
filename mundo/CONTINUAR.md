@@ -119,8 +119,14 @@ vas a romper una, leé primero por qué existe.
 2. **Ninguna escritura sin confirmación humana en pantalla.** El agente
    propone la acción exacta; la persona autoriza. Ese candado es a la vez la
    mecánica del juego y la regla de seguridad.
-3. **La puerta no juzga.** La presencia sirve para coordinar, nunca para
-   vigilar. Nada de rankings, acumulados de ausencias ni historial de entradas.
+3. **La actividad por persona se mide y se guarda.** Decisión de Rodz del
+   2026-09-16, que reemplaza la regla anterior ("la puerta no juzga", que salió
+   de la mesa redonda y no del dueño del proyecto). Omar quiere productividad de
+   toda la empresa, no solo de los mecánicos, así que el Mundo acumula historial
+   de actividad por rol además de la última marca.
+   Lo que **sigue** afuera es el **contenido**: qué preguntó cada quien no se
+   guarda, y no por pudor — ese nodo lo lee cualquiera con la URL, así que no
+   hay dónde guardar un secreto ahí. Se mide *cuándo* y *cuánto*, no *qué*.
 4. **Nadie tiene que pegar un JSON.** La ruta principal para cargar un proceso
    es acompañada. Si el sistema solo funciona para quien pega bloques, funciona
    para tres personas.
