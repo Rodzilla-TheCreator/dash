@@ -215,9 +215,11 @@
 </header>
 
 <div class="company-switch" role="tablist" aria-label="Seleccionar empresa">
-  <button class="company-pill active" data-company="montasa" role="tab" aria-selected="true">Montasa</button>
+  <button class="company-pill active" data-company="grupo" role="tab" aria-selected="true">Grupo</button>
   <button class="company-pill" data-company="monhaco" role="tab" aria-selected="false">Monhaco</button>
+  <button class="company-pill" data-company="montasa" role="tab" aria-selected="false">Montasa HN</button>
   <button class="company-pill" data-company="monhagro" role="tab" aria-selected="false">Monhagro</button>
+  <button class="company-pill" data-company="costarica" role="tab" aria-selected="false">Costa Rica</button>
 </div>
 
 <div class="dash-layout">
@@ -244,18 +246,57 @@ async function getJSON(path){
   return await r.json();
 }
 
-/* Cada empresa es un nodo raiz distinto en la base. Monhagro aun no existe. */
-const NODO_EMPRESA = { montasa: "montasa", monhaco: "monhaco", monhagro: null };
+/* =====================================================================
+   LAS EMPRESAS, EN UNA SOLA TABLA
+   ---------------------------------------------------------------------
+   Antes esto vivia en cuatro mapas sueltos (nodo de Firebase, corte de
+   RADAR, sedes de caja chica, pagina de flota) y se podian desincronizar
+   sin que nada avisara. Ahora es una tabla: agregar una empresa es una
+   linea.
 
-/* A donde lleva el widget de Flota segun la empresa activa.
-   La de Montasa la confirmo Rodz (MTRENTAL_Gerencia); las otras son inferidas
-   por los archivos que ya existen en el repo — ajustar si alguna cambia. */
+   Y HABIA UN ERROR SERIO, que lo cacho Fabrizio el 16-sep-2026:
+   la pastilla que decia "Montasa" pedia el corte `hn` de RADAR, que NO es
+   Montasa — son las tres empresas hondurenas juntas, Monhaco incluido, que
+   ademas tenia su propia pastilla. Costa Rica no aparecia en ningun lado.
+
+   Los cortes de RADAR, para que no se vuelva a confundir:
+     honduras  = MONHACO           <- nombre heredado, no es "Honduras"
+     montasa   = Montasa Honduras  <- dejo de facturar en octubre 2025
+     monhagro  = Monhagro
+     costarica = Montasa Costa Rica
+     hn        = las tres hondurenas
+     all       = las cuatro        <- esto si es "el grupo"
+
+   Su ejemplo de lo caro que sale equivocarse: un comparativo anio contra
+   anio mirando solo `honduras` muestra a Monhaco creciendo 46% cuando el
+   grupo viene 44% abajo. El numero se ve perfectamente sano.
+   ===================================================================== */
 const BASE_APP = "https://montasa-hn.github.io/app/";
-const PAG_FLOTA = {
-  montasa:  BASE_APP + "MTRENTAL_Gerencia.html",
-  monhaco:  BASE_APP + "MONHACO_Gerencia.html",
-  monhagro: null
+const EMPRESAS = {
+  grupo: {
+    label: "Grupo", radar: "all", nodos: ["montasa", "monhaco"],
+    sedes: ["SPS", "Choloma"], flota: null,
+    nota: "las cuatro empresas juntas"
+  },
+  monhaco: {
+    label: "Monhaco", radar: "honduras", nodos: ["monhaco"],
+    sedes: ["Choloma"], flota: BASE_APP + "MONHACO_Gerencia.html"
+  },
+  montasa: {
+    label: "Montasa HN", radar: "montasa", nodos: ["montasa"],
+    sedes: ["SPS"], flota: BASE_APP + "MTRENTAL_Gerencia.html",
+    nota: "dejo de facturar en octubre 2025: las ventas dan ~0 a proposito"
+  },
+  monhagro: {
+    label: "Monhagro", radar: "monhagro", nodos: [], sedes: [], flota: null,
+    nota: "sin nodo en Firebase: la operacion devuelve VACIO, no cero"
+  },
+  costarica: {
+    label: "Costa Rica", radar: "costarica", nodos: [], sedes: [], flota: null,
+    nota: "no comparte la base de Firebase: solo datos de RADAR"
+  }
 };
+function emp(){ return EMPRESAS[activeCompany] || EMPRESAS.grupo; }
 
 /* --- CONFIG FLOTA -------------------------------------------------------
    Reparto por "estado" del equipo. Los valores confirmados en la base son
@@ -354,7 +395,7 @@ function evaluarEquipo(eq, ultimoDeHistorial){
 }
 
 /* ===================== ESTADO GLOBAL ===================== */
-let activeCompany = "montasa";
+let activeCompany = "grupo";
 const state = {
   equipos:{}, preventivos:{}, correctivos:{},   // Firebase flota/mant
   // Solo los carga la vista Taller: en Oficina serian dos peticiones al pedo
@@ -367,7 +408,7 @@ const state = {
 
 /* --- Caja chica / viaticos (Firebase, base independiente) --- */
 const CC_FB = "https://montasa-app-default-rtdb.firebaseio.com/bitacora";
-const CC_SEDES = { montasa: ["SPS"], monhaco: ["Choloma"], monhagro: [] };
+
 function fmtL(monto){
   const n = aNumero(monto);
   return n == null ? monto : "L " + n.toLocaleString("es-HN",{minimumFractionDigits:2, maximumFractionDigits:2});
@@ -409,7 +450,7 @@ function computeMant(){
 
 /* --- CAJA CHICA / VIATICOS (Firebase) — solo cargan estado; el tile lo dibuja renderTiles --- */
 async function cargarCajaChica(){
-  const sedes = CC_SEDES[activeCompany] || [];
+  const sedes = emp().sedes;
   if(sedes.length === 0){ state.cajaPend = "n/a"; return; }
   try{
     const res = await fetch(CC_FB + "/data-cajachica.json?_=" + Date.now(), { cache:"no-store" });
@@ -440,7 +481,7 @@ async function cargarViajes(){
 const RADAR_API = "https://montasa-web.vercel.app/api/dashboard";
 /* pill -> corte de RADAR. "Montasa" = grupo HN (empresa_id 'montasa' sola es la
    empresa retirada oct-2025, daria ~0); Monhaco = honduras; Monhagro = monhagro. */
-const RADAR_EMPRESA = { montasa:"hn", monhaco:"honduras", monhagro:"monhagro" };
+
 /* Token de RADAR. El usuario decidio dejarlo publico en el repo (dato interno,
    sin capa de seguridad todavia). Si queda vacio, se usa el que Omar pegue con
    el boton "Conectar RADAR" (localStorage). Pegar el token real aqui: */
@@ -450,8 +491,8 @@ async function cargarRadar(){
   const tok = radarToken();
   if(!tok){ state.radar = "no-token"; return; }
   try{
-    const emp = RADAR_EMPRESA[activeCompany] || "hn";
-    const r = await fetch(RADAR_API + "?empresa=" + emp, { headers:{ Authorization:"Bearer "+tok }, cache:"no-store" });
+    const corte = emp().radar;
+    const r = await fetch(RADAR_API + "?empresa=" + corte, { headers:{ Authorization:"Bearer "+tok }, cache:"no-store" });
     if(r.status===401 || r.status===403){ state.radar = "bad-token"; return; }
     if(!r.ok) throw new Error("HTTP " + r.status);
     state.radar = await r.json();
@@ -1079,8 +1120,8 @@ function renderTiles(){
   grid.querySelectorAll('.tile[data-nav="1"]').forEach(tile=>{
     tile.style.cursor="pointer";
     tile.addEventListener("click",e=>{ if(e.target.closest("button")) return;
-      const url=PAG_FLOTA[activeCompany];
-      if(url) window.location.href=url; else showToast("Aún no hay página para "+activeCompany);
+      const url=emp().flota;
+      if(url) window.location.href=url; else showToast("Sin página de flota para "+emp().label);
     });
   });
 }
@@ -1088,19 +1129,30 @@ function renderTiles(){
 /* ===================== REFRESCO Y EMPRESA ===================== */
 let _timer=null;
 async function refrescar(){
-  const nodo=NODO_EMPRESA[activeCompany];
-  if(nodo){
+  const nodos=emp().nodos;
+  if(nodos.length){
     try{
-      const equipos=(await getJSON(nodo+"/equipos"))||{};
+      /* Puede ser mas de un nodo: "Grupo" suma montasa + monhaco. Las llaves
+         se prefijan con el nodo porque las dos empresas numeran desde cero y
+         un merge plano se pisaria la mitad de la flota sin avisar. */
+      const junta = async (hoja) => {
+        const out={};
+        for(const n of nodos){
+          const d = await getJSON(n+"/"+hoja).catch(()=>({}));
+          Object.entries(d||{}).forEach(([k,v])=>{ if(v) out[n+":"+k]=v; });
+        }
+        return out;
+      };
+      state.equipos = await junta("equipos");
       setConn(true);
-      state.equipos=equipos;
-      console.log("[Dash]",nodo+"/equipos ->",Object.keys(equipos).length,"equipos");
-      const [prev,corr]=await Promise.all([ getJSON(nodo+"/preventivos").catch(()=>({})), getJSON(nodo+"/correctivos").catch(()=>({})) ]);
-      state.preventivos=prev||{}; state.correctivos=corr||{};
-      console.log("[Dash] preventivos:",Object.keys(state.preventivos).length,"| correctivos:",Object.keys(state.correctivos).length);
+      const [prev,corr] = await Promise.all([ junta("preventivos"), junta("correctivos") ]);
+      state.preventivos=prev; state.correctivos=corr;
+      console.log("[Dash]",nodos.join("+"),"->",Object.keys(state.equipos).length,"equipos |",
+        Object.keys(prev).length,"preventivos |",Object.keys(corr).length,"correctivos");
     }catch(e){ setConn(false); console.error("[Dash] ERROR:",e.message); state.equipos={}; state.preventivos={}; state.correctivos={}; }
   } else {
-    setConn(true); state.equipos={}; state.preventivos={}; state.correctivos={};   // monhagro: sin nodo de flota
+    // Monhagro y Costa Rica no tienen nodo: VACIO, que no es lo mismo que cero.
+    setConn(true); state.equipos={}; state.preventivos={}; state.correctivos={};
   }
   await cargarTaller();
   await cargarCajaChica();
@@ -1116,14 +1168,20 @@ async function refrescar(){
    desde Oficina. Si alguno falla, el resto de la vista sigue funcionando. */
 async function cargarTaller(){
   if(!enTaller()){ state.ordenesCerradas={}; state.solicitudes={}; state.repuestos={}; return; }
-  const nodo=NODO_EMPRESA[activeCompany];
-  if(!nodo){ state.ordenesCerradas={}; state.solicitudes={}; state.repuestos={}; return; }
-  const [oc,so,re]=await Promise.all([
-    getJSON(nodo+"/ordenesCerradas").catch(()=>({})),
-    getJSON(nodo+"/solicitudes").catch(()=>({})),
-    getJSON(nodo+"/repuestos").catch(()=>({}))
-  ]);
-  state.ordenesCerradas=oc||{}; state.solicitudes=so||{}; state.repuestos=re||{};
+  const nodos=emp().nodos;
+  if(!nodos.length){ state.ordenesCerradas={}; state.solicitudes={}; state.repuestos={}; return; }
+  /* Igual que en refrescar(): puede ser mas de un nodo y las llaves se
+     prefijan, porque las dos empresas numeran desde cero. */
+  const junta = async (hoja) => {
+    const out={};
+    for(const n of nodos){
+      const d = await getJSON(n+"/"+hoja).catch(()=>({}));
+      Object.entries(d||{}).forEach(([k,v])=>{ if(v) out[n+":"+k]=v; });
+    }
+    return out;
+  };
+  const [oc,so,re]=await Promise.all([ junta("ordenesCerradas"), junta("solicitudes"), junta("repuestos") ]);
+  state.ordenesCerradas=oc; state.solicitudes=so; state.repuestos=re;
   console.log("[Dash] taller:",Object.keys(state.ordenesCerradas).length,"cerradas |",
     Object.keys(state.solicitudes).length,"solicitudes |",Object.keys(state.repuestos).length,"repuestos");
 }
@@ -1197,7 +1255,7 @@ function updateRadarBtn(){
    refresco; cargarEmpresa arranca el temporizador de 60s. */
 setupRadarBtn();
 pintarVista();
-cargarEmpresa("montasa");
+cargarEmpresa("grupo");
 </script>
 </body>
 </html>
