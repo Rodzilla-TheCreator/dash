@@ -465,12 +465,18 @@ async function cargarCajaChica(){
   }
 }
 async function cargarViajes(){
+  /* OJO: el nodo `bitacora/data-viajes` NO EXISTE. Antes esta funcion devolvia
+     un arreglo vacio cuando Firebase contestaba null, y la tarjeta mostraba
+     "0 viaticos por revisar" — que se lee como "no hay pendientes" cuando la
+     verdad es "no hay fuente". Un cero falso es peor que un hueco.
+     Ahora se distingue: null = no existe el nodo. Los viaticos de verdad estan
+     DENTRO de las ordenes de taller y los muestra el indicador T7.1. */
   try{
     const res = await fetch(CC_FB + "/data-viajes.json?_=" + Date.now(), { cache:"no-store" });
     if(!res.ok) throw new Error("HTTP " + res.status);
     const arr = await res.json();
-    state.viajesPend = (Array.isArray(arr) ? arr : [])
-      .filter(x => x.estado === "Enviado a revisión").length;
+    state.viajesPend = arr == null ? null
+      : (Array.isArray(arr) ? arr : []).filter(x => x && x.estado === "Enviado a revisión").length;
   }catch(e){ state.viajesPend = null; }
 }
 
@@ -792,6 +798,25 @@ function estaCerrada(o){
 function solicitudesTaller(){
   return Object.values(state.solicitudes||{}).filter(s=>s&&typeof s==="object");
 }
+/* El campo `tecnico` trae VARIOS NOMBRES en una sola cadena en 97 de 188
+   ordenes ("Jonathan Martinez, Kevin Deras, Elkin Perez"). Contar la cadena
+   completa hacia que cada combinacion de cuadrilla figurara como un tecnico
+   distinto, y el trabajo de una persona quedaba repartido entre todas las
+   combinaciones donde aparece. Se parte por coma: una orden de cuadrilla cuenta
+   para cada integrante. Tambien se sacan los registros de prueba, que existen:
+   "Miguel (Pruebas)" aparece en datos de produccion. */
+function personas(v){
+  return String(v==null?"":v).split(",").map(x=>x.trim())
+    .filter(x=>x && !/\(pruebas?\)/i.test(x));
+}
+
+/* Igual que topN pero para campos con varios nombres por celda. */
+function topPersonas(lista, campo, n){
+  const c={};
+  lista.forEach(x=>personas(x && x[campo]).forEach(p=>{ c[p]=(c[p]||0)+1; }));
+  return Object.entries(c).sort((a,b)=>b[1]-a[1]).slice(0, n||6);
+}
+
 /* Cuenta ocurrencias de un campo y devuelve el top ordenado. */
 function topN(lista, campo, n){
   const c={};
@@ -896,19 +921,21 @@ function tileBodyTaller(id){
     }
 
     case "T3.1": {
-      const body=filasRank(topN(ords,"tecnico",7).map(([k,n])=>({et:k,vl:n})));
+      const body=filasRank(topPersonas(ords,"tecnico",7).map(([k,n])=>({et:k,vl:n})));
       return { nav:false, body: body||pend("Ninguna orden trae técnico") };
     }
     case "T3.2": {
+      /* Una orden de cuadrilla suma sus horas a CADA integrante: son las horas
+         que esa persona estuvo en el trabajo, no una fraccion. */
       const g={};
-      ords.forEach(o=>{ const t=String(o.tecnico||"").trim(); const m=duracionUtil(o);
-        if(t&&m!=null) g[t]=(g[t]||0)+m; });
+      ords.forEach(o=>{ const m=duracionUtil(o);
+        if(m!=null) personas(o.tecnico).forEach(t=>{ g[t]=(g[t]||0)+m; }); });
       const f=Object.entries(g).sort((a,b)=>b[1]-a[1]).slice(0,7);
       const body=filasRank(f.map(([k,v])=>({et:k,vl:hhmm(v)})));
       return { nav:false, body: body||pend("Sin horas atribuibles a un técnico") };
     }
     case "T3.3": {
-      const body=filasRank(topN(abiertas,"tecnico",7).map(([k,n])=>({et:k,vl:n})));
+      const body=filasRank(topPersonas(abiertas,"tecnico",7).map(([k,n])=>({et:k,vl:n})));
       return { nav:false, body: body||pend("Sin órdenes abiertas con técnico","0") };
     }
 
@@ -922,8 +949,19 @@ function tileBodyTaller(id){
       return { nav:false, body: body||pend("Sin correctivos con equipo identificado") };
     }
     case "T4.3": {
-      const body=filasRank(topN(ords,"falla",6).map(([k,n])=>({et:k,vl:n+"×"})));
-      return { nav:false, body: body||pend("Ninguna orden describe la falla") };
+      /* `falla` es texto libre y trae de todo: la entrada mas repetida era la
+         palabra "prueba" (9 veces), seguida de "Preparacion de equipo para
+         renta" y "Aseo del taller", que no son averias. Se filtran las pruebas
+         y el aseo; el resto se muestra advirtiendo que es texto libre. */
+      const BASURA = /^(prueba|pruebas|test|aseo|limpieza)/i;
+      const reales = ords.filter(o=>{
+        const f=String(o.falla||"").trim();
+        return f && !BASURA.test(f) && !/\(pruebas?\)/i.test(String(o.tecnico||""));
+      });
+      const body=filasRank(topN(reales,"falla",6).map(([k,n])=>({et:k,vl:n+"×"})));
+      if(!body) return { nav:false, body: pend("Ninguna orden describe la falla") };
+      return { nav:false, body: body +
+        '<div class="big-sub" style="margin-top:7px;font-size:10px;line-height:1.35">campo de texto libre: cada quien lo escribe distinto. Para tendencia, usar T4.1 (por sistema).</div>' };
     }
 
     case "T5.1": {
@@ -959,7 +997,7 @@ function tileBodyTaller(id){
       return { nav:false, body: body||pend("Las solicitudes no detallan repuestos todavía") };
     }
     case "T6.3": {
-      const body=filasRank(topN(solicitudesTaller(),x=>x.tecnicoNombre||x.tecnico,7).map(([k,n])=>({et:k,vl:n})));
+      const body=filasRank(topPersonas(solicitudesTaller().map(x=>({t:x.tecnicoNombre||x.tecnico})),"t",7).map(([k,n])=>({et:k,vl:n})));
       return { nav:false, body: body||pend("Sin solicitudes con técnico") };
     }
 
@@ -983,11 +1021,20 @@ function tileBodyTaller(id){
       return { nav:false, body: body||pend("Los viáticos no traen destino") };
     }
     case "T7.4": {
-      let km=0, n=0;
+      /* kmSalida y kmRetorno son lecturas ABSOLUTAS de odometro, no distancias,
+         y hay pares corruptos: uno dice salida 399422 y retorno 39999 (se cayo
+         un digito). Sin tope, el total daba 403.229 km en 28 viajes — 14.400 por
+         viaje, imposible. Se acota a un viaje creible y se dice cuantos se
+         descartaron, en vez de sumar basura en silencio. */
+      const TOPE_KM = 2000;
+      let km=0, n=0, fuera=0;
       ords.forEach(o=>{ const a=aNumero(o.kmSalida), b=aNumero(o.kmRetorno);
-        if(a!=null&&b!=null&&b>a){ km+=b-a; n++; } });
-      return { nav:false, body: n? numGrande(km.toLocaleString("es-HN")+" km","en "+n+" viaje(s) con odómetro")
-        : pend("Sin pares de kilometraje salida/retorno") };
+        if(a==null||b==null) return;
+        const d=b-a;
+        if(d>0 && d<=TOPE_KM){ km+=d; n++; } else fuera++; });
+      if(!n) return { nav:false, body: pend("Sin pares de kilometraje utilizables") };
+      return { nav:false, body: numGrande(km.toLocaleString("es-HN")+" km",
+        "en "+n+" viaje(s)" + (fuera?" · "+fuera+" descartado(s) por odómetro inconsistente":"")) };
     }
 
     case "T8.1": {
@@ -1061,7 +1108,8 @@ function tileBody(id, src){
   }
   if(id==="4.5"){
     const v=state.viajesPend;
-    return { nav:false, body:'<div class="center-num"><div class="big-num" style="color:var(--amber)">'+(v==null?"!":v)+'</div><div class="big-sub">viáticos por revisar (Bitácora)</div></div>' };
+    if(v==null) return { nav:false, body: pend("El nodo data-viajes no existe. Los viáticos reales están en las órdenes de taller: ver T7.1 en la vista Taller.","—") };
+    return { nav:false, body:'<div class="center-num"><div class="big-num" style="color:var(--amber)">'+v+'</div><div class="big-sub">viáticos por revisar (Bitácora)</div></div>' };
   }
   if(id==="10.3"){
     const f=computeFlota(), m=computeMant();

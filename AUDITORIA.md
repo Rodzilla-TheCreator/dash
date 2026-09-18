@@ -1,5 +1,8 @@
 # Auditoría de indicadores — 2026-09-18
 
+> **Los cuatro rojos quedaron arreglados el mismo día.** Cada uno lleva ✅ abajo con lo que
+> da ahora. Los amarillos siguen abiertos.
+
 Revisión de los tres tableros (**Oficina**, **Taller**, **Cristian**) contra los datos vivos
 de RADAR y de la base de Miguel. No es una lista de ideas: cada punto se comprobó
 consultando la fuente, y dice cómo.
@@ -25,6 +28,10 @@ donde los saca `T7.1`. Son L 45,880 en 8 viajes.
 
 **Arreglo:** que `4.5` lea las órdenes como `T7.1`, o que muestre hueco. Cero no.
 
+✅ **Hecho.** `cargarViajes()` ahora distingue "el nodo devolvió null" de "la lista está
+vacía", y la tarjeta muestra el hueco con el motivo y manda a `T7.1`. Verificado: dice
+*"El nodo data-viajes no existe…"* en vez de `0`.
+
 ### 2. `T3.1` `T3.2` `T3.3` `T6.3` — el ranking por técnico no es por técnico
 
 **97 de 188 órdenes** traen varios nombres en un solo campo `tecnico`:
@@ -40,6 +47,12 @@ combinaciones en las que aparece. Por eso `T3.3` muestra filas como
 
 **Arreglo:** partir el campo por coma y contar por persona. Una orden de cuadrilla cuenta
 para cada integrante (o se reparte, pero hay que decidirlo y decirlo).
+
+✅ **Hecho.** Se agregó `personas()` y `topPersonas()`: parten por coma, descartan los
+registros de prueba, y una orden de cuadrilla suma a cada integrante (las horas que esa
+persona estuvo, no una fracción). Antes `T3.1` mostraba cuadrillas con 1 o 2; ahora:
+Fernando Benavides 78, Kevin Deras 64, Jonathan Martinez 64, Elkin Perez 54. `T3.2` da
+236h 30min para el primero. También corregidos `T3.3` y `T6.3`.
 
 **Bonus del mismo hallazgo:** *"Miguel (Pruebas)"* aparece en la producción. Hay registros de
 prueba mezclados con los reales.
@@ -60,6 +73,10 @@ El total se contamina con pares que pertenecen a odómetros distintos.
 **Arreglo:** tope por viaje (nada de más de ~2,000 km) y descartar lo que no pase, diciendo
 cuántos se descartaron.
 
+✅ **Hecho.** Tope de 2.000 km por viaje. Pasó de **403.229 km en 28 viajes** a
+**4.306 km en 27 viajes, 2 descartados por odómetro inconsistente** — unos 160 km por
+viaje, que ya es creíble.
+
 ### 4. `T4.3` Fallas más repetidas — la falla número uno es la palabra **"prueba"**
 
 ```
@@ -75,6 +92,12 @@ averías.
 **Arreglo:** el campo `falla` es texto libre y no sirve para rankear tal cual. `T4.1`
 (por `sistema`) sí funciona porque ese campo es una lista cerrada. O se limpia el dato en el
 origen, o este indicador se retira.
+
+⚠️ **Parcial.** Se filtran los registros de prueba y los de aseo, y la tarjeta ahora avisa
+que es texto libre y manda a `T4.1` para tendencia. Pero el primer lugar quedó
+*"Preparación de equipo para renta en El Salvador"*, que tampoco es una avería: **el campo
+mezcla trabajos con fallas y eso no se arregla del lado del tablero.** Queda para hablar
+con Miguel.
 
 ---
 
