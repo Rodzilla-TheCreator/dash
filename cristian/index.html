@@ -202,6 +202,11 @@
   .panel-cab{padding:18px;border-bottom:1px solid var(--linea);display:flex;align-items:flex-start;gap:10px;}
   .panel-cab h3{margin:0;font-size:15px;font-weight:600;}
   .panel-cab p{margin:4px 0 0;font-size:11.5px;color:var(--tinta-media);}
+  .panel-acciones{display:flex;gap:6px;margin-top:9px;}
+  .panel-acciones button{font:inherit;font-size:11px;padding:4px 9px;cursor:pointer;
+    color:var(--tinta-media);background:#fff;border:1px solid var(--linea);border-radius:5px;}
+  .panel-acciones button:hover{border-color:var(--tinta-suave);color:var(--tinta);}
+  .panel-acciones button:active{background:var(--tarjeta);}
   .cerrar{margin-left:auto;background:none;border:none;font-size:22px;line-height:1;cursor:pointer;
     color:var(--tinta-suave);padding:0 2px;}
   .cerrar:hover{color:var(--tinta);}
@@ -232,6 +237,10 @@
     <div>
       <h3>Todos los indicadores</h3>
       <p>Los de Oficina y los de Taller, juntos. Marcá los que querés en tu tablero.</p>
+      <div class="panel-acciones">
+        <button type="button" id="marcar-todos">Seleccionar todo</button>
+        <button type="button" id="marcar-ninguno">Quitar todo</button>
+      </div>
     </div>
     <button class="cerrar" id="cerrar" aria-label="Cerrar">&times;</button>
   </div>
@@ -562,12 +571,31 @@ function pintarCatalogo(){
   document.querySelectorAll("#catalogo input").forEach(cb=>{
     cb.addEventListener("change", ()=>{
       cb.checked ? elegidos.add(cb.dataset.id) : elegidos.delete(cb.dataset.id);
-      try{ localStorage.setItem("cristian_kpis", JSON.stringify([...elegidos])); }catch(e){}
+      guardarSeleccion();
       document.getElementById("cuenta").textContent = elegidos.size;
       pintarWidgets();
     });
   });
 }
+
+/* Un solo lugar donde se escribe la selección, para que la casilla suelta y los
+   dos botones de arriba no puedan quedar desincronizados. */
+function guardarSeleccion(){
+  try{ localStorage.setItem("cristian_kpis", JSON.stringify([...elegidos])); }catch(e){}
+}
+const TODOS_LOS_IDS = () => [...OFICINA, ...TALLER].flatMap(g=>g.items.map(i=>i[0]));
+
+/* Seleccionar todo / quitar todo. Repintan el catálogo entero en vez de tocar
+   cada casilla a mano: pintarCatalogo() ya sabe dejar cada una como va y vuelve
+   a enganchar sus listeners, así que no hay un segundo camino que mantener. */
+document.getElementById("marcar-todos").addEventListener("click", ()=>{
+  TODOS_LOS_IDS().forEach(id=>elegidos.add(id));
+  guardarSeleccion(); pintarCatalogo(); pintarWidgets();
+});
+document.getElementById("marcar-ninguno").addEventListener("click", ()=>{
+  elegidos.clear();
+  guardarSeleccion(); pintarCatalogo(); pintarWidgets();
+});
 
 /* =====================================================================
    WIDGETS — lo que se marca en el sidebar aparece acá abajo
