@@ -184,7 +184,6 @@
 
   <!-- ══ WIDGETS DE LO MARCADO EN EL SIDEBAR ══ -->
   <section id="zona-widgets" hidden>
-    <h2 id="titulo-widgets">Lo que marcaste</h2>
     <div class="rejilla" id="widgets"></div>
   </section>
 </div>
@@ -536,8 +535,6 @@ function pintarWidgets(){
     g.items.filter(([id])=>elegidos.has(id)).map(([id,et])=>({id,et})));
 
   zona.hidden = ids.length === 0;
-  document.getElementById("titulo-widgets").textContent =
-    `Lo que marcaste (${ids.length})`;
 
   caja.innerHTML = ids.map(({id,et})=>{
     let cuerpo = null, hueco = false;
