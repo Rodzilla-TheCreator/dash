@@ -521,7 +521,17 @@ async function cargarFx(){
 function usd(v){ return v==null ? null : "$"+Math.round(v).toLocaleString("en-US")+" USD"; }
 function num(v){ return v==null ? null : Number(v).toLocaleString("es-HN"); }
 function pct(v){ return v==null ? null : (Math.round(v*10)/10)+"%"; }
-/* FIX del dolar en el Dash: RADAR devuelve los montos de factura_lineas_sap
+/* OJO: esta conversion ya NO se usa, y no se borra para que quede el porque.
+   Cuando se escribio, RADAR sumaba `factura_lineas_sap.total_linea`, que viene en
+   la moneda nativa del documento, y los montos de categorias e ingresos de renta
+   llegaban en lempiras. RADAR se arreglo y ahora suma `total_usd`: se comprobo
+   contra la base que la renta del mes da 72.366,77 en el payload y 72.366,77 en
+   el SQL. Seguir dividiendo hundia los numeros 27 veces -- la renta del ano salia
+   en 43.304 cuando son 1.170.070. Si algun dia vuelve a venir en lempiras, la
+   funcion esta aca. Antes de usarla, comprobarlo con SQL.
+
+   Lo de abajo es el comentario original:
+   RADAR devuelve los montos de factura_lineas_sap
    (categorias, ingresos de renta) en LEMPIRAS sin convertir (aviso factor ~23x).
    Convertimos aca, SIN tocar la app de Fabri, usando el MISMO tipo de cambio que
    usa Fabri (el que trae el JSON de RADAR, hoy 27) para no descuadrar numeros con
@@ -537,7 +547,9 @@ const RADAR_MAP = {
   "1.1": rd=>{ const f=rd.ventas&&rd.ventas.facturado; if(!f||f.mes==null) return null; return BN(usd(f.mes),"mes · hoy "+usd(f.hoy)+" · YTD "+usd(f.ytd)); },
   "1.2": rd=>{ const m=rd.ventas&&rd.ventas.meta; if(!m||m.cumplimiento_pct==null) return null; return BN(pct(m.cumplimiento_pct),"cumplimiento · meta "+usd(m.meta_cargada_usd)); },
   "1.3": rd=>{ const a=rd.ventas&&rd.ventas.por_vendedor; if(!a||!a.length) return null; return LST(a.slice().sort((x,y)=>(y.mes||0)-(x.mes||0)).slice(0,6).map(v=>[v.vendedor,usd(v.mes)])); },
-  "1.4": rd=>{ const a=rd.ventas&&rd.ventas.por_categoria; if(!a||!a.length) return null; return LST(a.slice().sort((x,y)=>(y.lineas_ytd||0)-(x.lineas_ytd||0)).map(c=>{ const v=fixUsd(c.ytd,rd); return [c.categoria, v!=null ? usd(v) : (num(c.lineas_ytd)+" ren.")]; })); },
+  /* `ytd` ya viene en dolares (RADAR suma total_usd): no se convierte. Ordenado
+     por plata y no por numero de lineas, que es la pregunta real. */
+  "1.4": rd=>{ const a=rd.ventas&&rd.ventas.por_categoria; if(!a||!a.length) return null; return LST(a.slice().sort((x,y)=>(y.ytd||0)-(x.ytd||0)).map(c=>[c.categoria, c.ytd!=null ? usd(c.ytd) : (num(c.lineas_ytd)+" ren.")])); },
   "1.5": rd=>{ const t=rd.ventas&&rd.ventas.ticket_promedio; if(!t||t.mes==null) return null; return BN(usd(t.mes),"ticket promedio (mes)"); },
   "1.6": rd=>{ const f=rd.ventas&&rd.ventas.facturado; if(!f||f.ytd_yoy_pct==null) return null; return BN((f.ytd_yoy_pct>0?"+":"")+pct(f.ytd_yoy_pct),"YTD "+usd(f.ytd)+" vs "+usd(f.ytd_anio_anterior), f.ytd_yoy_pct>=0?"--green":"--red"); },
   "1.7": rd=>{ const f=rd.ventas&&rd.ventas.forecast; if(!f||f.estimado==null) return null; return ROWS([["Estimado",usd(f.estimado)],["Real",usd(f.real)],["Precisión",pct(f.precision_pct)]]); },
@@ -558,7 +570,7 @@ const RADAR_MAP = {
   "3.6": rd=>{ const c=rd.cobros; if(!c||c.dso_dias==null) return null; return BN(num(c.dso_dias),"DSO (días de cobro)"); },
   "3.7": rd=>{ const nc=rd.cobros&&rd.cobros.notas_credito; if(!nc||nc.saldo==null) return null; return BN(usd(nc.saldo),(nc.n!=null?nc.n+" ":"")+"notas de crédito (saldo)"); },
   "4.1": rd=>{ const c=rd.cashflow; if(!c||c.facturado_mes==null) return null; return ROWS([["Facturado mes",usd(c.facturado_mes)],["Cobrado mes",usd(c.cobrado_mes)],["Brecha",usd(c.brecha_mes)]]); },
-  "5.3": rd=>{ const f=rd.flota; if(!f) return null; const v=fixUsd(f.ingresos_renta_mes,rd); if(v==null) return null; return BN(usd(v),"ingresos por renta (mes)"); },
+  "5.3": rd=>{ const f=rd.flota; if(!f||f.ingresos_renta_mes==null) return null; return BN(usd(f.ingresos_renta_mes),"ingresos por renta (mes)"); },
   "6.3": rd=>{ const t=rd.taller; if(!t||t.equipos_en_reparacion==null) return null; return BN(num(t.equipos_en_reparacion),"equipos en reparación","--red"); },
   "7.1": rd=>{ const v=rd.actividad&&rd.actividad.visitas; if(!v) return null; return ROWS([["Hoy",num(v.dia)],["Semana",num(v.semana)]]); },
   "7.2": rd=>{ const a=rd.actividad&&rd.actividad.actividades; if(!a) return null; return ROWS([["Pendientes",num(a.pendientes)],["Vencidas",num(a.vencidas)]]); },

@@ -1,15 +1,27 @@
 # Auditoría de indicadores — 2026-09-18
 
-> **Los cuatro rojos quedaron arreglados el mismo día.** Cada uno lleva ✅ abajo con lo que
-> da ahora. Los amarillos siguen abiertos.
+> **Segunda pasada, 18 de septiembre.** A los cuatro rojos del principio se les sumaron
+> siete hallazgos más (12 a 18) al revisar los 78 indicadores del tablero de Cristian uno por
+> uno y contra datos vivos. Cada uno lleva ✅ o ⚠️ con lo que da ahora.
+>
+> **El más caro no estaba en el tablero nuevo sino en el de Oficina:** la renta del año se
+> mostraba en $43,304 y son $1,170,070 — ver el hallazgo 12.
 
 Revisión de los tres tableros (**Oficina**, **Taller**, **Cristian**) contra los datos vivos
 de RADAR y de la base de Miguel. No es una lista de ideas: cada punto se comprobó
 consultando la fuente, y dice cómo.
 
-**Resumen:** de 78 indicadores, **36 de los 37 de RADAR dan dato correcto**. Los problemas
-están casi todos del lado del taller, y **cuatro dan números que parecen buenos y están
-mal** — que es peor que no tener el dato.
+**Resumen:** de los 78 del tablero de Cristian, **63 dan dato** y **15 salen como hueco con
+el motivo escrito**. Ninguno sale con el texto genérico de "todavía no conectado", que era
+mentira en seis de ellos: RADAR sí explica qué le falta y ahora se muestra su explicación.
+
+**28 de los 63 se parten por empresa**, y cuáles no se adivinó: se pidió el endpoint con los
+cuatro cortes y se sumaron las empresas contra el grupo. Los del taller se parten por los dos
+nodos de Firebase que existen.
+
+El patrón de todos los hallazgos es el mismo y vale más que la lista: **acá los datos no
+fallan con un error, fallan devolviendo un número.** Cero, el mismo número repetido, o el
+número correcto dividido entre 27.
 
 ---
 
@@ -163,14 +175,129 @@ están escritos con el campo bueno.
 ✅ **Hecho.** Corregidos los nombres de campo. Ahora `1.3` da Audry Garcia $52,697 · 
 Administracion $17,134 · Christian Quesada $14,372, y `10.1` Monhaco $82,768.
 
-El `1.4` llevaba además un segundo error escondido detrás del primero: las categorías vienen
-de `factura_lineas_sap` **en lempiras sin convertir**. Se agregó `aUsd()`, que usa el mismo
-tipo de cambio del payload que usa Oficina. Sin eso el arreglo habría mostrado renta a
-$1,170,000 en vez de $43,304.
+En el `1.4` se agregó de paso una conversión a dólares, copiando lo que hace Oficina.
+**Eso estaba mal y se revirtió el mismo día** — ver el hallazgo 12.
 
 **Hallazgo suelto:** `por_vendedor` trae *"Administracion"* y *"Administraci�n"* como dos
 vendedores distintos — el mismo nombre con la tilde mal codificada en el origen. Pasa igual en
 Oficina. Es dato de SAP, no del tablero.
+
+### 12. 🔴 La renta del año aparecía en **$43,304** y son **$1,170,070**
+
+El error más caro de toda la auditoría, y estaba en el tablero de **Oficina**, que es el que
+mira Omar.
+
+`fixUsd()` divide entre el tipo de cambio los montos de `ventas.por_categoria` y de
+`flota.ingresos_renta_mes`. El comentario explicaba por qué: RADAR sumaba
+`factura_lineas_sap.total_linea`, que viene en la moneda nativa del documento, así que los
+montos llegaban en lempiras.
+
+**Eso fue cierto y dejó de serlo.** RADAR ahora suma `total_usd`. Se comprobó categoría por
+categoría contra la base, y coinciden al centavo:
+
+| | RADAR dice | `sum(total_linea)` | `sum(total_usd)` |
+|---|---|---|---|
+| renta | 1,170,070 | 73,729,645 | **1,170,070** |
+| repuestos | 119,516 | 26,280,713 | **119,516** |
+| venta_equipo | 223,435 | 5,913,120 | **223,435** |
+
+Y la renta del mes: `flota.ingresos_renta_mes` = 72,366.77, y el SQL da 72,366.77.
+
+Así que seguir dividiendo hundía los números **27 veces**:
+
+| | antes | ahora |
+|---|---|---|
+| `1.4` renta del año | $43,304 | **$1,170,070** |
+| `5.3` renta del mes | $2,679 | **$72,367** |
+
+Y no era sólo un número feo: con $43,304 la renta parecía el **2.6%** de lo facturado, cuando
+es el **69%**. Una empresa de renta de montacargas se veía como si viviera de otra cosa.
+
+✅ **Hecho** en los dos tableros. La función queda en el archivo con la explicación de por
+qué ya no se usa y qué comprobar antes de volver a usarla — porque el día que RADAR cambie
+otra vez, el comentario de hoy va a ser el que engañe.
+
+`total_linea` no sirve para plata en ningún caso: mezcla LPS, USD y colones en la misma
+columna, y las filas marcadas `USD` traen valores 545 veces más grandes que su `total_usd`.
+
+### 13. 🔴 125 oportunidades tienen `empresa_id = 'all'`
+
+Sumando los cuatro cortes de empresa contra el corte de grupo, el pipeline no cuadra: 1,113
+contra 1,149 abiertas, y $5.46M contra $5.83M. Faltan 36 en el dashboard, y en la tabla la
+causa es más grande:
+
+```
+honduras   2403    $15,348,294
+costarica   219     $1,535,959
+all         125       $638,204   ← el literal del filtro, no una empresa
+monhagro      2        $32,037
+```
+
+**`'all'` es la palabra que usa el filtro, no una compañía.** Esas oportunidades aparecen en
+el total del grupo y en ninguna empresa, así que no las ve nadie que mire su propio corte.
+
+⚠️ **Mostrado, no arreglado.** El arreglo es de datos, no de tablero. Mientras tanto, los
+cuatro indicadores partidos que lo sufren (`2.1`, `2.3`, `2.7`) dicen al pie cuántas quedaron
+sin empresa, en vez de dejar que la suma no cuadre en silencio.
+
+### 14. 🔴 Pedir por empresa devuelve ceros y repetidos, sin avisar
+
+Este endpoint no falla con un error: falla devolviendo algo. Se probaron los cuatro cortes y
+hay tres comportamientos distintos, y sólo uno es correcto:
+
+| bloque | qué pasa al pedir por empresa |
+|---|---|
+| ventas, cobros, cashflow, clientes | **suma igual al grupo** — se puede partir |
+| `flota.*`, `taller.equipos_en_reparacion` | **devuelve 0** en las cuatro |
+| `actividad.*`, `leads.*`, `clientes.tickets`, `taller.mant_*`, `ventas.forecast` | **el mismo número en las cuatro** |
+
+Lo tercero es lo peligroso: `leads.por_canal` da **882 en cada empresa y 881 en el grupo** —
+o sea que ni filtra, ni cuadra, y por empresa da más que el total.
+
+✅ **Hecho.** Los 28 que sí cuadran se parten en secciones por empresa. Los 15 que no traen
+escrito el motivo en la tarjeta, con el número comprobado. Ninguno se parte "por si acaso".
+
+### 15. 🔴 `T8.3` decía **0 equipos sin horómetro** y son **186 de 212**
+
+Un bug de una línea, en el tablero nuevo de Cristian. La función que lee números hacía
+`Number(String(v))`, y `Number("")` es **0**, no `NaN`. Así que un horómetro en blanco no
+contaba como "falta el dato" sino como **cero horas**, y el indicador de calidad de datos
+reportaba calidad perfecta.
+
+Arrastraba a dos más: el `10.3` decía lo mismo, y el texto del `T5.2` también.
+
+✅ **Hecho.** Ahora: Montasa 59 de 84, Monhaco 127 de 128, grupo 186 de 212 — el mismo número
+que da Oficina, que es la comprobación.
+
+### 16. 🟡 `4.4` Caja chica: 15 registros, los 15 liquidados, todos del mismo día
+
+El nodo existe y tiene datos, así que "0 pendientes" habría pasado por dato bueno. Pero los
+15 registros que hay están todos en `Liquidado`, todos en Choloma, todos cargados el
+2026-08-06 con `origen: "Liquidacion MONHACO 2026-08-06 (Excel Christian)"`, por L 9,223.
+
+No es una cola de gastos por aprobar: es **una carga de Excel que pasó una vez**. Cero
+pendientes es literalmente cierto y como indicador no dice nada — el mismo caso que el `4.5`.
+
+✅ **Hecho.** Sale como hueco explicando que son 15 de una sola carga, en vez de un cero.
+
+### 17. 🟡 `T6.2` no muestra repuestos, muestra trabajos
+
+El campo de las solicitudes es `desc` y trae *"Mantenimiento 250 horas"* (23 veces),
+*"Cambio de aceite y filtros"*, *"prueba"*. Ninguno es un repuesto. La app no tiene campo de
+pieza pedida.
+
+✅ **Parcial.** Se filtran los registros de prueba y la tarjeta dice qué está contando. El
+indicador no se puede tener hasta que la app guarde el repuesto.
+
+### 18. 🟡 `T5.2` y `T5.3` no se pueden calcular sin inventar un intervalo
+
+Los preventivos no traen fecha de próximo vencimiento. El intervalo está escrito en las notas
+(*"Mantenimiento 250 horas"*), o sea que depende del horómetro — y el horómetro falta en 186
+de 212 equipos (hallazgo 15).
+
+✅ **Dicho, no inventado.** Salen como "No calculable" con el motivo y mandan al `6.1`, que
+es la cuenta que RADAR sí lleva. Elegir un intervalo por defecto habría dado un número
+inventado con cara de dato.
 
 ---
 
@@ -195,7 +322,15 @@ Oficina. Es dato de SAP, no del tablero.
 - **Firebase:** los 27 de Taller y los 6 de Oficina renderizados en el navegador con datos
   vivos, y los campos sospechosos (`tecnico`, `estado` de solicitudes, `kmSalida`/`kmRetorno`,
   `falla`) contados directo contra la base.
-- **Supabase:** se usó para el potencial de renta y para confirmar la composición de flota.
+- **Supabase:** se usó para el potencial de renta, para confirmar la composición de flota,
+  para saber qué columna suma RADAR en las categorías (hallazgo 12) y para encontrar el
+  `empresa_id='all'` (hallazgo 13).
+- **Los cuatro cortes por empresa** (`?empresa=honduras|montasa|monhagro|costarica`) se
+  bajaron y se sumaron contra `?empresa=all`, métrica por métrica. Es lo que separó los 28
+  que se pueden partir de los 15 que no.
+- **Los 78 del tablero de Cristian** se renderizaron en el navegador con los payloads reales
+  y se leyó el texto de cada tarjeta. Así salieron el `T8.3` en cero (hallazgo 15), los ids
+  opacos del `T4.2` y el `null` que imprimía el `2.6`.
 
 ## Orden sugerido
 

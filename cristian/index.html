@@ -79,6 +79,50 @@
   .wid.hueco .wid-val{color:var(--tinta-suave);font-size:20px;}
   .wid.hueco .wid-sub{color:var(--tinta-suave);}
 
+  /* Tamanos: ver la tabla TAM en el script. La rejilla es auto-fill, asi que
+     un span que no cabe se recorta solo, y en telefono todo cae a una columna. */
+  .wid.w2{grid-column:span 2;}
+  .wid.w3{grid-column:span 3;}
+  .wid.h2{min-height:232px;}
+
+  /* Secciones por empresa: al costado y no apiladas, para que el ojo compare
+     los tres numeros en la misma linea de base. */
+  .wid-emp{display:flex;flex:1;align-items:stretch;min-width:0;}
+  .wid-emp .sec{flex:1;min-width:0;padding:0 14px;border-left:1px solid var(--linea);
+    display:flex;flex-direction:column;justify-content:center;}
+  .wid-emp .sec:first-child{padding-left:0;border-left:0;}
+  .wid-emp .sec .emp{font-size:9.5px;font-weight:700;letter-spacing:.07em;
+    text-transform:uppercase;color:var(--tinta-suave);margin-bottom:6px;}
+  .wid-emp .sec .n{font-size:20px;font-weight:700;color:var(--verde);line-height:1.15;
+    font-variant-numeric:tabular-nums;}
+  .wid-emp .sec .s{font-size:10.5px;color:var(--tinta-media);margin-top:3px;line-height:1.35;}
+  /* Cero no se pinta como logro: queda gris para que no compita con los que si tienen. */
+  .wid-emp .sec.cero .n{color:var(--tinta-suave);}
+  /* Montasa HN esta retirada: entra apagada, y solo si tiene algo. */
+  .wid-emp .sec.retirada{opacity:.58;}
+  .wid-tot{margin-top:11px;padding-top:9px;border-top:1px solid var(--linea);
+    font-size:10.5px;color:var(--tinta-media);line-height:1.45;}
+  .wid-tot code{font-size:10px;background:#F1F1EF;padding:1px 4px;border-radius:3px;}
+  .wid-nota{margin-top:9px;font-size:10px;color:var(--tinta-suave);line-height:1.45;}
+
+  /* Semaforos (10.3) */
+  .sem{display:flex;flex-direction:column;gap:7px;font-size:11.5px;flex:1;justify-content:center;}
+  .sem-fila{display:flex;align-items:center;gap:9px;}
+  .sem-fila .luz{width:9px;height:9px;border-radius:50%;flex:0 0 auto;}
+  .sem-fila .luz.verde{background:#3FA96A;}
+  .sem-fila .luz.ambar{background:#D89B1C;}
+  .sem-fila .luz.rojo{background:#C8553D;}
+  .sem-fila .et{flex:1;min-width:0;color:var(--tinta-media);overflow:hidden;
+    text-overflow:ellipsis;white-space:nowrap;}
+  .sem-fila .vl{font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap;}
+
+  @media (max-width:720px){
+    /* a una columna los span estorban, y las secciones se apilan */
+    .wid.w2,.wid.w3{grid-column:span 1;}
+    .wid-emp{flex-direction:column;gap:11px;}
+    .wid-emp .sec,.wid-emp .sec:first-child{padding:0 0 0 11px;border-left:1px solid var(--linea);}
+  }
+
   /* ── sidebar escondida ────────────────────────────────────────── */
   .velo{position:fixed;inset:0;background:rgba(26,29,31,.35);opacity:0;pointer-events:none;
     transition:opacity .18s;z-index:40;}
@@ -400,156 +444,862 @@ function topLista(ruta, campoNombre, campoValor, n, formato){
     .map(x=>[ String(x[campoNombre] ?? "—"), (formato||usd)(x[campoValor]) ]));
 }
 
-/* RADAR devuelve los montos de factura_lineas_sap (las categorias) en LEMPIRAS
-   sin convertir. Se convierte aca con el MISMO tipo de cambio que trae el payload,
-   para no descuadrar con los numeros de Fabri. El resto de los montos ya son USD. */
-function aUsd(v){
-  if(v==null) return null;
-  const t = pick(DATOS,"tipo_cambio.honduras.tasa");
-  return t ? v/t : null;
+/* =====================================================================
+   POR EMPRESA
+   ---------------------------------------------------------------------
+   Este tablero no es el de Oficina y no tiene por qué mostrar lo mismo:
+   acá varios indicadores se abren en secciones, una por empresa.
+
+   Qué se puede partir y qué no NO se adivinó: se pidió el endpoint con
+   los cuatro cortes y se sumaron las cuatro empresas contra el grupo.
+   Los que cuadran se parten. Los que no, salen a nivel grupo con el
+   motivo escrito — porque el modo en que este endpoint falla no es
+   devolver error, es devolver CERO o devolver EL MISMO NÚMERO en las
+   cuatro empresas, y eso pasa por dato bueno si nadie lo compara.
+   ===================================================================== */
+const EMPRESAS = [
+  { id:"honduras",  nombre:"Monhaco" },
+  { id:"monhagro",  nombre:"Monhagro" },
+  { id:"costarica", nombre:"Costa Rica" }
+];
+/* Montasa HN quedó retirada en octubre de 2025. No se borra —todavía tiene
+   acumulado del año— pero sólo aparece como cuarta sección cuando ese
+   indicador le da algo distinto de cero, para no dibujar una columna vacía. */
+const RETIRADA = { id:"montasa", nombre:"Montasa HN" };
+const PAY = {};
+
+async function cargarEmpresas(){
+  await Promise.all([...EMPRESAS, RETIRADA].map(async e=>{
+    try{
+      const r = await fetch(`${RADAR_API}?empresa=${e.id}`,
+        { headers:{ Authorization:"Bearer " + RADAR_TOKEN }, cache:"no-store" });
+      if(r.ok) PAY[e.id] = await r.json();
+    }catch(_){ /* si una empresa falla, las otras siguen */ }
+  }));
+}
+
+/* Las secciones de un widget partido. Van al costado, no apiladas: así el
+   ojo compara tres números en la misma línea de base. */
+function secciones(filas, pie){
+  return `<div class="wid-emp">` + filas.map(f=>
+    `<div class="sec${f.cero?" cero":""}${f.retirada?" retirada":""}">`
+    + `<div class="emp">${f.emp}</div><div class="n">${f.n}</div>`
+    + (f.s ? `<div class="s">${f.s}</div>` : "")
+    + `</div>`).join("") + `</div>`
+    + (pie ? `<div class="wid-tot">${pie}</div>` : "");
+}
+
+/* `get` recibe el payload de una empresa y devuelve [valor, subtítulo, esCero].
+   `brecha` es para los indicadores donde la suma de las cuatro NO da el grupo:
+   en vez de esconder la diferencia, se dice cuánta es y de dónde sale. */
+function porEmpresa(get, opt){
+  if(!DATOS) return null;
+  opt = opt || {};
+  const filas = [];
+  for(const e of EMPRESAS){
+    const p = PAY[e.id]; if(!p) continue;
+    const r = get(p); if(!r) continue;
+    filas.push({ emp:e.nombre, n:r[0], s:r[1], cero:r[2]===true });
+  }
+  if(!filas.length) return null;
+  const pr = PAY[RETIRADA.id] && get(PAY[RETIRADA.id]);
+  if(pr && pr[2]!==true) filas.push({ emp:RETIRADA.nombre, n:pr[0], s:pr[1], retirada:true });
+
+  const g = get(DATOS);
+  let pie = g ? `Grupo <b>${g[0]}</b>` : "";
+  if(opt.brecha){
+    const suma = [...EMPRESAS, RETIRADA].reduce((a,e)=>
+      a + (PAY[e.id] ? (opt.brecha(PAY[e.id]) || 0) : 0), 0);
+    const tot = opt.brecha(DATOS) || 0;
+    const d = tot - suma;
+    const f = opt.formato || fmt;
+    if(d > 0) pie += ` · ${f(d)} sin empresa (quedaron con <code>empresa_id='all'</code>)`;
+  }
+  return secciones(filas, pie);
+}
+
+/* Por qué estos NO se parten. Cada motivo se comprobó, no se supone. */
+const NO_SEPARABLE = {
+  "1.5":"Pedido por empresa, el ticket promedio viene vacío en Montasa HN y Monhagro.",
+  "1.7":"RADAR devuelve el mismo pronóstico en las cuatro empresas: el filtro no llega al forecast.",
+  "2.9":"El ciclo de venta viene vacío en tres de los cuatro cortes.",
+  "3.6":"El DSO viene vacío en el corte de Montasa HN.",
+  "5.1":"Pedida por empresa, RADAR devuelve la flota en cero. Sólo cuadra a nivel grupo.",
+  "5.2":"Mismo motivo que 5.1: el denominador por empresa llega en cero y el porcentaje no se puede calcular.",
+  "6.1":"RADAR devuelve 2 próximos en las cuatro empresas por igual: el filtro no se aplica a mantenimientos.",
+  "6.3":"Por empresa devuelve cero equipos en reparación, aunque a nivel grupo son 43.",
+  "7.1":"Las visitas vienen en cero en todos los cortes y RADAR explica por qué: no existe el campo de visita planeada.",
+  "7.2":"Las 231 actividades pendientes se repiten idénticas en las cuatro empresas: el filtro no se aplica.",
+  "7.3":"Las alertas vienen en cero en todos los cortes.",
+  "7.4":"Las giras del mes se repiten idénticas en las cuatro empresas.",
+  "8.4":"Los tickets se repiten idénticos en las cuatro empresas.",
+  "9.1":"Los leads por canal salen iguales en las cuatro empresas — y por empresa dan 882 contra 881 del grupo, o sea que ni se filtran ni cuadran.",
+  "9.3":"Mismo origen que 9.1: la conversión de leads no distingue empresa."
+};
+/* Hueco con la razón que da RADAR, más una pista nuestra si la hay. */
+function sinFuente(llave, pista){
+  const r = pick(DATOS, "no_disponible." + llave);
+  if(!DATOS) return null;
+  return { hueco:true, html:V("Sin fuente",
+    (r || "RADAR no publica este dato.") + (pista ? " " + pista : "")) };
+}
+function nota(id){
+  return NO_SEPARABLE[id] ? `<div class="wid-nota">No se parte por empresa: ${NO_SEPARABLE[id]}</div>` : "";
+}
+
+/* =====================================================================
+   TALLER — la base de Miguel
+   ---------------------------------------------------------------------
+   Se guardan las órdenes CRUDAS y no un puñado de conteos, porque los
+   indicadores de tiempo necesitan recalcular sobre cada orden. Cada una
+   queda marcada con la empresa de la que salió (`_emp`), así los del
+   taller también se pueden partir — con dos secciones y no tres, porque
+   en Firebase sólo existen los nodos `montasa` y `monhaco`: Monhagro
+   todavía no tiene app.
+
+   Los cálculos son los mismos que ya se auditaron en el tablero de
+   Oficina, con las tres correcciones que salieron de ahí: el desfase de
+   UTC, el campo `tecnico` con varios nombres por celda, y el odómetro.
+   ===================================================================== */
+let T = null;
+const NODOS_FB = [{ nodo:"montasa", nombre:"Montasa" }, { nodo:"monhaco", nombre:"Monhaco" }];
+
+const aNum = v => {
+  if(v == null) return null;
+  const t = String(v).replace(/[^\d.-]/g, "").trim();
+  /* Sin este corte, Number("") da 0 y un horometro en blanco pasaba por
+     "cero horas": T8.3 reportaba 0 equipos sin horometro en vez de 186. */
+  if(t === "" || t === "-" || t === ".") return null;
+  const x = Number(t);
+  return isFinite(x) ? x : null;
+};
+function momento(t){
+  t = String(t == null ? "" : t).trim(); if(t.length < 10) return null;
+  let m = t.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
+  if(m) return new Date(+m[1], +m[2]-1, +m[3], +m[4], +m[5]);
+  m = t.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})/);
+  if(m) return new Date(+m[3], +m[2]-1, +m[1], +m[4], +m[5]);
+  m = t.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if(m) return new Date(+m[1], +m[2]-1, +m[3]);
+  return null;
+}
+function minDeTexto(t){
+  t = String(t == null ? "" : t).trim(); if(!t) return null;
+  const h = t.match(/(\d+)\s*h/), m = t.match(/(\d+)\s*min/);
+  if(!h && !m) return null;
+  return (h ? parseInt(h[1],10)*60 : 0) + (m ? parseInt(m[1],10) : 0);
+}
+const TOPE_MIN = 24*60;   // más que esto es orden olvidada abierta, no trabajo largo
+/* 63 de 170 órdenes traen `fechaInicio` DESPUÉS de `fechaFin`: el inicio se
+   guarda en UTC y el fin en hora local. Restar 6 h recupera 59 de las 63.
+   Es compensación de lectura: el arreglo va en la app de Miguel, y el día que
+   lo haga hay que quitar esto o se resta dos veces. */
+function duracion(o){
+  let a = momento(o.inicioTrabajo), b = momento(o.finTrabajo);
+  if(a && b && (b-a) >= 0) return { min:Math.round((b-a)/60000), fuente:"marcas" };
+  const m = minDeTexto(o.horasTrab);
+  if(m != null) return { min:m, fuente:"horasTrab" };
+  a = momento(o.fechaInicio); b = momento(o.fechaFin);
+  if(a && b){
+    const crudo = Math.round((b-a)/60000);
+    if(crudo < 0){
+      const corr = Math.round((b - (a - 6*3600000))/60000);
+      if(corr >= 0 && corr <= TOPE_MIN) return { min:corr, fuente:"fechas(-6h)" };
+    }
+    return { min:crudo, fuente:"fechas" };
+  }
+  return { min:null, fuente:null };
+}
+const durUtil = o => { const d = duracion(o); return (d.min != null && d.min >= 0 && d.min <= TOPE_MIN) ? d.min : null; };
+const hhmm = min => { if(min == null) return "—";
+  const h = Math.floor(min/60), m = Math.round(min%60);
+  return h ? h+"h "+String(m).padStart(2,"0")+"min" : m+"min"; };
+const mediana = a => { if(!a.length) return null;
+  const s = [...a].sort((x,y)=>x-y), k = s.length>>1;
+  return s.length%2 ? s[k] : Math.round((s[k-1]+s[k])/2); };
+const cerrada = o => o.completado === true || o._nodo === "ordenesCerradas"
+  || ["completado","cerrado","finalizado"].includes(String(o.estado||"").trim().toLowerCase());
+
+/* El campo `tecnico` trae VARIOS nombres en una sola cadena en la mitad de las
+   órdenes. Contar la cadena entera hacía que cada cuadrilla figurara como un
+   técnico distinto. Se parte por coma, y se descartan los registros de prueba:
+   "Miguel (Pruebas)" está mezclado con los reales en producción. */
+const personas = v => String(v == null ? "" : v).split(",").map(x=>x.trim())
+  .filter(x => x && !/\(pruebas?\)/i.test(x));
+
+function topN(lista, campo, n){
+  const c = {};
+  lista.forEach(x=>{ const v = String((typeof campo === "function" ? campo(x) : x[campo]) || "").trim();
+    if(v) c[v] = (c[v]||0)+1; });
+  return Object.entries(c).sort((a,b)=>b[1]-a[1]).slice(0, n||6);
+}
+function topPersonas(lista, campo, n){
+  const c = {};
+  lista.forEach(x=>personas(x && x[campo]).forEach(p=>{ c[p] = (c[p]||0)+1; }));
+  return Object.entries(c).sort((a,b)=>b[1]-a[1]).slice(0, n||6);
+}
+function medianasPor(campo, lista){
+  const g = {};
+  (lista || T.ords).forEach(o=>{
+    const k = String(o[campo]||"").trim(); if(!k) return;
+    const m = durUtil(o); if(m == null) return;
+    (g[k] = g[k] || []).push(m);
+  });
+  return Object.entries(g).map(([k,v])=>({ et:k, med:mediana(v), n:v.length }))
+    .sort((a,b)=>b.n-a.n);
+}
+/* Los viáticos NO están en `bitacora/data-viajes` (ese nodo no existe). Están
+   DENTRO de las órdenes, en `viaticos`, con combustible, peaje, hospedaje y un
+   arreglo `facturas[]`; las comidas van aparte en `vales`. */
+function viaticosDe(o){
+  const v = o.viaticos; if(!v || typeof v !== "object") return null;
+  const num = x => { const n = aNum(x); return n == null ? 0 : n; };
+  const facturas = (Array.isArray(v.facturas) ? v.facturas : []).reduce((a,f)=>a+num(f&&f.monto), 0);
+  const vales = (Array.isArray(o.vales) ? o.vales : []).reduce((a,x)=>a+num(x&&x.monto), 0);
+  return { _emp:o._emp,
+    combustible:num(v.combustible), peaje:num(v.costo_peaje), hospedaje:num(v.hospedaje),
+    facturas, vales, destino:String(v.destino||"").trim(),
+    total:num(v.combustible)+num(v.costo_peaje)+num(v.hospedaje)+facturas+vales };
+}
+const viaticos = lista => (lista || T.ords).map(viaticosDe).filter(Boolean);
+const lps = n => n == null ? "—" : "L " + Number(n).toLocaleString("es-HN", {maximumFractionDigits:0});
+
+async function cargarTaller(){
+  const hoja = async (h) => {
+    const out = [];
+    for(const { nodo } of NODOS_FB){
+      try{
+        const r = await fetch(`${FB}/${nodo}/${h}.json?_=${Date.now()}`, { cache:"no-store" });
+        const d = await r.json();
+        Object.entries(d || {}).forEach(([k,v])=>{
+          if(v && typeof v === "object") out.push(Object.assign({ _emp:nodo, _nodo:h, _id:nodo+":"+k }, v));
+        });
+      }catch(_){}
+    }
+    return out;
+  };
+  const [eq, corr, prev, cerr, sol, rep] = await Promise.all(
+    ["equipos","correctivos","preventivos","ordenesCerradas","solicitudes","repuestos"].map(hoja));
+  T = { equipos:eq, correctivos:corr, preventivos:prev, cerradas:cerr, solicitudes:sol,
+        repuestos:rep, ords:corr.concat(prev, cerr) };
+}
+
+/* Igual que porEmpresa pero para el taller: dos nodos, no cuatro cortes. */
+function porNodo(get, pie){
+  if(!T) return null;
+  const filas = [];
+  for(const { nodo, nombre } of NODOS_FB){
+    const r = get(nodo); if(!r) continue;
+    filas.push({ emp:nombre, n:r[0], s:r[1], cero:r[2] === true });
+  }
+  if(!filas.length) return null;
+  const g = get(null);
+  return secciones(filas, (g ? `Grupo <b>${g[0]}</b>` : "")
+    + (pie ? ` · ${pie}` : " · Monhagro no tiene app de taller todavía"));
+}
+const ordsDe = emp => emp ? T.ords.filter(o=>o._emp === emp) : T.ords;
+const eqDe   = emp => emp ? T.equipos.filter(o=>o._emp === emp) : T.equipos;
+
+/* =====================================================================
+   MONEDA — por qué acá no se convierte nada
+   ---------------------------------------------------------------------
+   `factura_lineas_sap` tiene dos columnas de plata: `total_linea`, en la
+   moneda nativa del documento (y revuelta: hay filas en LPS, en USD y en
+   colones, con la etiqueta a veces equivocada), y `total_usd`, ya
+   convertida. Se comprobó contra el SQL que RADAR suma `total_usd`: la
+   renta del mes da 72.366,77 en el payload y 72.366,77 en la base.
+
+   O sea que `por_categoria` y `ingresos_renta_mes` YA VIENEN EN DÓLARES,
+   y dividirlos por el tipo de cambio los hunde 27 veces. El tablero de
+   Oficina traía esa división —fue cierta antes de que RADAR se arreglara—
+   y por eso ahí la renta del año sale en 43.304 cuando son 1.170.070.
+   ===================================================================== */
+
+/* Listas de varias filas, una por empresa: para rankings partidos. */
+function seccionesLista(filas, pie){
+  return `<div class="wid-emp">` + filas.map(f=>
+    `<div class="sec"><div class="emp">${f.emp}</div>${f.html || '<div class="s">sin dato</div>'}</div>`
+  ).join("") + `</div>` + (pie ? `<div class="wid-tot">${pie}</div>` : "");
+}
+function rankEmpresa(ruta, campoNombre, campoValor, n, formato){
+  if(!DATOS) return null;
+  const arma = p => {
+    const a = pick(p, ruta);
+    if(!Array.isArray(a) || !a.length) return null;
+    const top = a.slice().sort((x,y)=>(y[campoValor]||0)-(x[campoValor]||0))
+      .filter(x=>(x[campoValor]||0) > 0).slice(0, n||4);
+    if(!top.length) return null;
+    return L(top.map(x=>[String(x[campoNombre] ?? "—"), (formato||usd)(x[campoValor])]));
+  };
+  const filas = EMPRESAS.map(e=>({ emp:e.nombre, html:PAY[e.id] ? arma(PAY[e.id]) : null }));
+  if(!filas.some(f=>f.html)) return null;
+  return seccionesLista(filas);
 }
 
 const MAPA = {
-  /* 1 · Ventas */
-  "1.1": ()=> L([["Hoy",usd(pick(DATOS,"ventas.facturado.hoy"))],
-                 ["Semana",usd(pick(DATOS,"ventas.facturado.semana"))],
-                 ["Mes",usd(pick(DATOS,"ventas.facturado.mes"))]]),
-  "1.2": ()=> pick(DATOS,"ventas.meta.cumplimiento_pct") == null
-             ? { hueco:true, html:V("Sin meta", pick(DATOS,"ventas.meta.nota")) }
-             : V(pct(pick(DATOS,"ventas.meta.cumplimiento_pct")), "del mes"),
-  "1.3": ()=> topLista("ventas.por_vendedor","vendedor","mes",5),
-  "1.4": ()=>{ const a=pick(DATOS,"ventas.por_categoria");
-                 if(!Array.isArray(a)||!a.length) return null;
-                 return L(a.slice().sort((x,y)=>(y.lineas_ytd||0)-(x.lineas_ytd||0)).slice(0,6)
-                   .map(c=>{ const v=aUsd(c.ytd);
-                             return [c.categoria, v!=null ? usd(v) : fmt(c.lineas_ytd)+" ren."]; })); },
-  "1.5": ()=> V(usd(pick(DATOS,"ventas.ticket_promedio.mes")), "promedio del mes"),
-  "1.6": ()=> V(usd(pick(DATOS,"ventas.facturado.ytd")),
-                `contra ${usd(pick(DATOS,"ventas.facturado.ytd_anio_anterior"))} el año pasado · ${pct(pick(DATOS,"ventas.facturado.ytd_yoy_pct"))}`),
-  "1.7": ()=> V(usd(pick(DATOS,"ventas.forecast.estimado")),
-                `proyección del mes · precisión histórica ${pct(pick(DATOS,"ventas.forecast.precision_pct"))}`),
-  /* 2 · Pipeline */
-  "2.1": ()=> V(fmt(pick(DATOS,"pipeline.abiertas.n")), `${usd(pick(DATOS,"pipeline.abiertas.valor"))} en juego`),
-  "2.2": ()=> topLista("pipeline.por_etapa","etapa","valor",6),
-  "2.3": ()=> V(usd(pick(DATOS,"pipeline.abiertas.valor_ponderado")), "ponderado por probabilidad"),
-  "2.4": ()=> L([["Hoy",fmt(pick(DATOS,"pipeline.nuevas.dia"))],
-                 ["Semana",fmt(pick(DATOS,"pipeline.nuevas.semana"))],
-                 ["Mes",fmt(pick(DATOS,"pipeline.nuevas.mes"))]]),
-  "2.5": ()=> V(pct(pick(DATOS,"pipeline.win_rate_pct")).replace("+",""),
-                `${fmt(pick(DATOS,"pipeline.ganadas_ytd.n"))} ganadas · ${fmt(pick(DATOS,"pipeline.perdidas_ytd.n"))} perdidas`),
-  "2.6": ()=> topLista("pipeline.razones_perdida","motivo","n",5,fmt),
-  "2.7": ()=> V(fmt(pick(DATOS,"pipeline.estancadas_14d")), "sin moverse en 14 días o más"),
-  "2.8": ()=> V(fmt(pick(DATOS,"pipeline.cotizaciones_con_numero_sap.n")),
-                `${usd(pick(DATOS,"pipeline.cotizaciones_con_numero_sap.valor"))} cotizado`),
-  "2.9": ()=> V(fmt(pick(DATOS,"pipeline.ciclo_venta_dias")) + " días", "de la primera visita al cierre"),
-  /* 3 · Cobros */
-  "3.1": ()=> L([["Hoy",usd(pick(DATOS,"cobros.cobrado.hoy"))],
-                 ["Semana",usd(pick(DATOS,"cobros.cobrado.semana"))],
-                 ["Mes",usd(pick(DATOS,"cobros.cobrado.mes"))]]),
-  "3.2": ()=> V(usd(pick(DATOS,"cobros.cartera.total")),
-                `${usd(pick(DATOS,"cobros.cartera.corriente"))} corriente`),
-  "3.3": ()=> L([["1 a 30 días",usd(pick(DATOS,"cobros.cartera.antiguedad.d1_30"))],
-                 ["31 a 60",usd(pick(DATOS,"cobros.cartera.antiguedad.d31_60"))],
-                 ["61 a 90",usd(pick(DATOS,"cobros.cartera.antiguedad.d61_90"))],
-                 ["más de 90",usd(pick(DATOS,"cobros.cartera.antiguedad.d90_mas"))]]),
-  "3.4": ()=> V(Number(pick(DATOS,"cobros.cartera.morosidad_pct")).toFixed(1)+"%",
-                `${usd(pick(DATOS,"cobros.cartera.vencida"))} vencido`),
-  "3.5": ()=> topLista("cobros.top_deudores","cliente","saldo",5),
-  "3.6": ()=> V(fmt(pick(DATOS,"cobros.dso_dias")) + " días", "promedio en cobrar"),
-  /* 4 · Cashflow */
-  "4.1": ()=> L([["Facturado del mes",usd(pick(DATOS,"ventas.facturado.mes"))],
-                 ["Cobrado del mes",usd(pick(DATOS,"cobros.cobrado.mes"))]]),
-  /* 5 · Flota */
-  "5.1": ()=> L([["En renta",fmt(pick(DATOS,"flota.rentados"))],
-                 ["Disponibles",fmt(pick(DATOS,"flota.disponibles"))],
-                 ["En taller",fmt(pick(DATOS,"flota.en_taller"))]]),
-  "5.2": ()=> V(Number(pick(DATOS,"flota.utilizacion_pct")).toFixed(1)+"%",
-                `${fmt(pick(DATOS,"flota.rentados"))} de ${fmt(pick(DATOS,"flota.total_rentable"))} equipos`),
-  "5.3": ()=> V(usd(pick(DATOS,"flota.ingresos_renta_mes")),
-                "facturado por renta este mes — no es el potencial"),
-  /* 6 · Taller desde RADAR */
-  "6.1": ()=> L([["Vencidos",fmt(pick(DATOS,"taller.mant_vencidos"))],
-                 ["Próximos 30 días",fmt(pick(DATOS,"taller.mant_proximos_30d"))]]),
-  "6.3": ()=> V(fmt(pick(DATOS,"taller.equipos_en_reparacion")), "equipos en reparación"),
-  /* 8 · Clientes */
-  "8.1": ()=> L([["Activos (6 meses)",fmt(pick(DATOS,"clientes.activos_6m"))],
-                 ["Inactivos",fmt(pick(DATOS,"clientes.inactivos_6m"))]]),
-  "8.2": ()=> V(fmt(pick(DATOS,"clientes.nuevos_mes")), "clientes nuevos este mes"),
-  "8.4": ()=> L([["Abiertos",fmt(pick(DATOS,"clientes.tickets.abiertos"))],
-                 ["Resueltos del mes",fmt(pick(DATOS,"clientes.tickets.resueltos_mes"))]]),
-  /* 10 · Multi-empresa */
-  "10.1": ()=> topLista("ventas.por_empresa","nombre","mes",4),
-  "10.2": ()=> {
-    const t = pick(DATOS,"tipo_cambio") || {};
-    const filas = Object.entries(t).filter(([,v])=>v && v.tasa)
-      .map(([k,v])=>[k, Number(v.tasa).toFixed(4)]);
-    return filas.length ? L(filas) : null;
+  /* ── 1 · Ventas ──────────────────────────────────────────────── */
+  "1.1": ()=> porEmpresa(p=>{
+    const f = pick(p,"ventas.facturado") || {};
+    return [usd(f.mes), `hoy ${usd(f.hoy)} · sem ${usd(f.semana)}`, !f.mes];
+  }),
+  "1.2": ()=> ({ hueco:true, html:V("Sin meta", pick(DATOS,"ventas.meta.nota")
+                 || "RADAR no tiene metas cargadas para este mes.") }),
+  "1.3": ()=> rankEmpresa("ventas.por_vendedor","vendedor","mes",4),
+  /* Ordenado por plata y no por número de líneas: la pregunta es de dónde sale
+     el dinero. Sin conversión — ver la nota de moneda de arriba. */
+  "1.4": ()=>{
+    const a = pick(DATOS,"ventas.por_categoria");
+    if(!Array.isArray(a) || !a.length) return null;
+    const tot = a.reduce((s,c)=>s+(c.ytd||0), 0);
+    const renta = (a.find(c=>c.categoria === "renta") || {}).ytd || 0;
+    return L(a.slice().sort((x,y)=>(y.ytd||0)-(x.ytd||0)).slice(0,8)
+      .map(c=>[`${c.categoria}${tot?` · ${Math.round((c.ytd||0)*100/tot)}%`:""}`, usd(c.ytd)]))
+      + `<div class="wid-nota">Acumulado del año. La renta es ${tot?Math.round(renta*100/tot):"—"}% de todo lo facturado.</div>`;
   },
-  /* ── Taller, desde la base de Miguel ── */
-  "T1.1": ()=> tallerV(d=>[fmt(d.abiertas), "órdenes sin cerrar"]),
-  "T1.3": ()=> tallerV(d=>[fmt(d.malEstado), `de ${fmt(d.equipos)} equipos`]),
-  "T3.1": ()=> tallerL(d=>d.porTecnico),
-  "T4.1": ()=> tallerL(d=>d.porSistema),
-  "T8.3": ()=> tallerV(d=>[fmt(d.sinHorometro), `de ${fmt(d.equipos)} equipos sin horómetro`])
+  "1.5": ()=>{
+    const t = pick(DATOS,"ventas.ticket_promedio.mes");
+    if(t == null) return null;
+    return V(usd(t), "promedio del mes") + nota("1.5");
+  },
+  "1.6": ()=> porEmpresa(p=>{
+    const f = pick(p,"ventas.facturado") || {};
+    return [usd(f.ytd), f.ytd_anio_anterior ? `antes ${usd(f.ytd_anio_anterior)}` : "sin año anterior", !f.ytd];
+  }),
+  "1.7": ()=>{
+    const f = pick(DATOS,"ventas.forecast") || {};
+    if(f.estimado == null) return null;
+    return V(usd(f.estimado), `real hasta hoy ${usd(f.real)} · precisión histórica ${pct(f.precision_pct)}`) + nota("1.7");
+  },
+
+  /* ── 2 · Pipeline ────────────────────────────────────────────── */
+  "2.1": ()=> porEmpresa(p=>{
+    const a = pick(p,"pipeline.abiertas") || {};
+    return [fmt(a.n), `${usd(a.valor)} en juego`, !a.n];
+  }, { brecha:p=>pick(p,"pipeline.abiertas.n") }),
+  "2.2": ()=> topLista("pipeline.por_etapa","etapa","valor",9),
+  "2.3": ()=> porEmpresa(p=>[usd(pick(p,"pipeline.abiertas.valor_ponderado")), "ponderado",
+                             !pick(p,"pipeline.abiertas.valor_ponderado")],
+                         { brecha:p=>pick(p,"pipeline.abiertas.valor_ponderado"), formato:usd }),
+  "2.4": ()=> porEmpresa(p=>{
+    const n = pick(p,"pipeline.nuevas") || {};
+    return [fmt(n.mes), `hoy ${fmt(n.dia)} · sem ${fmt(n.semana)}`, !n.mes];
+  }),
+  "2.5": ()=> porEmpresa(p=>{
+    const q = pick(p,"pipeline") || {};
+    if(q.win_rate_pct == null) return null;
+    return [Number(q.win_rate_pct).toFixed(1)+"%",
+            `${fmt(pick(p,"pipeline.ganadas_ytd.n"))} gan · ${fmt(pick(p,"pipeline.perdidas_ytd.n"))} perd`];
+  }),
+  "2.6": ()=>{
+    const l = topLista("pipeline.razones_perdida","motivo","n",6,fmt);
+    return l && l + `<div class="wid-nota">"sin_asignar" y "Oportunidad Abierta" no son motivos de pérdida, son oportunidades sin clasificar. El dato útil empieza en la tercera fila.</div>`;
+  },
+  "2.7": ()=> porEmpresa(p=>[fmt(pick(p,"pipeline.estancadas_14d")), "sin moverse +14d",
+                             !pick(p,"pipeline.estancadas_14d")],
+                         { brecha:p=>pick(p,"pipeline.estancadas_14d") }),
+  "2.8": ()=> porEmpresa(p=>{
+    const c = pick(p,"pipeline.cotizaciones_con_numero_sap") || {};
+    return [fmt(c.n), usd(c.valor), !c.n];
+  }),
+  "2.9": ()=>{
+    const d = pick(DATOS,"pipeline.ciclo_venta_dias");
+    if(d == null) return null;
+    return V(Math.round(d) + " días", "de la primera visita al cierre") + nota("2.9");
+  },
+
+  /* ── 3 · Cobros ──────────────────────────────────────────────── */
+  "3.1": ()=> porEmpresa(p=>{
+    const c = pick(p,"cobros.cobrado") || {};
+    return [usd(c.mes), `hoy ${usd(c.hoy)} · sem ${usd(c.semana)}`, !c.mes];
+  }),
+  "3.2": ()=> porEmpresa(p=>{
+    const c = pick(p,"cobros.cartera") || {};
+    return [usd(c.total), `${usd(c.corriente)} corriente`, !c.total];
+  }),
+  "3.3": ()=>{
+    const a = pick(DATOS,"cobros.cartera.antiguedad") || {};
+    const t = (a.d1_30||0)+(a.d31_60||0)+(a.d61_90||0)+(a.d90_mas||0);
+    const f = (et,v)=>({ emp:et, n:usd(v), s:t?Math.round((v||0)*100/t)+"% del vencido":"" });
+    return secciones([f("1 a 30 días",a.d1_30), f("31 a 60",a.d31_60),
+                      f("61 a 90",a.d61_90), f("más de 90",a.d90_mas)],
+                     `Vencido total <b>${usd(t)}</b>`);
+  },
+  "3.4": ()=> porEmpresa(p=>{
+    const c = pick(p,"cobros.cartera") || {};
+    if(c.morosidad_pct == null) return null;
+    return [Number(c.morosidad_pct).toFixed(1)+"%", `${usd(c.vencida)} vencido`];
+  }),
+  "3.5": ()=> topLista("cobros.top_deudores","cliente","saldo",8),
+  "3.6": ()=>{
+    const d = pick(DATOS,"cobros.dso_dias");
+    if(d == null) return null;
+    return V(Math.round(d) + " días", "promedio en cobrar") + nota("3.6");
+  },
+  "3.7": ()=> porEmpresa(p=>{
+    const n = pick(p,"cobros.notas_credito") || {};
+    return [fmt(n.n), `${usd(n.saldo)} de saldo`, !n.n];
+  }),
+
+  /* ── 4 · Cashflow ────────────────────────────────────────────── */
+  "4.1": ()=> porEmpresa(p=>{
+    const c = pick(p,"cashflow") || {};
+    if(c.facturado_mes == null) return null;
+    return [usd(c.brecha_mes), `fact ${usd(c.facturado_mes)} · cob ${usd(c.cobrado_mes)}`,
+            !c.facturado_mes && !c.cobrado_mes];
+  }),
+  /* No se deja en cero: hay 15 registros y los 15 están liquidados. "Cero
+     pendientes" se lee como "al día" cuando lo que pasa es que el nodo se cargó
+     una vez desde un Excel y no hay flujo vivo que lo alimente. */
+  "4.4": ()=>{
+    if(!CAJA) return null;
+    const pend = CAJA.filter(x=>String(x.estado||"").toLowerCase() !== "liquidado");
+    const tot = CAJA.reduce((a,x)=>a+(aNum(x.monto)||0), 0);
+    if(!pend.length) return { hueco:true, html:
+      V("Nada pendiente", `Los ${CAJA.length} registros que existen están liquidados, por ${lps(tot)}. `
+        + `Entraron todos el mismo día desde un Excel y todos son de Choloma: no es una cola viva de gastos por aprobar.`) };
+    return V(lps(pend.reduce((a,x)=>a+(aNum(x.monto)||0), 0)),
+             `${pend.length} de ${CAJA.length} registros sin liquidar`);
+  },
+  "4.5": ()=> ({ hueco:true, html:V("Sin fuente",
+    "La tabla de viáticos de RADAR está vacía y el nodo bitacora/data-viajes no existe. "
+    + "Los viáticos reales están dentro de las órdenes de taller: ver T7.1 y T7.2.") }),
+
+  /* Estos seis no tienen dato y RADAR dice por qué en su bloque `no_disponible`.
+     Se muestra SU razón y no una genérica: "no está conectado" sería falso. */
+  "4.2": ()=> sinFuente("cuentas_por_pagar"),
+  "4.3": ()=> sinFuente("cashflow_neto_proyectado"),
+  "5.4": ()=> sinFuente("contratos_renta_activos",
+    "Los precios de renta tampoco están: ver el aviso de Monhaco arriba."),
+  "5.5": ()=> sinFuente("equipos_ociosos_dias",
+    "Cuántos están parados sí se sabe (5.1); cuántos días llevan, no."),
+  "8.3": ()=> sinFuente("nps"),
+  "9.2": ()=> sinFuente("costo_por_lead"),
+
+  /* ── 5 · Flota ───────────────────────────────────────────────── */
+  "5.1": ()=>{
+    const f = pick(DATOS,"flota") || {};
+    if(f.total_rentable == null) return null;
+    return secciones([{ emp:"En renta", n:fmt(f.rentados) },
+                      { emp:"Disponibles", n:fmt(f.disponibles) },
+                      { emp:"En taller", n:fmt(f.en_taller) }],
+                     `Flota rentable <b>${fmt(f.total_rentable)}</b>`) + nota("5.1");
+  },
+  "5.2": ()=>{
+    const f = pick(DATOS,"flota") || {};
+    if(f.utilizacion_pct == null) return null;
+    return V(Number(f.utilizacion_pct).toFixed(1)+"%",
+             `${fmt(f.rentados)} de ${fmt(f.total_rentable)} equipos rentables`)
+      + `<div class="wid-nota">RADAR saca de la cuenta los no rentables y los vendidos. Oficina los cuenta y da 58%: son dos definiciones distintas de "flota".</div>`;
+  },
+  "5.3": ()=> porEmpresa(p=>{
+    const v = pick(p,"flota.ingresos_renta_mes");
+    return [usd(v), "facturado por renta", !v];
+  }),
+
+  /* ── 6 · Taller visto por RADAR ──────────────────────────────── */
+  "6.1": ()=>{
+    const t = pick(DATOS,"taller") || {};
+    if(t.mant_proximos_30d == null) return null;
+    return secciones([{ emp:"Vencidos", n:fmt(t.mant_vencidos), cero:!t.mant_vencidos },
+                      { emp:"Próximos 30 días", n:fmt(t.mant_proximos_30d) }]) + nota("6.1");
+  },
+  "6.2": ()=> ({ hueco:true, html:V("Sin fuente",
+    (pick(DATOS,"no_disponible.ordenes_trabajo") || "RADAR no tiene órdenes de trabajo.")
+    + " El taller sí las tiene en la base de Miguel: ver T1.1 y T1.2.") }),
+  "6.3": ()=>{
+    const e = pick(DATOS,"taller.equipos_en_reparacion");
+    if(e == null) return null;
+    return V(fmt(e), "equipos en reparación") + nota("6.3");
+  },
+  "6.4": ()=> ({ hueco:true, html:V("Sin fuente",
+    (pick(DATOS,"no_disponible.tiempo_promedio_reparacion") || "RADAR no calcula el tiempo de reparación.")
+    + " Con los datos de Miguel sí se puede: ver T2.1 y T2.2.") }),
+
+  /* ── 7 · Equipo comercial ───────────────────────────────────── */
+  "7.1": ()=>{
+    const v = pick(DATOS,"actividad.visitas") || {};
+    return { hueco:true, html:V(`${fmt(v.semana)} esta semana`,
+      v.nota || "No hay campo de visita planeada, así que planeadas contra realizadas no se calcula.") };
+  },
+  "7.2": ()=>{
+    const a = pick(DATOS,"actividad.actividades") || {};
+    if(a.pendientes == null) return null;
+    return secciones([{ emp:"Pendientes", n:fmt(a.pendientes) },
+                      { emp:"Vencidas", n:fmt(a.vencidas), cero:!a.vencidas }]) + nota("7.2");
+  },
+  "7.3": ()=>{
+    const a = pick(DATOS,"actividad.alertas_abiertas") || {};
+    if(a.total == null) return null;
+    if(!a.total) return { hueco:true, html:V("0",
+      "Ninguna alerta abierta, y en ninguno de los cuatro cortes tampoco. O está todo al día, o nadie usa el campo.") };
+    return V(fmt(a.total), "seguimientos abiertos");
+  },
+  "7.4": ()=>{
+    const g = pick(DATOS,"actividad.giras_mes") || {};
+    if(g.n == null) return null;
+    return secciones([{ emp:"Giras", n:fmt(g.n) }, { emp:"Km", n:fmt(g.km) },
+                      { emp:"Costo", n:usd(g.costo) }]) + nota("7.4");
+  },
+
+  /* ── 8 · Clientes ────────────────────────────────────────────── */
+  "8.1": ()=> porEmpresa(p=>{
+    const c = pick(p,"clientes") || {};
+    if(c.activos_6m == null) return null;
+    return [fmt(c.activos_6m), `${fmt(c.inactivos_6m)} inactivos`, !c.activos_6m];
+  }),
+  "8.2": ()=> porEmpresa(p=>{
+    const n = pick(p,"clientes.nuevos_mes");
+    return [fmt(n), "primera factura este mes", !n];
+  }),
+  "8.4": ()=>{
+    const t = pick(DATOS,"clientes.tickets") || {};
+    if(t.abiertos == null) return null;
+    return secciones([{ emp:"Abiertos", n:fmt(t.abiertos) },
+                      { emp:"Resueltos del mes", n:fmt(t.resueltos_mes), cero:!t.resueltos_mes }]) + nota("8.4");
+  },
+
+  /* ── 9 · Marketing ───────────────────────────────────────────── */
+  "9.1": ()=>{
+    const l = topLista("leads.por_canal","canal","n",6,fmt);
+    return l ? l + nota("9.1") : null;
+  },
+  "9.3": ()=>{
+    const l = pick(DATOS,"leads") || {};
+    if(l.conversion_pct == null) return null;
+    return V(Number(l.conversion_pct).toFixed(1)+"%",
+             `${fmt(l.convertidos_ytd)} convertidos en el año`) + nota("9.3");
+  },
+
+  /* ── 10 · Grupo ──────────────────────────────────────────────── */
+  "10.1": ()=>{
+    const a = pick(DATOS,"ventas.por_empresa");
+    if(!Array.isArray(a) || !a.length) return null;
+    return secciones(a.slice().sort((x,y)=>(y.ytd||0)-(x.ytd||0))
+      .map(e=>({ emp:e.nombre || e.empresa_id, n:usd(e.mes), s:`año ${usd(e.ytd)}`, cero:!e.mes })),
+      `Grupo <b>${usd(a.reduce((s,e)=>s+(e.mes||0),0))}</b> este mes`);
+  },
+  /* El payload trae una entrada por EMPRESA, así que el lempira venía tres
+     veces. Se agrupa por tasa: lo que interesa es la moneda. */
+  "10.2": ()=>{
+    const t = pick(DATOS,"tipo_cambio") || {};
+    const por = {};
+    Object.entries(t).forEach(([k,v])=>{
+      if(!v || !v.tasa) return;
+      const g = por[v.tasa] = por[v.tasa] || { tasa:v.tasa, fuente:v.fuente, fecha:v.fecha, de:[] };
+      g.de.push(k === "costarica" ? "Costa Rica" : (k === "honduras" ? "Monhaco" : k));
+    });
+    const f = Object.values(por).sort((a,b)=>a.tasa-b.tasa);
+    if(!f.length) return null;
+    return L(f.map(g=>[`${g.de.length > 1 ? "Lempira" : (g.tasa > 100 ? "Colón" : "Lempira")} · ${g.fuente}`,
+                       Number(g.tasa).toFixed(2)]))
+      + `<div class="wid-nota">Al ${f[0].fecha}. RADAR lo guarda por empresa, no por moneda, así que el lempira venía repetido ${f.find(g=>g.de.length>1) ? f.find(g=>g.de.length>1).de.length + " veces" : ""}.</div>`;
+  },
+  /* Un semáforo de verdad: lo que si se pone rojo alguien tiene que atender hoy.
+     Cada renglón sale de un dato ya comprobado en este mismo tablero. */
+  "10.3": ()=>{
+    if(!DATOS) return null;
+    const luz = (mal, medio) => mal ? "rojo" : (medio ? "ambar" : "verde");
+    const f = pick(DATOS,"flota") || {};
+    const mor = pick(DATOS,"cobros.cartera.morosidad_pct");
+    const filas = [];
+    if(mor != null) filas.push(["Morosidad de cartera", Number(mor).toFixed(1)+"%", luz(mor>=20, mor>=10)]);
+    if(f.total_rentable){
+      const parados = f.total_rentable - (f.rentados||0);
+      filas.push(["Equipos parados", `${fmt(parados)} de ${fmt(f.total_rentable)}`,
+                  luz(parados > f.total_rentable*0.35, parados>0)]);
+    }
+    if(T){
+      const mal = T.equipos.filter(e=>String(e.estado||"").trim().toUpperCase()==="MAL ESTADO").length;
+      filas.push(["Equipos en mal estado", fmt(mal), luz(mal > T.equipos.length*0.3, mal>0)]);
+      const viejas = T.ords.filter(o=>!cerrada(o)).filter(o=>{
+        const d = momento(o.fecha); return d && (Date.now()-d)/86400000 > 7; }).length;
+      filas.push(["Órdenes abiertas hace +7 días", fmt(viejas), luz(viejas>5, viejas>0)]);
+      const sinHoro = T.equipos.filter(e=>aNum(e.horometro)==null).length;
+      filas.push(["Equipos sin horómetro", `${fmt(sinHoro)} de ${fmt(T.equipos.length)}`,
+                  luz(sinHoro > T.equipos.length*0.5, sinHoro>0)]);
+    }
+    filas.push(["Precios de renta en Monhaco", `0 de ${CORTE.sinPrecioMonhaco} cargados`, "rojo"]);
+    return `<div class="sem">` + filas.map(([et,v,c])=>
+      `<div class="sem-fila"><span class="luz ${c}"></span><span class="et">${et}</span>`
+      + `<span class="vl">${v}</span></div>`).join("") + `</div>`;
+  },
+
+  /* ── Taller · la base de Miguel ──────────────────────────────── */
+  "T1.1": ()=> porNodo(emp=>{
+    const ab = ordsDe(emp).filter(o=>!cerrada(o));
+    return [fmt(ab.length), "sin cerrar", !ab.length];
+  }),
+  "T1.2": ()=>{
+    const hoy = new Date(), mes = hoy.getMonth(), anio = hoy.getFullYear();
+    const delMes = l => l.filter(o=>cerrada(o)).filter(o=>{
+      const f = momento(o.fechaCierre || o.fechaCompletado || o.fecha);
+      return f && f.getMonth() === mes && f.getFullYear() === anio; });
+    return porNodo(emp=>{
+      const n = delMes(ordsDe(emp)).length;
+      return [fmt(n), hoy.toLocaleDateString("es-HN",{month:"long"}), !n];
+    });
+  },
+  "T1.3": ()=> porNodo(emp=>{
+    const eq = eqDe(emp);
+    if(!eq.length) return null;
+    const mal = eq.filter(e=>String(e.estado||"").trim().toUpperCase() === "MAL ESTADO").length;
+    return [fmt(mal), `${Math.round(mal*100/eq.length)}% de ${fmt(eq.length)}`, !mal];
+  }),
+  /* Muestra la prioridad de las ABIERTAS. Contar toda la historia daba
+     "Normal 78 · Alta 39 · Urgente 36" en una tarjeta que se lee como "lo que
+     hay ahora", y lo que hay ahora son unas pocas. */
+  "T1.4": ()=>{
+    if(!T) return null;
+    const ab = T.ords.filter(o=>!cerrada(o));
+    const t = topN(ab, "prioridad", 4);
+    if(!t.length) return { hueco:true, html:V("Sin dato",
+      `Ninguna de las ${fmt(ab.length)} órdenes abiertas trae prioridad.`) };
+    return secciones(t.map(([k,n])=>({ emp:k, n:fmt(n) })),
+      `De <b>${fmt(ab.length)}</b> abiertas · en toda la historia son ${fmt(T.ords.length)}`);
+  },
+
+  "T2.1": ()=>{
+    if(!T) return null;
+    const f = medianasPor("servicio").filter(x=>x.med != null);
+    if(!f.length) return null;
+    return L(f.slice(0,7).map(x=>[`${x.et} · n=${x.n}`, hhmm(x.med)]))
+      + `<div class="wid-nota">Mediana y no promedio: hay órdenes de 89 h y de 693 h que quedaron abiertas y olvidadas, y el promedio se va con ellas.</div>`;
+  },
+  "T2.2": ()=>{
+    if(!T) return null;
+    const f = medianasPor("sistema").filter(x=>x.med != null);
+    if(!f.length) return null;
+    return L(f.slice(0,8).map(x=>[`${x.et} · n=${x.n}`, hhmm(x.med)]));
+  },
+  "T2.3": ()=>{
+    if(!T) return null;
+    const dias = T.ords.filter(cerrada).map(o=>{
+      const a = momento(o.fecha), b = momento(o.fechaCierre || o.fechaCompletado);
+      return (a && b) ? Math.round((b-a)/86400000) : null;
+    }).filter(d=>d != null && d >= 0 && d < 365);
+    const m = mediana(dias);
+    if(m == null) return null;
+    return V(m + (m === 1 ? " día" : " días"), `mediana para cerrar · n=${dias.length}`);
+  },
+  "T2.4": ()=>{
+    if(!T) return null;
+    const v = T.ords.filter(o=>!cerrada(o)).filter(o=>{
+      const f = momento(o.fecha); return f && (Date.now()-f)/86400000 > 7; });
+    return V(fmt(v.length), "abiertas hace más de una semana");
+  },
+
+  /* Las órdenes de cuadrilla traen varios nombres en un solo campo `tecnico`.
+     Se parte por coma: una orden de cuadrilla cuenta para cada integrante. */
+  "T3.1": ()=>{
+    if(!T) return null;
+    const t = topPersonas(T.ords, "tecnico", 7);
+    return t.length ? L(t.map(([k,n])=>[k, fmt(n)])) : null;
+  },
+  "T3.2": ()=>{
+    if(!T) return null;
+    const g = {};
+    T.ords.forEach(o=>{ const m = durUtil(o);
+      if(m != null) personas(o.tecnico).forEach(p=>{ g[p] = (g[p]||0)+m; }); });
+    const f = Object.entries(g).sort((a,b)=>b[1]-a[1]).slice(0,7);
+    if(!f.length) return null;
+    return L(f.map(([k,v])=>[k, hhmm(v)]))
+      + `<div class="wid-nota">Una orden de cuadrilla suma sus horas a cada integrante: son las horas que esa persona estuvo, no una fracción.</div>`;
+  },
+  "T3.3": ()=>{
+    if(!T) return null;
+    const t = topPersonas(T.ords.filter(o=>!cerrada(o)), "tecnico", 7);
+    return t.length ? L(t.map(([k,n])=>[k, fmt(n)]))
+      : { hueco:true, html:V("0", "Ninguna orden abierta tiene técnico asignado.") };
+  },
+
+  "T4.1": ()=>{
+    if(!T) return null;
+    const t = topN(T.correctivos, "sistema", 7);
+    return t.length ? L(t.map(([k,n])=>[k, fmt(n)])) : null;
+  },
+  /* Algunas órdenes traen `equipoTxt` legible y otras sólo `equipoId`, que es
+     una llave de Firebase: la lista salía con "552qobrl" al lado de "MT-54".
+     Se resuelve el id contra el catálogo de equipos. */
+  "T4.2": ()=>{
+    if(!T) return null;
+    const porId = {};
+    T.equipos.forEach(e=>{ if(e.id) porId[e.id] = e.codigo || e.nombre || e.modelo; });
+    const nombre = o => o.equipoTxt || porId[o.equipoId] || o.equipo
+      || (o.equipoId ? "equipo sin código (" + o.equipoId + ")" : "");
+    const t = topN(T.correctivos, nombre, 7);
+    return t.length ? L(t.map(([k,n])=>[k, n+"×"])) : null;
+  },
+  /* `falla` es texto libre y trae de todo: la entrada más repetida era la
+     palabra "prueba". Se filtran las pruebas y el aseo, pero el campo mezcla
+     trabajos con averías y eso no se arregla del lado del tablero. */
+  "T4.3": ()=>{
+    if(!T) return null;
+    const BASURA = /^(prueba|pruebas|test|aseo|limpieza)/i;
+    const reales = T.ords.filter(o=>{
+      const f = String(o.falla||"").trim();
+      return f && !BASURA.test(f) && !/\(pruebas?\)/i.test(String(o.tecnico||""));
+    });
+    const t = topN(reales, "falla", 6);
+    if(!t.length) return null;
+    return L(t.map(([k,n])=>[k, n+"×"]))
+      + `<div class="wid-nota">Texto libre: cada quien lo escribe distinto, y el campo mezcla trabajos ("preparación de equipo para renta") con averías. Para tendencia sirve T4.1, que usa una lista cerrada.</div>`;
+  },
+
+  "T5.1": ()=>{
+    if(!T || !T.preventivos.length) return null;
+    const ok = T.preventivos.filter(p=>p.completado === true).length;
+    return secciones([{ emp:"Completados", n:fmt(ok) },
+                      { emp:"Pendientes", n:fmt(T.preventivos.length-ok), cero:ok === T.preventivos.length }],
+                     `De <b>${fmt(T.preventivos.length)}</b> preventivos registrados`);
+  },
+  /* No se inventa un vencimiento. Los preventivos no traen fecha de próximo
+     mantenimiento: el intervalo está en las notas ("Mantenimiento 250 horas"),
+     o sea que depende del horómetro, y el horómetro falta en la mayoría de los
+     equipos. RADAR sí lleva su propia cuenta: está en 6.1. */
+  "T5.2": ()=> ({ hueco:true, html:V("No calculable",
+    T ? `Los preventivos no tienen campo de próximo vencimiento. El intervalo va por horómetro y `
+        + `${fmt(T.equipos.filter(e=>aNum(e.horometro)==null).length)} de ${fmt(T.equipos.length)} equipos no lo tienen. `
+        + `La cuenta de RADAR está en 6.1.`
+      : "Esperando los datos del taller…") }),
+  "T5.3": ()=> ({ hueco:true, html:V("No calculable",
+    "Mismo motivo que T5.2: sin fecha de próximo mantenimiento no hay lista de próximos. Ver 6.1.") }),
+
+  "T6.1": ()=>{
+    if(!T || !T.solicitudes.length) return null;
+    const estados = topN(T.solicitudes, "estado", 5);
+    const pend = T.solicitudes.filter(s=>{
+      const e = String(s.estado||"").toLowerCase();
+      return e !== "entregado" && e !== "completado" && e !== "cerrado"; }).length;
+    const unico = estados.length === 1;
+    return V(fmt(pend), `de ${fmt(T.solicitudes.length)} solicitudes sin entregar`)
+      + `<div class="wid-nota">${unico
+          ? `Cien por ciento pendiente no es creíble: el único estado que existe en la base es "${estados[0][0]}" y lo tienen todas. El flujo nunca marca la entrega.`
+          : `Estados en uso: ${estados.map(([k,n])=>`${k} ${n}`).join(" · ")}.`}</div>`;
+  },
+  /* El campo `desc` de las solicitudes no trae el repuesto: trae el trabajo
+     ("Mantenimiento 250 horas"), y encima con registros de prueba. Se filtran
+     las pruebas y se dice qué es lo que se está contando, porque titular esto
+     "repuestos más pedidos" sería inventar un dato que la base no tiene. */
+  "T6.2": ()=>{
+    if(!T) return null;
+    const BASURA = /^(prueba|pruebas|test|xxx+|n\/a|-+)$/i;
+    const reales = T.solicitudes.filter(x=>{
+      const d = String(x.desc||"").trim();
+      return d && !BASURA.test(d);
+    });
+    const t = topN(reales, o=>o.desc, 7);
+    if(!t.length) return { hueco:true, html:V("Sin detalle",
+      "Las solicitudes no describen lo pedido.") };
+    return L(t.map(([k,n])=>[k, n+"×"]))
+      + `<div class="wid-nota">No son repuestos: el campo <code>desc</code> describe el trabajo, no la pieza. Mientras la app no tenga un campo de repuesto, esto no se puede contar.</div>`;
+  },
+  "T6.3": ()=>{
+    if(!T) return null;
+    const t = topPersonas(T.solicitudes.map(s=>({ t:s.tecnicoNombre || s.tecnico })), "t", 7);
+    return t.length ? L(t.map(([k,n])=>[k, fmt(n)])) : null;
+  },
+
+  "T7.1": ()=> porNodo(emp=>{
+    const v = viaticos(ordsDe(emp));
+    if(!v.length) return null;
+    return [lps(v.reduce((a,x)=>a+x.total,0)), `${v.length} viaje(s)`];
+  }, "sin ventana de tiempo: es todo lo registrado en la historia"),
+  "T7.2": ()=>{
+    if(!T) return null;
+    const v = viaticos();
+    if(!v.length) return null;
+    const s = k => v.reduce((a,x)=>a+x[k], 0);
+    const f = [["Combustible","combustible"],["Peaje","peaje"],["Hospedaje","hospedaje"],
+               ["Facturas","facturas"],["Vales","vales"]]
+      .map(([et,k])=>({ emp:et, n:lps(s(k)), cero:!s(k) })).filter(x=>!x.cero);
+    if(!f.length) return null;
+    return secciones(f, `Total <b>${lps(s("total"))}</b> en ${v.length} viaje(s)`)
+      + `<div class="wid-nota">⚠️ Estos registros traen número de identidad y cuenta bancaria del técnico, en una base cuyas reglas están abiertas.</div>`;
+  },
+  "T7.3": ()=>{
+    if(!T) return null;
+    const t = topN(viaticos(), "destino", 6);
+    return t.length ? L(t.map(([k,n])=>[k, n+" viaje"+(n>1?"s":"")]))
+      : { hueco:true, html:V("Sin dato", "Los viáticos no traen destino.") };
+  },
+  /* kmSalida y kmRetorno son lecturas ABSOLUTAS de odómetro, no distancias, y
+     hay pares corruptos (salida 399422, retorno 39999: se cayó un dígito). Sin
+     tope el total daba 403.229 km en 28 viajes, o sea 14.400 por viaje. */
+  "T7.4": ()=>{
+    if(!T) return null;
+    const TOPE_KM = 2000;
+    let km = 0, n = 0, fuera = 0;
+    T.ords.forEach(o=>{
+      const a = aNum(o.kmSalida), b = aNum(o.kmRetorno);
+      if(a == null || b == null) return;
+      const d = b-a;
+      if(d > 0 && d <= TOPE_KM){ km += d; n++; } else fuera++;
+    });
+    if(!n) return null;
+    return V(fmt(km) + " km", `en ${n} viaje(s)`
+      + (fuera ? ` · ${fuera} descartado(s) por odómetro inconsistente` : ""));
+  },
+
+  "T8.1": ()=>{
+    if(!T) return null;
+    const sin = T.ords.filter(o=>duracion(o).min == null).length;
+    return V(fmt(sin), `de ${fmt(T.ords.length)} órdenes sin tiempo registrado`);
+  },
+  "T8.2": ()=>{
+    if(!T) return null;
+    const corr = T.ords.filter(o=>duracion(o).fuente === "fechas(-6h)").length;
+    const rotas = T.ords.filter(o=>{ const d = duracion(o);
+      return d.min != null && (d.min < 0 || d.min > TOPE_MIN); }).length;
+    return secciones([{ emp:"Corregidas al leer", n:fmt(corr) },
+                      { emp:"Igual fuera de rango", n:fmt(rotas), cero:!rotas }])
+      + `<div class="wid-nota">El inicio se guarda en UTC y el fin en hora local. El tablero compensa restando 6 h al leer; el arreglo va en la app de Miguel, y ese día hay que quitar la compensación o se resta dos veces.</div>`;
+  },
+  "T8.3": ()=> porNodo(emp=>{
+    const eq = eqDe(emp);
+    if(!eq.length) return null;
+    const sin = eq.filter(e=>aNum(e.horometro) == null).length;
+    return [fmt(sin), `de ${fmt(eq.length)} equipos`, !sin];
+  })
 };
 
-function tallerV(f){ if(!TALLER_DATA) return null; const [v,s]=f(TALLER_DATA); return V(v,s); }
-function tallerL(f){ if(!TALLER_DATA) return null; const l=f(TALLER_DATA); return l&&l.length?L(l):null; }
-
-/* Los nodos del taller, de la base de Miguel. Las llaves se prefijan con
-   el nodo porque las dos empresas numeran desde cero. */
-async function cargarTaller(){
-  const junta = async (hoja) => {
-    const out = {};
-    for(const n of ["montasa","monhaco"]){
-      try{
-        const r = await fetch(`${FB}/${n}/${hoja}.json?_=${Date.now()}`, {cache:"no-store"});
-        const d = await r.json();
-        Object.entries(d||{}).forEach(([k,v])=>{ if(v) out[n+":"+k]=v; });
-      }catch(e){}
-    }
-    return Object.values(out);
-  };
-  const [eq, corr, prev, cerr] = await Promise.all(
-    ["equipos","correctivos","preventivos","ordenesCerradas"].map(junta));
-
-  const norm = v => String(v==null?"":v).trim().toUpperCase();
-  const cuenta = (lista, campo) => {
-    const c = {};
-    lista.forEach(o=>{ const v=String((o&&o[campo])||"").trim(); if(v) c[v]=(c[v]||0)+1; });
-    return Object.entries(c).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([k,v])=>[k, fmt(v)]);
-  };
-  const cerrada = o => o.completado===true
-    || ["COMPLETADO","CERRADO","FINALIZADO"].includes(norm(o.estado));
-
-  TALLER_DATA = {
-    equipos: eq.length,
-    malEstado: eq.filter(e=>norm(e.estado)==="MAL ESTADO").length,
-    sinHorometro: eq.filter(e=>!String(e.horometro||"").trim()).length,
-    abiertas: corr.concat(prev).filter(o=>!cerrada(o)).length,
-    porTecnico: cuenta(corr.concat(prev, cerr), "tecnico"),
-    porSistema: cuenta(corr, "sistema")
-  };
-}
-
-/* Razones que RADAR mismo da para lo que no tiene. */
-const RAZON_RADAR = {
-  "4.2":"no_disponible.cuentas_por_pagar", "4.3":"no_disponible.cashflow_neto_proyectado",
-  "4.5":"no_disponible.viaticos_pendientes", "5.4":"no_disponible.contratos_renta_activos",
-  "5.5":"no_disponible.equipos_ociosos_dias", "6.2":"no_disponible.ordenes_trabajo",
-  "6.4":"no_disponible.tiempo_promedio_reparacion", "8.3":"no_disponible.nps",
-  "9.2":"no_disponible.costo_por_lead", "7.1":"no_disponible.visitas_planeadas"
+/* =====================================================================
+   TAMAÑOS
+   ---------------------------------------------------------------------
+   No todos piden la misma caja. Un número solo cabe en una columna; un
+   desglose por empresa necesita dos o tres, y un ranking de siete filas
+   necesita alto, no ancho. `w2`/`w3` son columnas de la rejilla y `h2`
+   es alto doble; se pueden combinar.
+   ===================================================================== */
+const TAM = {
+  "1.1":"w2", "1.3":"w3 h2", "1.4":"w2 h2", "1.6":"w2",
+  "2.1":"w2", "2.2":"h2", "2.3":"w2", "2.4":"w2", "2.5":"w2", "2.6":"w2 h2", "2.7":"w2", "2.8":"w2",
+  "3.1":"w2", "3.2":"w2", "3.3":"w3", "3.4":"w2", "3.5":"h2", "3.7":"w2",
+  "4.1":"w2", "4.4":"w2", "4.5":"w2",
+  "5.1":"w2", "5.2":"w2", "5.3":"w2",
+  "6.1":"w2", "6.2":"w2", "6.4":"w2",
+  "7.1":"w2", "7.2":"w2", "7.4":"w2",
+  "8.1":"w2", "8.2":"w2", "8.4":"w2",
+  "9.1":"w2 h2",
+  "10.1":"w3", "10.2":"h2", "10.3":"w2 h2",
+  "T1.1":"w2", "T1.2":"w2", "T1.3":"w2", "T1.4":"w2",
+  "T2.1":"w2 h2", "T2.2":"h2",
+  "T3.1":"h2", "T3.2":"w2 h2", "T3.3":"h2",
+  "T4.1":"h2", "T4.2":"h2", "T4.3":"w2 h2",
+  "T5.1":"w2", "T5.2":"w2", "T5.3":"w2",
+  "T6.1":"w2", "T6.2":"w2 h2", "T6.3":"h2",
+  "T7.1":"w2", "T7.2":"w3", "T7.3":"h2",
+  "T8.2":"w2", "T8.3":"w2"
 };
 
 function pintarWidgets(){
   const zona = document.getElementById("zona-widgets");
   const caja = document.getElementById("widgets");
   const ids = [...OFICINA, ...TALLER].flatMap(g =>
-    g.items.filter(([id])=>elegidos.has(id)).map(([id,et])=>({id,et})));
+    g.items.filter(([id])=>elegidos.has(id)).map(([id,et])=>({ id, et })));
 
   zona.hidden = ids.length === 0;
 
-  caja.innerHTML = ids.map(({id,et})=>{
+  caja.innerHTML = ids.map(({ id, et })=>{
     let cuerpo = null, hueco = false;
     try{
       const f = MAPA[id];
@@ -558,15 +1308,19 @@ function pintarWidgets(){
         if(r && r.hueco){ cuerpo = r.html; hueco = true; }
         else cuerpo = r;
       }
-    }catch(e){ cuerpo = null; }
+    }catch(e){
+      /* que un indicador se caiga no debe tumbar el resto del tablero */
+      cuerpo = V("Error al calcular", e.message);
+      hueco = true;
+    }
 
     if(!cuerpo){
       hueco = true;
-      const razon = RAZON_RADAR[id] ? pick(DATOS, RAZON_RADAR[id]) : null;
-      cuerpo = V("Sin dato", razon
-        || (DATOS ? "Todavía no está conectado a este tablero." : "Esperando a RADAR…"));
+      cuerpo = V("Sin dato", DATOS || T
+        ? "Este indicador todavía no está conectado a este tablero."
+        : "Esperando a RADAR y al taller…");
     }
-    return `<div class="wid${hueco?" hueco":""}">
+    return `<div class="wid ${TAM[id]||""}${hueco?" hueco":""}">
       <div class="wid-cab"><span class="et">${et}</span><span class="id">${id}</span></div>
       ${cuerpo}</div>`;
   }).join("");
@@ -581,11 +1335,24 @@ document.getElementById("cerrar").addEventListener("click", cerrar);
 velo.addEventListener("click", cerrar);
 document.addEventListener("keydown", e=>{ if(e.key === "Escape") cerrar(); });
 
+/* Caja chica: la escribe el tablero de Omar en la bitacora, no RADAR. */
+let CAJA = null;
+async function cargarCaja(){
+  try{
+    const r = await fetch(FB + "/bitacora/data-cajachica.json?_=" + Date.now(), { cache:"no-store" });
+    const d = await r.json();
+    CAJA = Array.isArray(d) ? d.filter(Boolean) : Object.values(d||{}).filter(Boolean);
+  }catch(_){}
+}
+
 pintarCorte();
 pintarCatalogo();
 pintarWidgets();
+/* Cada fuente repinta en cuanto llega: el tablero no espera a la mas lenta. */
 cargarVivo().then(pintarWidgets);
+cargarEmpresas().then(pintarWidgets);
 cargarTaller().then(pintarWidgets);
+cargarCaja().then(pintarWidgets);
 </script>
 </body>
 </html>
