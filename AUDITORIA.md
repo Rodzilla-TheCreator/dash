@@ -152,6 +152,26 @@ un dato que no hay hasta que se hace clic.
 
 En el tablero de Cristian esto **ya está bien**: muestra hueco con la nota de RADAR.
 
+### 11. `1.3` `1.4` `2.6` `10.1` en el de Cristian — cuatro listas que no leen nada
+
+Los cuatro pedían un campo **que no existe en el payload**: `facturado` (el real es `mes`)
+y `razon` (el real es `motivo`). `topLista` no se cae con eso: `undefined` sale como `—` y la
+ordenada queda en cero, así que **se dibujaban los nombres correctos con todos los valores en
+raya y en un orden que no era ranking**. En Oficina los mismos cuatro sí dan dato porque ahí
+están escritos con el campo bueno.
+
+✅ **Hecho.** Corregidos los nombres de campo. Ahora `1.3` da Audry Garcia $52,697 · 
+Administracion $17,134 · Christian Quesada $14,372, y `10.1` Monhaco $82,768.
+
+El `1.4` llevaba además un segundo error escondido detrás del primero: las categorías vienen
+de `factura_lineas_sap` **en lempiras sin convertir**. Se agregó `aUsd()`, que usa el mismo
+tipo de cambio del payload que usa Oficina. Sin eso el arreglo habría mostrado renta a
+$1,170,000 en vez de $43,304.
+
+**Hallazgo suelto:** `por_vendedor` trae *"Administracion"* y *"Administraci�n"* como dos
+vendedores distintos — el mismo nombre con la tilde mal codificada en el origen. Pasa igual en
+Oficina. Es dato de SAP, no del tablero.
+
 ---
 
 ## 🟢 Comprobados y sanos

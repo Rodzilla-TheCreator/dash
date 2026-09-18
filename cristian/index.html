@@ -400,6 +400,15 @@ function topLista(ruta, campoNombre, campoValor, n, formato){
     .map(x=>[ String(x[campoNombre] ?? "—"), (formato||usd)(x[campoValor]) ]));
 }
 
+/* RADAR devuelve los montos de factura_lineas_sap (las categorias) en LEMPIRAS
+   sin convertir. Se convierte aca con el MISMO tipo de cambio que trae el payload,
+   para no descuadrar con los numeros de Fabri. El resto de los montos ya son USD. */
+function aUsd(v){
+  if(v==null) return null;
+  const t = pick(DATOS,"tipo_cambio.honduras.tasa");
+  return t ? v/t : null;
+}
+
 const MAPA = {
   /* 1 · Ventas */
   "1.1": ()=> L([["Hoy",usd(pick(DATOS,"ventas.facturado.hoy"))],
@@ -408,8 +417,12 @@ const MAPA = {
   "1.2": ()=> pick(DATOS,"ventas.meta.cumplimiento_pct") == null
              ? { hueco:true, html:V("Sin meta", pick(DATOS,"ventas.meta.nota")) }
              : V(pct(pick(DATOS,"ventas.meta.cumplimiento_pct")), "del mes"),
-  "1.3": ()=> topLista("ventas.por_vendedor","vendedor","facturado",5),
-  "1.4": ()=> topLista("ventas.por_categoria","categoria","facturado",5),
+  "1.3": ()=> topLista("ventas.por_vendedor","vendedor","mes",5),
+  "1.4": ()=>{ const a=pick(DATOS,"ventas.por_categoria");
+                 if(!Array.isArray(a)||!a.length) return null;
+                 return L(a.slice().sort((x,y)=>(y.lineas_ytd||0)-(x.lineas_ytd||0)).slice(0,6)
+                   .map(c=>{ const v=aUsd(c.ytd);
+                             return [c.categoria, v!=null ? usd(v) : fmt(c.lineas_ytd)+" ren."]; })); },
   "1.5": ()=> V(usd(pick(DATOS,"ventas.ticket_promedio.mes")), "promedio del mes"),
   "1.6": ()=> V(usd(pick(DATOS,"ventas.facturado.ytd")),
                 `contra ${usd(pick(DATOS,"ventas.facturado.ytd_anio_anterior"))} el año pasado · ${pct(pick(DATOS,"ventas.facturado.ytd_yoy_pct"))}`),
@@ -424,7 +437,7 @@ const MAPA = {
                  ["Mes",fmt(pick(DATOS,"pipeline.nuevas.mes"))]]),
   "2.5": ()=> V(pct(pick(DATOS,"pipeline.win_rate_pct")).replace("+",""),
                 `${fmt(pick(DATOS,"pipeline.ganadas_ytd.n"))} ganadas · ${fmt(pick(DATOS,"pipeline.perdidas_ytd.n"))} perdidas`),
-  "2.6": ()=> topLista("pipeline.razones_perdida","razon","n",5,fmt),
+  "2.6": ()=> topLista("pipeline.razones_perdida","motivo","n",5,fmt),
   "2.7": ()=> V(fmt(pick(DATOS,"pipeline.estancadas_14d")), "sin moverse en 14 días o más"),
   "2.8": ()=> V(fmt(pick(DATOS,"pipeline.cotizaciones_con_numero_sap.n")),
                 `${usd(pick(DATOS,"pipeline.cotizaciones_con_numero_sap.valor"))} cotizado`),
@@ -465,7 +478,7 @@ const MAPA = {
   "8.4": ()=> L([["Abiertos",fmt(pick(DATOS,"clientes.tickets.abiertos"))],
                  ["Resueltos del mes",fmt(pick(DATOS,"clientes.tickets.resueltos_mes"))]]),
   /* 10 · Multi-empresa */
-  "10.1": ()=> topLista("ventas.por_empresa","nombre","facturado",4),
+  "10.1": ()=> topLista("ventas.por_empresa","nombre","mes",4),
   "10.2": ()=> {
     const t = pick(DATOS,"tipo_cambio") || {};
     const filas = Object.entries(t).filter(([,v])=>v && v.tasa)
