@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Tablero de Flota · Christian</title>
+<title>Tablero de Flota · Cristian</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -59,6 +59,25 @@
   .aviso b{font-weight:600;}
   .pie{margin-top:34px;padding-top:16px;border-top:1px solid var(--linea);
     font-size:11.5px;color:var(--tinta-suave);line-height:1.6;}
+
+  /* ── widgets de lo marcado ────────────────────────────────────── */
+  #zona-widgets{margin-top:26px;}
+  .rejilla{display:grid;grid-template-columns:repeat(auto-fill,minmax(226px,1fr));gap:14px;}
+  .wid{background:var(--tarjeta);border-radius:10px;padding:15px 16px;min-height:104px;
+    display:flex;flex-direction:column;}
+  .wid-cab{display:flex;align-items:baseline;gap:7px;margin-bottom:9px;}
+  .wid-cab .et{font-size:11.5px;font-weight:600;color:var(--tinta-media);flex:1;min-width:0;line-height:1.3;}
+  .wid-cab .id{font-size:9.5px;color:var(--tinta-suave);font-variant-numeric:tabular-nums;flex:0 0 auto;}
+  .wid-val{font-size:26px;font-weight:700;color:var(--verde);line-height:1.1;font-variant-numeric:tabular-nums;}
+  .wid-sub{font-size:11px;color:var(--tinta-media);margin-top:4px;line-height:1.4;}
+  .wid-lista{display:flex;flex-direction:column;gap:4px;font-size:11.5px;}
+  .wid-lista .fila{display:flex;gap:8px;align-items:baseline;}
+  .wid-lista .fila .k{flex:1;min-width:0;color:var(--tinta-media);overflow:hidden;
+    text-overflow:ellipsis;white-space:nowrap;}
+  .wid-lista .fila .v{font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap;}
+  .wid.hueco{background:#FAFAFA;border:1px dashed var(--linea);}
+  .wid.hueco .wid-val{color:var(--tinta-suave);font-size:20px;}
+  .wid.hueco .wid-sub{color:var(--tinta-suave);}
 
   /* ── sidebar escondida ────────────────────────────────────────── */
   .velo{position:fixed;inset:0;background:rgba(26,29,31,.35);opacity:0;pointer-events:none;
@@ -162,11 +181,17 @@
   </div>
 
   <div class="pie" id="pie"></div>
+
+  <!-- ══ WIDGETS DE LO MARCADO EN EL SIDEBAR ══ -->
+  <section id="zona-widgets" hidden>
+    <h2 id="titulo-widgets">Lo que marcaste</h2>
+    <div class="rejilla" id="widgets"></div>
+  </section>
 </div>
 
 <script>
 /* =====================================================================
-   TABLERO DE FLOTA — para Christian
+   TABLERO DE FLOTA — para Cristian
    ---------------------------------------------------------------------
    Dos orígenes distintos, y la diferencia importa tanto que está escrita
    en la pantalla y no solo acá:
@@ -255,6 +280,7 @@ async function cargarVivo(){
       headers:{ Authorization:"Bearer " + RADAR_TOKEN }, cache:"no-store" });
     if(!r.ok) throw new Error("HTTP " + r.status);
     const d = await r.json();
+    DATOS = d;
     const f = d.flota || {};
     const total = f.total_rentable, renta = f.rentados;
     const parados = (f.por_estado?.reparacion || 0) + (f.por_estado?.mantenimiento || 0)
@@ -274,17 +300,14 @@ async function cargarVivo(){
     sello.innerHTML = `en vivo · ${new Date().toLocaleString("es-HN",{hour12:false})}`;
 
     document.getElementById("pie").innerHTML =
-      `Conteos en vivo de RADAR. Excluidos del total: ${fmt(f.excluidos?.vendidos)} vendidos y
-       ${fmt(f.excluidos?.no_rentables)} no rentables.<br>
-       <b>Ojo con "ingresos de renta" de RADAR (${usd(f.ingresos_renta_mes)}/mes):</b> eso es lo
-       que ya se facturó, no lo que se podría facturar. Son dos preguntas distintas y la tabla
-       de la derecha contesta la segunda.`;
+      `Conteos en vivo de RADAR al ${new Date(d.generado).toLocaleString("es-HN",{hour12:false})}.`;
   }catch(e){
     sello.textContent = "sin conexión a RADAR";
     ["c-total","c-renta","c-parados"].forEach(id=>{
       const el = document.getElementById(id);
       el.textContent = "—"; el.classList.add("sindato");
     });
+    pintarWidgets();
     document.getElementById("pie").innerHTML =
       `<b>No se pudo leer RADAR</b> (${e.message}), así que los tres números de arriba están
        vacíos a propósito: se dibuja el hueco, no un número viejo. Las tablas de abajo son la
@@ -317,7 +340,7 @@ const TALLER = [
 ];
 const ETIQUETA = { fb:"taller", radar:"radar", gap:"falta" };
 
-let elegidos = (()=>{ try{ const s=JSON.parse(localStorage.getItem("christian_kpis"));
+let elegidos = (()=>{ try{ const s=JSON.parse(localStorage.getItem("cristian_kpis"));
   return new Set(Array.isArray(s)?s:[]); }catch(e){ return new Set(); } })();
 
 function pintarCatalogo(){
@@ -338,10 +361,205 @@ function pintarCatalogo(){
   document.querySelectorAll("#catalogo input").forEach(cb=>{
     cb.addEventListener("change", ()=>{
       cb.checked ? elegidos.add(cb.dataset.id) : elegidos.delete(cb.dataset.id);
-      try{ localStorage.setItem("christian_kpis", JSON.stringify([...elegidos])); }catch(e){}
+      try{ localStorage.setItem("cristian_kpis", JSON.stringify([...elegidos])); }catch(e){}
       document.getElementById("cuenta").textContent = elegidos.size;
+      pintarWidgets();
     });
   });
+}
+
+/* =====================================================================
+   WIDGETS — lo que se marca en el sidebar aparece acá abajo
+   ---------------------------------------------------------------------
+   Cada indicador se mapea a su dato REAL del payload de RADAR o de la
+   base del taller. Lo que no tiene dato NO se dibuja como cero: sale
+   como hueco punteado diciendo qué falta, y cuando RADAR mismo explica
+   por qué no lo tiene (su bloque `no_disponible`), se muestra esa razón
+   en vez de una inventada.
+   ===================================================================== */
+let DATOS = null;      // payload de RADAR
+let TALLER_DATA = null; // nodos de Firebase
+
+const FB = "https://montasa-app-default-rtdb.firebaseio.com";
+
+const pick = (o, ruta) => ruta.split(".").reduce((a,k)=> (a==null?a:a[k]), o);
+const pct  = n => n == null ? "—" : (n>0?"+":"") + Number(n).toFixed(1) + "%";
+
+/* Un número grande con su subtítulo. */
+const V = (valor, sub) => `<div class="wid-val">${valor}</div>` + (sub?`<div class="wid-sub">${sub}</div>`:"");
+/* Una lista de pares. */
+const L = (filas) => `<div class="wid-lista">` + filas.map(([k,v])=>
+  `<div class="fila"><span class="k">${k}</span><span class="v">${v}</span></div>`).join("") + `</div>`;
+
+/* Top N de una lista del payload, por una columna numérica. */
+function topLista(ruta, campoNombre, campoValor, n, formato){
+  const arr = pick(DATOS, ruta);
+  if(!Array.isArray(arr) || !arr.length) return null;
+  return L(arr.slice()
+    .sort((a,b)=>(b[campoValor]||0)-(a[campoValor]||0))
+    .slice(0, n||5)
+    .map(x=>[ String(x[campoNombre] ?? "—"), (formato||usd)(x[campoValor]) ]));
+}
+
+const MAPA = {
+  /* 1 · Ventas */
+  "1.1": ()=> L([["Hoy",usd(pick(DATOS,"ventas.facturado.hoy"))],
+                 ["Semana",usd(pick(DATOS,"ventas.facturado.semana"))],
+                 ["Mes",usd(pick(DATOS,"ventas.facturado.mes"))]]),
+  "1.2": ()=> pick(DATOS,"ventas.meta.cumplimiento_pct") == null
+             ? { hueco:true, html:V("Sin meta", pick(DATOS,"ventas.meta.nota")) }
+             : V(pct(pick(DATOS,"ventas.meta.cumplimiento_pct")), "del mes"),
+  "1.3": ()=> topLista("ventas.por_vendedor","vendedor","facturado",5),
+  "1.4": ()=> topLista("ventas.por_categoria","categoria","facturado",5),
+  "1.5": ()=> V(usd(pick(DATOS,"ventas.ticket_promedio.mes")), "promedio del mes"),
+  "1.6": ()=> V(usd(pick(DATOS,"ventas.facturado.ytd")),
+                `contra ${usd(pick(DATOS,"ventas.facturado.ytd_anio_anterior"))} el año pasado · ${pct(pick(DATOS,"ventas.facturado.ytd_yoy_pct"))}`),
+  "1.7": ()=> V(usd(pick(DATOS,"ventas.forecast.estimado")),
+                `proyección del mes · precisión histórica ${pct(pick(DATOS,"ventas.forecast.precision_pct"))}`),
+  /* 2 · Pipeline */
+  "2.1": ()=> V(fmt(pick(DATOS,"pipeline.abiertas.n")), `${usd(pick(DATOS,"pipeline.abiertas.valor"))} en juego`),
+  "2.2": ()=> topLista("pipeline.por_etapa","etapa","valor",6),
+  "2.3": ()=> V(usd(pick(DATOS,"pipeline.abiertas.valor_ponderado")), "ponderado por probabilidad"),
+  "2.4": ()=> L([["Hoy",fmt(pick(DATOS,"pipeline.nuevas.dia"))],
+                 ["Semana",fmt(pick(DATOS,"pipeline.nuevas.semana"))],
+                 ["Mes",fmt(pick(DATOS,"pipeline.nuevas.mes"))]]),
+  "2.5": ()=> V(pct(pick(DATOS,"pipeline.win_rate_pct")).replace("+",""),
+                `${fmt(pick(DATOS,"pipeline.ganadas_ytd.n"))} ganadas · ${fmt(pick(DATOS,"pipeline.perdidas_ytd.n"))} perdidas`),
+  "2.6": ()=> topLista("pipeline.razones_perdida","razon","n",5,fmt),
+  "2.7": ()=> V(fmt(pick(DATOS,"pipeline.estancadas_14d")), "sin moverse en 14 días o más"),
+  "2.8": ()=> V(fmt(pick(DATOS,"pipeline.cotizaciones_con_numero_sap.n")),
+                `${usd(pick(DATOS,"pipeline.cotizaciones_con_numero_sap.valor"))} cotizado`),
+  "2.9": ()=> V(fmt(pick(DATOS,"pipeline.ciclo_venta_dias")) + " días", "de la primera visita al cierre"),
+  /* 3 · Cobros */
+  "3.1": ()=> L([["Hoy",usd(pick(DATOS,"cobros.cobrado.hoy"))],
+                 ["Semana",usd(pick(DATOS,"cobros.cobrado.semana"))],
+                 ["Mes",usd(pick(DATOS,"cobros.cobrado.mes"))]]),
+  "3.2": ()=> V(usd(pick(DATOS,"cobros.cartera.total")),
+                `${usd(pick(DATOS,"cobros.cartera.corriente"))} corriente`),
+  "3.3": ()=> L([["1 a 30 días",usd(pick(DATOS,"cobros.cartera.antiguedad.d1_30"))],
+                 ["31 a 60",usd(pick(DATOS,"cobros.cartera.antiguedad.d31_60"))],
+                 ["61 a 90",usd(pick(DATOS,"cobros.cartera.antiguedad.d61_90"))],
+                 ["más de 90",usd(pick(DATOS,"cobros.cartera.antiguedad.d90_mas"))]]),
+  "3.4": ()=> V(Number(pick(DATOS,"cobros.cartera.morosidad_pct")).toFixed(1)+"%",
+                `${usd(pick(DATOS,"cobros.cartera.vencida"))} vencido`),
+  "3.5": ()=> topLista("cobros.top_deudores","cliente","saldo",5),
+  "3.6": ()=> V(fmt(pick(DATOS,"cobros.dso_dias")) + " días", "promedio en cobrar"),
+  /* 4 · Cashflow */
+  "4.1": ()=> L([["Facturado del mes",usd(pick(DATOS,"ventas.facturado.mes"))],
+                 ["Cobrado del mes",usd(pick(DATOS,"cobros.cobrado.mes"))]]),
+  /* 5 · Flota */
+  "5.1": ()=> L([["En renta",fmt(pick(DATOS,"flota.rentados"))],
+                 ["Disponibles",fmt(pick(DATOS,"flota.disponibles"))],
+                 ["En taller",fmt(pick(DATOS,"flota.en_taller"))]]),
+  "5.2": ()=> V(Number(pick(DATOS,"flota.utilizacion_pct")).toFixed(1)+"%",
+                `${fmt(pick(DATOS,"flota.rentados"))} de ${fmt(pick(DATOS,"flota.total_rentable"))} equipos`),
+  "5.3": ()=> V(usd(pick(DATOS,"flota.ingresos_renta_mes")),
+                "facturado por renta este mes — no es el potencial"),
+  /* 6 · Taller desde RADAR */
+  "6.1": ()=> L([["Vencidos",fmt(pick(DATOS,"taller.mant_vencidos"))],
+                 ["Próximos 30 días",fmt(pick(DATOS,"taller.mant_proximos_30d"))]]),
+  "6.3": ()=> V(fmt(pick(DATOS,"taller.equipos_en_reparacion")), "equipos en reparación"),
+  /* 8 · Clientes */
+  "8.1": ()=> L([["Activos (6 meses)",fmt(pick(DATOS,"clientes.activos_6m"))],
+                 ["Inactivos",fmt(pick(DATOS,"clientes.inactivos_6m"))]]),
+  "8.2": ()=> V(fmt(pick(DATOS,"clientes.nuevos_mes")), "clientes nuevos este mes"),
+  "8.4": ()=> L([["Abiertos",fmt(pick(DATOS,"clientes.tickets.abiertos"))],
+                 ["Resueltos del mes",fmt(pick(DATOS,"clientes.tickets.resueltos_mes"))]]),
+  /* 10 · Multi-empresa */
+  "10.1": ()=> topLista("ventas.por_empresa","nombre","facturado",4),
+  "10.2": ()=> {
+    const t = pick(DATOS,"tipo_cambio") || {};
+    const filas = Object.entries(t).filter(([,v])=>v && v.tasa)
+      .map(([k,v])=>[k, Number(v.tasa).toFixed(4)]);
+    return filas.length ? L(filas) : null;
+  },
+  /* ── Taller, desde la base de Miguel ── */
+  "T1.1": ()=> tallerV(d=>[fmt(d.abiertas), "órdenes sin cerrar"]),
+  "T1.3": ()=> tallerV(d=>[fmt(d.malEstado), `de ${fmt(d.equipos)} equipos`]),
+  "T3.1": ()=> tallerL(d=>d.porTecnico),
+  "T4.1": ()=> tallerL(d=>d.porSistema),
+  "T8.3": ()=> tallerV(d=>[fmt(d.sinHorometro), `de ${fmt(d.equipos)} equipos sin horómetro`])
+};
+
+function tallerV(f){ if(!TALLER_DATA) return null; const [v,s]=f(TALLER_DATA); return V(v,s); }
+function tallerL(f){ if(!TALLER_DATA) return null; const l=f(TALLER_DATA); return l&&l.length?L(l):null; }
+
+/* Los nodos del taller, de la base de Miguel. Las llaves se prefijan con
+   el nodo porque las dos empresas numeran desde cero. */
+async function cargarTaller(){
+  const junta = async (hoja) => {
+    const out = {};
+    for(const n of ["montasa","monhaco"]){
+      try{
+        const r = await fetch(`${FB}/${n}/${hoja}.json?_=${Date.now()}`, {cache:"no-store"});
+        const d = await r.json();
+        Object.entries(d||{}).forEach(([k,v])=>{ if(v) out[n+":"+k]=v; });
+      }catch(e){}
+    }
+    return Object.values(out);
+  };
+  const [eq, corr, prev, cerr] = await Promise.all(
+    ["equipos","correctivos","preventivos","ordenesCerradas"].map(junta));
+
+  const norm = v => String(v==null?"":v).trim().toUpperCase();
+  const cuenta = (lista, campo) => {
+    const c = {};
+    lista.forEach(o=>{ const v=String((o&&o[campo])||"").trim(); if(v) c[v]=(c[v]||0)+1; });
+    return Object.entries(c).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([k,v])=>[k, fmt(v)]);
+  };
+  const cerrada = o => o.completado===true
+    || ["COMPLETADO","CERRADO","FINALIZADO"].includes(norm(o.estado));
+
+  TALLER_DATA = {
+    equipos: eq.length,
+    malEstado: eq.filter(e=>norm(e.estado)==="MAL ESTADO").length,
+    sinHorometro: eq.filter(e=>!String(e.horometro||"").trim()).length,
+    abiertas: corr.concat(prev).filter(o=>!cerrada(o)).length,
+    porTecnico: cuenta(corr.concat(prev, cerr), "tecnico"),
+    porSistema: cuenta(corr, "sistema")
+  };
+}
+
+/* Razones que RADAR mismo da para lo que no tiene. */
+const RAZON_RADAR = {
+  "4.2":"no_disponible.cuentas_por_pagar", "4.3":"no_disponible.cashflow_neto_proyectado",
+  "4.5":"no_disponible.viaticos_pendientes", "5.4":"no_disponible.contratos_renta_activos",
+  "5.5":"no_disponible.equipos_ociosos_dias", "6.2":"no_disponible.ordenes_trabajo",
+  "6.4":"no_disponible.tiempo_promedio_reparacion", "8.3":"no_disponible.nps",
+  "9.2":"no_disponible.costo_por_lead", "7.1":"no_disponible.visitas_planeadas"
+};
+
+function pintarWidgets(){
+  const zona = document.getElementById("zona-widgets");
+  const caja = document.getElementById("widgets");
+  const ids = [...OFICINA, ...TALLER].flatMap(g =>
+    g.items.filter(([id])=>elegidos.has(id)).map(([id,et])=>({id,et})));
+
+  zona.hidden = ids.length === 0;
+  document.getElementById("titulo-widgets").textContent =
+    `Lo que marcaste (${ids.length})`;
+
+  caja.innerHTML = ids.map(({id,et})=>{
+    let cuerpo = null, hueco = false;
+    try{
+      const f = MAPA[id];
+      if(f){
+        const r = f();
+        if(r && r.hueco){ cuerpo = r.html; hueco = true; }
+        else cuerpo = r;
+      }
+    }catch(e){ cuerpo = null; }
+
+    if(!cuerpo){
+      hueco = true;
+      const razon = RAZON_RADAR[id] ? pick(DATOS, RAZON_RADAR[id]) : null;
+      cuerpo = V("Sin dato", razon
+        || (DATOS ? "Todavía no está conectado a este tablero." : "Esperando a RADAR…"));
+    }
+    return `<div class="wid${hueco?" hueco":""}">
+      <div class="wid-cab"><span class="et">${et}</span><span class="id">${id}</span></div>
+      ${cuerpo}</div>`;
+  }).join("");
 }
 
 /* ── Abrir y cerrar ───────────────────────────────────────────────── */
@@ -355,7 +573,9 @@ document.addEventListener("keydown", e=>{ if(e.key === "Escape") cerrar(); });
 
 pintarCorte();
 pintarCatalogo();
-cargarVivo();
+pintarWidgets();
+cargarVivo().then(pintarWidgets);
+cargarTaller().then(pintarWidgets);
 </script>
 </body>
 </html>
