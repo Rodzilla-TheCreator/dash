@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tablero de Flota · Christian</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --verde:#12A05C; --verde-claro:#E8F6EF; --verde-oscuro:#0B7A45;
+    --ambar:#B7791F; --ambar-fondo:#FEF6E7;
+    --rojo:#C0392B; --rojo-fondo:#FDECEA;
+    --tinta:#1A1D1F; --tinta-media:#5B6469; --tinta-suave:#8A9297;
+    --linea:#E4E7E9; --fondo:#FFFFFF; --tarjeta:#F6F7F8;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--fondo);color:var(--tinta);
+    font-family:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;font-size:14px;line-height:1.5;}
+
+  /* ── barra superior ───────────────────────────────────────────── */
+  .barra{display:flex;align-items:center;gap:14px;padding:18px 26px;border-bottom:1px solid var(--linea);}
+  .hamburguesa{background:none;border:1px solid var(--linea);border-radius:6px;width:36px;height:36px;
+    cursor:pointer;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:3px;padding:0;flex:0 0 auto;}
+  .hamburguesa span{display:block;width:16px;height:2px;background:var(--tinta-media);border-radius:2px;}
+  .hamburguesa:hover{background:var(--tarjeta);}
+  .hamburguesa:focus-visible{outline:2px solid var(--verde);outline-offset:2px;}
+  .marca{display:flex;align-items:center;gap:10px;min-width:0;}
+  .icono{width:26px;height:26px;flex:0 0 auto;}
+  h1{font-size:19px;font-weight:600;margin:0;letter-spacing:-.01em;}
+  .sello{margin-left:auto;font-size:11.5px;color:var(--tinta-suave);text-align:right;white-space:nowrap;}
+
+  .lienzo{padding:26px;max-width:1180px;}
+
+  /* ── tarjetas de cifra ────────────────────────────────────────── */
+  .cifras{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:18px;margin-bottom:30px;}
+  .cifra{background:var(--tarjeta);border-radius:10px;padding:22px;text-align:center;}
+  .cifra .n{font-size:38px;font-weight:700;color:var(--verde);line-height:1;font-variant-numeric:tabular-nums;}
+  .cifra .t{font-size:12.5px;color:var(--tinta-media);margin-top:8px;}
+
+  /* ── tablas ───────────────────────────────────────────────────── */
+  .dos{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:32px;}
+  h2{font-size:14.5px;font-weight:600;margin:0 0 12px;}
+  .caja{overflow-x:auto;}
+  table{width:100%;border-collapse:collapse;font-size:12.5px;}
+  thead th{background:var(--verde);color:#fff;text-align:left;padding:9px 12px;font-weight:600;white-space:nowrap;}
+  thead th.num{text-align:right;}
+  tbody td{padding:9px 12px;border-bottom:1px solid var(--linea);font-variant-numeric:tabular-nums;}
+  tbody td.num{text-align:right;}
+  tbody tr:last-child td{border-bottom:none;}
+  tbody tr.total td{font-weight:600;border-top:2px solid var(--linea);}
+  .sindato{color:var(--tinta-suave);font-style:italic;}
+
+  /* ── avisos ───────────────────────────────────────────────────── */
+  .aviso{border-radius:8px;padding:13px 15px;font-size:12.5px;line-height:1.55;margin-top:14px;}
+  .aviso.ambar{background:var(--ambar-fondo);color:#7A5210;border-left:3px solid var(--ambar);}
+  .aviso.rojo{background:var(--rojo-fondo);color:#8C2A20;border-left:3px solid var(--rojo);}
+  .aviso b{font-weight:600;}
+  .pie{margin-top:34px;padding-top:16px;border-top:1px solid var(--linea);
+    font-size:11.5px;color:var(--tinta-suave);line-height:1.6;}
+
+  /* ── sidebar escondida ────────────────────────────────────────── */
+  .velo{position:fixed;inset:0;background:rgba(26,29,31,.35);opacity:0;pointer-events:none;
+    transition:opacity .18s;z-index:40;}
+  .velo.abierto{opacity:1;pointer-events:auto;}
+  .panel{position:fixed;top:0;left:0;bottom:0;width:340px;max-width:88vw;background:#fff;z-index:50;
+    transform:translateX(-100%);transition:transform .2s ease;display:flex;flex-direction:column;
+    box-shadow:2px 0 18px rgba(0,0,0,.12);}
+  .panel.abierto{transform:translateX(0);}
+  .panel-cab{padding:18px;border-bottom:1px solid var(--linea);display:flex;align-items:flex-start;gap:10px;}
+  .panel-cab h3{margin:0;font-size:15px;font-weight:600;}
+  .panel-cab p{margin:4px 0 0;font-size:11.5px;color:var(--tinta-media);}
+  .cerrar{margin-left:auto;background:none;border:none;font-size:22px;line-height:1;cursor:pointer;
+    color:var(--tinta-suave);padding:0 2px;}
+  .cerrar:hover{color:var(--tinta);}
+  .panel-cuerpo{overflow-y:auto;padding:6px 18px 22px;flex:1;}
+  .seccion{font-size:10.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;
+    color:var(--verde);margin:18px 0 4px;padding-top:12px;border-top:1px solid var(--linea);}
+  .seccion:first-child{border-top:none;padding-top:4px;}
+  .grupo{font-size:12px;font-weight:600;color:var(--tinta-media);margin:12px 0 4px;}
+  .opt{display:flex;align-items:flex-start;gap:8px;padding:3px 0;font-size:12px;cursor:pointer;line-height:1.35;}
+  .opt input{margin-top:2px;accent-color:var(--verde);flex:0 0 auto;cursor:pointer;}
+  .opt .id{color:var(--tinta-suave);flex:0 0 auto;font-variant-numeric:tabular-nums;}
+  .opt .et{flex:1;min-width:0;}
+  .opt .fuente{font-size:9px;letter-spacing:.04em;text-transform:uppercase;padding:1px 5px;border-radius:3px;
+    flex:0 0 auto;align-self:center;}
+  .f-fb{background:var(--verde-claro);color:var(--verde-oscuro);}
+  .f-radar{background:#EAF0F8;color:#2B5C9B;}
+  .f-gap{background:#F0F0F0;color:#7A7A7A;}
+  .panel-pie{padding:13px 18px;border-top:1px solid var(--linea);font-size:11.5px;color:var(--tinta-media);}
+  .panel-pie b{color:var(--verde);}
+</style>
+</head>
+<body>
+
+<!-- ══ SIDEBAR ESCONDIDA ══ -->
+<div class="velo" id="velo"></div>
+<aside class="panel" id="panel" aria-label="Catálogo de indicadores">
+  <div class="panel-cab">
+    <div>
+      <h3>Todos los indicadores</h3>
+      <p>Los de Oficina y los de Taller, juntos. Marcá los que querés en tu tablero.</p>
+    </div>
+    <button class="cerrar" id="cerrar" aria-label="Cerrar">&times;</button>
+  </div>
+  <div class="panel-cuerpo" id="catalogo"></div>
+  <div class="panel-pie"><b id="cuenta">0</b> marcados de <span id="total">0</span>. Se guardan en este navegador.</div>
+</aside>
+
+<!-- ══ BARRA ══ -->
+<div class="barra">
+  <button class="hamburguesa" id="abrir" aria-label="Ver todos los indicadores">
+    <span></span><span></span><span></span>
+  </button>
+  <div class="marca">
+    <svg class="icono" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <rect x="3"  y="12" width="4" height="9" rx="1" fill="#12A05C"/>
+      <rect x="10" y="7"  width="4" height="14" rx="1" fill="#12A05C"/>
+      <rect x="17" y="3"  width="4" height="18" rx="1" fill="#12A05C"/>
+    </svg>
+    <h1 id="titulo">Tablero de Flota</h1>
+  </div>
+  <div class="sello" id="sello">cargando…</div>
+</div>
+
+<div class="lienzo">
+
+  <div class="cifras">
+    <div class="cifra"><div class="n" id="c-total">—</div><div class="t">equipos totales en la flota</div></div>
+    <div class="cifra"><div class="n" id="c-renta">—</div><div class="t" id="t-renta">generando renta</div></div>
+    <div class="cifra"><div class="n" id="c-parados">—</div><div class="t" id="t-parados">parados en taller</div></div>
+  </div>
+
+  <div class="dos">
+    <section>
+      <h2>Composición por empresa</h2>
+      <div class="caja">
+        <table>
+          <thead><tr>
+            <th>Empresa</th><th class="num">En renta</th><th class="num">Disponible</th>
+            <th class="num">En reparación</th><th class="num">En mant.</th><th class="num">TOTAL</th>
+          </tr></thead>
+          <tbody id="tabla-empresas"></tbody>
+        </table>
+      </div>
+      <div class="aviso ambar" id="aviso-empresas"></div>
+    </section>
+
+    <section>
+      <h2>La plata: qué genera y qué podría generar</h2>
+      <div class="caja">
+        <table>
+          <thead><tr>
+            <th>Estado</th><th class="num">USD/mes</th><th class="num">Equipos con precio</th>
+          </tr></thead>
+          <tbody id="tabla-plata"></tbody>
+        </table>
+      </div>
+      <div class="aviso rojo" id="aviso-plata"></div>
+    </section>
+  </div>
+
+  <div class="pie" id="pie"></div>
+</div>
+
+<script>
+/* =====================================================================
+   TABLERO DE FLOTA — para Christian
+   ---------------------------------------------------------------------
+   Dos orígenes distintos, y la diferencia importa tanto que está escrita
+   en la pantalla y no solo acá:
+
+   EN VIVO  — los conteos salen de RADAR (GET /api/dashboard?empresa=all)
+              cada vez que se abre la página.
+
+   CORTE    — el reparto por empresa y el dinero potencial NO los entrega
+              ese endpoint: hay que consultarlos con SQL contra la tabla
+              `equipos`. Están guardados acá como una foto fechada, y la
+              pantalla dice que son una foto. Para volverlos vivos, RADAR
+              tendría que devolver `flota` abierta por empresa y la suma de
+              `precio_renta_mes`; mientras no lo haga, mentir sería peor.
+
+   LA TRAMPA GRANDE: `flota.ingresos_renta_mes` del endpoint NO es el
+   potencial. Sale de líneas de factura con categoría renta — es lo que YA
+   se cobró. El potencial es otra cosa y se calcula con `precio_renta_mes`,
+   que 144 de 220 equipos no tienen cargado.
+   ===================================================================== */
+
+const RADAR_API = "https://montasa-web.vercel.app/api/dashboard";
+const RADAR_TOKEN = "CjXHIPSe6iJVnDQiF_yweLr7rJ3sQPdi";
+
+/* ── El corte con SQL. Fecha visible para que se note si envejece. ── */
+const CORTE = {
+  fecha: "2026-09-18",
+  empresas: [
+    { nombre:"MT Rental",  renta:24,  disp:15, rep:24, mant:6, total:69  },
+    { nombre:"Monhaco",    renta:100, disp:6,  rep:23, mant:0, total:129 },
+    { nombre:"Honduras",   renta:8,   disp:10, rep:4,  mant:0, total:22  }
+  ],
+  // usd = suma de precio_renta_mes; con = cuántos de esos equipos lo tienen
+  plata: [
+    { estado:"En renta (ya entra)",     usd:46423, con:30, de:132 },
+    { estado:"Disponible (fácil)",      usd:24628, con:14, de:31  },
+    { estado:"En reparación (frenado)", usd:43293, con:26, de:51  },
+    { estado:"En mantenimiento",        usd:9850,  con:6,  de:6   }
+  ],
+  sinPrecioMonhaco: 129
+};
+
+const fmt = n => n == null ? "—" : Number(n).toLocaleString("es-HN");
+const usd = n => n == null ? "—" : "$" + Number(n).toLocaleString("es-HN", {maximumFractionDigits:0});
+
+/* ── Tablas del corte ─────────────────────────────────────────────── */
+function pintarCorte(){
+  const t = CORTE.empresas.reduce((a,e)=>({
+    renta:a.renta+e.renta, disp:a.disp+e.disp, rep:a.rep+e.rep, mant:a.mant+e.mant, total:a.total+e.total
+  }), {renta:0,disp:0,rep:0,mant:0,total:0});
+
+  document.getElementById("tabla-empresas").innerHTML =
+    CORTE.empresas.map(e=>`<tr><td>${e.nombre}</td><td class="num">${e.renta}</td>
+      <td class="num">${e.disp}</td><td class="num">${e.rep}</td><td class="num">${e.mant}</td>
+      <td class="num">${e.total}</td></tr>`).join("")
+    + `<tr class="total"><td>TOTAL</td><td class="num">${t.renta}</td><td class="num">${t.disp}</td>
+       <td class="num">${t.rep}</td><td class="num">${t.mant}</td><td class="num">${t.total}</td></tr>`;
+
+  const parados = CORTE.plata.filter(p=>!p.estado.startsWith("En renta"));
+  const potencial = parados.reduce((a,p)=>a+p.usd,0);
+  const conPrecio = parados.reduce((a,p)=>a+p.con,0);
+  const deTotal   = parados.reduce((a,p)=>a+p.de,0);
+
+  document.getElementById("tabla-plata").innerHTML =
+    CORTE.plata.map(p=>`<tr><td>${p.estado}</td><td class="num">${usd(p.usd)}</td>
+      <td class="num">${p.con} de ${p.de}</td></tr>`).join("")
+    + `<tr class="total"><td>Potencial parado</td><td class="num">${usd(potencial)}</td>
+       <td class="num">${conPrecio} de ${deTotal}</td></tr>`;
+
+  document.getElementById("aviso-empresas").innerHTML =
+    `<b>Foto del ${CORTE.fecha}.</b> El reparto por empresa no lo entrega el endpoint de RADAR
+     — pedirlo por empresa devuelve la flota en cero — así que se consultó con SQL y quedó
+     guardado. Los tres números de arriba sí son de ahora.`;
+
+  document.getElementById("aviso-plata").innerHTML =
+    `<b>Los ${usd(potencial)} son solo de ${conPrecio} equipos de ${deTotal}.</b>
+     Los otros ${deTotal-conPrecio} están parados igual, pero no tienen precio de renta cargado,
+     así que suman cero. <b>Monhaco no tiene precio en ninguno de sus ${CORTE.sinPrecioMonhaco}
+     equipos</b>, y es la flota más grande. El número real es más alto; cuánto más, no se sabe.`;
+}
+
+/* ── Conteos en vivo ──────────────────────────────────────────────── */
+async function cargarVivo(){
+  const sello = document.getElementById("sello");
+  try{
+    const r = await fetch(RADAR_API + "?empresa=all", {
+      headers:{ Authorization:"Bearer " + RADAR_TOKEN }, cache:"no-store" });
+    if(!r.ok) throw new Error("HTTP " + r.status);
+    const d = await r.json();
+    const f = d.flota || {};
+    const total = f.total_rentable, renta = f.rentados;
+    const parados = (f.por_estado?.reparacion || 0) + (f.por_estado?.mantenimiento || 0)
+                  + (f.por_estado?.disponible || 0);
+
+    document.getElementById("c-total").textContent   = fmt(total);
+    document.getElementById("c-renta").textContent   = fmt(renta);
+    document.getElementById("c-parados").textContent = fmt(parados);
+    if(total){
+      document.getElementById("t-renta").textContent   =
+        `generando renta (${Math.round(renta*100/total)}%)`;
+      document.getElementById("t-parados").textContent =
+        `parados, sin generar (${Math.round(parados*100/total)}%)`;
+    }
+    document.getElementById("titulo").textContent =
+      `Tablero de Flota: ${fmt(total)} equipos, quién genera y quién está parado`;
+    sello.innerHTML = `en vivo · ${new Date().toLocaleString("es-HN",{hour12:false})}`;
+
+    document.getElementById("pie").innerHTML =
+      `Conteos en vivo de RADAR. Excluidos del total: ${fmt(f.excluidos?.vendidos)} vendidos y
+       ${fmt(f.excluidos?.no_rentables)} no rentables.<br>
+       <b>Ojo con "ingresos de renta" de RADAR (${usd(f.ingresos_renta_mes)}/mes):</b> eso es lo
+       que ya se facturó, no lo que se podría facturar. Son dos preguntas distintas y la tabla
+       de la derecha contesta la segunda.`;
+  }catch(e){
+    sello.textContent = "sin conexión a RADAR";
+    ["c-total","c-renta","c-parados"].forEach(id=>{
+      const el = document.getElementById(id);
+      el.textContent = "—"; el.classList.add("sindato");
+    });
+    document.getElementById("pie").innerHTML =
+      `<b>No se pudo leer RADAR</b> (${e.message}), así que los tres números de arriba están
+       vacíos a propósito: se dibuja el hueco, no un número viejo. Las tablas de abajo son la
+       foto del ${CORTE.fecha} y siguen valiendo.`;
+  }
+}
+
+/* ── Catálogo de indicadores (sidebar) ────────────────────────────── */
+const OFICINA = [
+  { n:"1", title:"Ventas y facturación", items:[["1.1","Facturado hoy / semana / mes","radar"],["1.2","Ventas vs meta del mes (%)","radar"],["1.3","Ranking de vendedores","radar"],["1.4","Ventas por categoría","radar"],["1.5","Ticket promedio","radar"],["1.6","Acumulado del año vs anterior","radar"],["1.7","Proyección de cierre de mes","radar"]]},
+  { n:"2", title:"Pipeline / CRM", items:[["2.1","Oportunidades abiertas","radar"],["2.2","Embudo por etapa","radar"],["2.3","Valor ponderado del pipeline","radar"],["2.4","Nuevos prospectos día/semana","radar"],["2.5","Conversión y win rate","radar"],["2.6","Razones de pérdida top","radar"],["2.7","Oportunidades estancadas","radar"],["2.8","Cotizaciones emitidas","radar"],["2.9","Ciclo de venta promedio","radar"]]},
+  { n:"3", title:"Cobros / cartera", items:[["3.1","Cobrado hoy / semana / mes","radar"],["3.2","Cuentas por cobrar (cartera)","radar"],["3.3","Cartera vencida por antigüedad","radar"],["3.4","% de morosidad","radar"],["3.5","Top deudores","radar"],["3.6","DSO (días de cobro)","radar"],["3.7","Notas de crédito","radar"]]},
+  { n:"4", title:"Cashflow", items:[["4.1","Facturado vs cobrado","radar"],["4.2","Cuentas por pagar","gap"],["4.3","Cashflow neto proyectado","gap"],["4.4","Caja chica pendiente","fb"],["4.5","Viáticos pendientes","fb"]]},
+  { n:"5", title:"Rentas y flota", items:[["5.1","Flota: rentados / disp. / mant.","fb"],["5.2","Utilización de flota (%)","fb"],["5.3","Ingresos por rentas del mes","radar"],["5.4","Contratos por vencer","radar"],["5.5","Equipos ociosos","radar"]]},
+  { n:"6", title:"Taller y mantenimiento", items:[["6.1","Mantenimientos vencidos / próximos","fb"],["6.2","Órdenes de trabajo","radar"],["6.3","Equipos caídos en taller","radar"],["6.4","Tiempo prom. de reparación","radar"]]},
+  { n:"7", title:"Equipo comercial", items:[["7.1","Visitas de campo (semana)","radar"],["7.2","Actividades vencidas","radar"],["7.3","Seguimientos urgentes","radar"],["7.4","Km / reembolsos (semana)","radar"]]},
+  { n:"8", title:"Clientes", items:[["8.1","Activos vs inactivos","radar"],["8.2","Nuevos clientes del mes","radar"],["8.3","Satisfacción / NPS","radar"],["8.4","Tickets de soporte","radar"]]},
+  { n:"9", title:"Marketing / leads", items:[["9.1","Leads por canal","radar"],["9.2","Inversión vs leads (costo/lead)","radar"],["9.3","Conversión de leads","radar"]]},
+  { n:"10", title:"Multi-empresa y alertas", items:[["10.1","Corte Monhaco vs Montasa CR","radar"],["10.2","Tipo de cambio HNL/CRC","radar"],["10.3","Panel de semáforos","fb"]]}
+];
+const TALLER = [
+  { n:"T1", title:"Estado del taller", items:[["T1.1","Órdenes abiertas ahora","fb"],["T1.2","Órdenes cerradas este mes","fb"],["T1.3","Equipos en mal estado","fb"],["T1.4","Órdenes por prioridad","fb"]]},
+  { n:"T2", title:"Cuánto tarda cada trabajo", items:[["T2.1","Tiempo típico por servicio","fb"],["T2.2","Tiempo típico por sistema","fb"],["T2.3","Días en cerrar una orden","fb"],["T2.4","Órdenes abiertas hace más de 7 días","fb"]]},
+  { n:"T3", title:"Carga por técnico", items:[["T3.1","Órdenes por técnico","fb"],["T3.2","Horas trabajadas por técnico","fb"],["T3.3","Órdenes abiertas por técnico","fb"]]},
+  { n:"T4", title:"Fallas y reincidencia", items:[["T4.1","Sistemas que más fallan","fb"],["T4.2","Equipos con más correctivos","fb"],["T4.3","Fallas más repetidas","fb"]]},
+  { n:"T5", title:"Preventivos", items:[["T5.1","Completados vs pendientes","fb"],["T5.2","Equipos con preventivo vencido","fb"],["T5.3","Próximos preventivos","fb"]]},
+  { n:"T6", title:"Repuestos", items:[["T6.1","Solicitudes pendientes","fb"],["T6.2","Repuestos más pedidos","fb"],["T6.3","Solicitudes por técnico","fb"]]},
+  { n:"T7", title:"Viáticos y viajes", items:[["T7.1","Viáticos registrados","fb"],["T7.2","Desglose de viáticos","fb"],["T7.3","Destinos más frecuentes","fb"],["T7.4","Kilómetros recorridos","fb"]]},
+  { n:"T8", title:"Calidad de los datos", items:[["T8.1","Órdenes sin tiempo registrado","fb"],["T8.2","Órdenes con fechas inconsistentes","fb"],["T8.3","Equipos sin horómetro","fb"]]}
+];
+const ETIQUETA = { fb:"taller", radar:"radar", gap:"falta" };
+
+let elegidos = (()=>{ try{ const s=JSON.parse(localStorage.getItem("christian_kpis"));
+  return new Set(Array.isArray(s)?s:[]); }catch(e){ return new Set(); } })();
+
+function pintarCatalogo(){
+  const bloque = (titulo, grupos) =>
+    `<div class="seccion">${titulo}</div>` + grupos.map(g =>
+      `<div class="grupo">${g.n}. ${g.title}</div>` + g.items.map(([id,et,src]) =>
+        `<label class="opt"><input type="checkbox" data-id="${id}"${elegidos.has(id)?" checked":""}>
+         <span class="id">${id}</span><span class="et">${et}</span>
+         <span class="fuente f-${src}">${ETIQUETA[src]}</span></label>`).join("")).join("");
+
+  document.getElementById("catalogo").innerHTML =
+    bloque("Dash de Oficina", OFICINA) + bloque("Dash de Taller", TALLER);
+
+  const total = [...OFICINA,...TALLER].reduce((a,g)=>a+g.items.length,0);
+  document.getElementById("total").textContent = total;
+  document.getElementById("cuenta").textContent = elegidos.size;
+
+  document.querySelectorAll("#catalogo input").forEach(cb=>{
+    cb.addEventListener("change", ()=>{
+      cb.checked ? elegidos.add(cb.dataset.id) : elegidos.delete(cb.dataset.id);
+      try{ localStorage.setItem("christian_kpis", JSON.stringify([...elegidos])); }catch(e){}
+      document.getElementById("cuenta").textContent = elegidos.size;
+    });
+  });
+}
+
+/* ── Abrir y cerrar ───────────────────────────────────────────────── */
+const panel = document.getElementById("panel"), velo = document.getElementById("velo");
+const abrir  = ()=>{ panel.classList.add("abierto");  velo.classList.add("abierto"); };
+const cerrar = ()=>{ panel.classList.remove("abierto"); velo.classList.remove("abierto"); };
+document.getElementById("abrir").addEventListener("click", abrir);
+document.getElementById("cerrar").addEventListener("click", cerrar);
+velo.addEventListener("click", cerrar);
+document.addEventListener("keydown", e=>{ if(e.key === "Escape") cerrar(); });
+
+pintarCorte();
+pintarCatalogo();
+cargarVivo();
+</script>
+</body>
+</html>
