@@ -5,7 +5,9 @@
 > uno y contra datos vivos. Cada uno lleva ✅ o ⚠️ con lo que da ahora.
 >
 > **El más caro no estaba en el tablero nuevo sino en el de Oficina:** la renta del año se
-> mostraba en $43,304 y son $1,170,070 — ver el hallazgo 12.
+> mostraba en $43,304 y son $1,170,070 — ver el hallazgo 12, que ahora trae las dos
+> comprobaciones independientes. El 19 arregla la condición que lo permitió: que la pantalla
+> no decía de qué moneda era nada.
 
 Revisión de los tres tableros (**Oficina**, **Taller**, **Cristian**) contra los datos vivos
 de RADAR y de la base de Miguel. No es una lista de ideas: cada punto se comprobó
@@ -192,8 +194,11 @@ mira Omar.
 `factura_lineas_sap.total_linea`, que viene en la moneda nativa del documento, así que los
 montos llegaban en lempiras.
 
-**Eso fue cierto y dejó de serlo.** RADAR ahora suma `total_usd`. Se comprobó categoría por
-categoría contra la base, y coinciden al centavo:
+**Eso fue cierto y dejó de serlo.** RADAR ahora suma `total_usd`. Se comprobó por dos
+caminos independientes, porque cambiar un número de dinero con una sola comprobación no
+alcanza.
+
+**Camino 1 — por categoría, contra la base.** Coinciden al centavo:
 
 | | RADAR dice | `sum(total_linea)` | `sum(total_usd)` |
 |---|---|---|---|
@@ -202,6 +207,26 @@ categoría contra la base, y coinciden al centavo:
 | venta_equipo | 223,435 | 5,913,120 | **223,435** |
 
 Y la renta del mes: `flota.ingresos_renta_mes` = 72,366.77, y el SQL da 72,366.77.
+
+**Camino 2 — la cabecera del documento en SAP, que no pasa por las líneas.** `facturas_sap`
+trae su propia `moneda` y su propio `total_usd`:
+
+| `moneda` | docs | `doc_total` (moneda nativa) | `total_usd` | razón |
+|---|---|---|---|---|
+| HNL | 440 | L 14,790,461 | $549,422 | 26.9 |
+| USD | 370 | 1,133,501 | $1,133,501 | **1.00** |
+| CRC | 7 | ₡4,217,686 | $8,190 | 515 |
+
+**Un documento emitido en dólares tiene `doc_total` idéntico a `total_usd`.** Eso sólo puede
+pasar si esa columna son dólares. Y las razones de los otros dos son exactamente el lempira y
+el colón del día. Sumando las tres: **$1,691,113 contra los $1,691,809 que muestra RADAR** —
+la diferencia son un par de documentos fuera del cruce. La renta de $1,170,070 es un
+subconjunto de esos $1.69M, o sea que cierra por arriba también.
+
+**Y la conversión, cuando haga falta, no se inventa:** Fabrizio mantiene `tipo_cambio_log`,
+una fila por día y por empresa con la tasa, la fuente (BCH para Honduras, Hacienda-CR para
+Costa Rica) y una bandera `sap_ok` de si se subió a SAP. Esa tabla es para convertir lo que
+llegue en moneda nativa. Lo que ya viene en `total_usd` no se toca.
 
 Así que seguir dividiendo hundía los números **27 veces**:
 
@@ -298,6 +323,28 @@ de 212 equipos (hallazgo 15).
 ✅ **Dicho, no inventado.** Salen como "No calculable" con el motivo y mandan al `6.1`, que
 es la cuenta que RADAR sí lleva. Elegir un intervalo por defecto habría dado un número
 inventado con cara de dato.
+
+### 19. ✅ Ahora se ve de qué moneda es cada número
+
+El hallazgo 12 pasó porque **nada en la pantalla decía en qué moneda estaba nada**. Un `$` a
+secas, en Honduras, se lee como lempira más de una vez. Así que además de arreglar el número
+se arregló la condición que permitió el error:
+
+**En el código.** Los dos tableros tenían formateadores sueltos (`usd()`, `lps()`, `fmtL()`)
+que decidían el símbolo por su cuenta. Ahora pasan por `dinero(monto, moneda)`, y **la moneda
+es un argumento obligatorio que tira error si falta** — no se puede imprimir plata sin decir
+de qué es. Arriba de esa función quedó la tabla de qué origen trae qué moneda y **cómo se
+comprobó cada uno**, con el aviso de no convertir nada sin correr antes el SQL.
+
+**En la pantalla.** Cada monto lleva su unidad escrita y su color: los dólares en verde, los
+lempiras en ocre. Y hay una leyenda arriba de los widgets, no al pie, porque hay que saber
+leer los números antes de mirarlos.
+
+Se comprobó en el navegador: **125 montos, los 125 con unidad, 117 en dólares y 8 en
+lempiras**, y ni un `$` suelto en ninguno de los dos tableros.
+
+Lo que esto compra: los viáticos del taller (L 45,881) y la cartera de RADAR ($931,734) ya no
+se pueden comparar de un vistazo como si fueran la misma plata.
 
 ---
 

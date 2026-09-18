@@ -75,6 +75,18 @@
   .rank-row .vl{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap;}
   .rank-row .nn{color:var(--ink-faint);font-size:10px;white-space:nowrap;}
   .rank-row.flojo .vl{color:var(--ink-dim);}
+
+  /* Monedas: cada monto lleva su unidad y su color, para no comparar de un
+     vistazo dolares de RADAR con lempiras del taller. */
+  .m{white-space:nowrap;}
+  .m i{font-style:normal;font-weight:600;opacity:.6;margin-left:.3em;
+    font-size:.62em;letter-spacing:.04em;}
+  .m.usd{color:var(--green);}
+  .m.lps{color:var(--amber);}
+  .big-num .m,.big-num .m i{color:inherit;}
+  .big-num .m.lps{color:var(--amber);}
+  .big-num .m.usd{color:var(--green);}
+  .big-sub .m,.rank-row .vl .m{font-weight:600;}
   .rank-barra{height:3px;background:var(--amber-dim);margin-top:2px;}
   .company-switch{display:flex;width:max-content;margin:0 auto 26px;border:1px solid var(--panel-line);background:var(--panel);}
   .company-pill{background:transparent;border:0;border-right:1px solid var(--panel-line);color:var(--ink-dim);font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14px;letter-spacing:1.5px;text-transform:uppercase;padding:10px 26px;cursor:pointer;transition:background .15s,color .15s;}
@@ -411,7 +423,9 @@ const CC_FB = "https://montasa-app-default-rtdb.firebaseio.com/bitacora";
 
 function fmtL(monto){
   const n = aNumero(monto);
-  return n == null ? monto : "L " + n.toLocaleString("es-HN",{minimumFractionDigits:2, maximumFractionDigits:2});
+  if(n == null) return monto;
+  return dineroHtml("L " + n.toLocaleString("es-HN",{minimumFractionDigits:2, maximumFractionDigits:2}),
+                    "lps", "LPS");
 }
 
 /* ===================== COMPUTOS (Firebase) ===================== */
@@ -518,7 +532,24 @@ async function cargarFx(){
 }
 
 /* helpers de formato (null = "no calculable", NO cero) */
-function usd(v){ return v==null ? null : "$"+Math.round(v).toLocaleString("en-US")+" USD"; }
+/* ═══ MONEDAS ═══════════════════════════════════════════════════════
+   Este tablero mezcla dos origenes con monedas distintas y ninguno de
+   los dos trae la moneda en el dato, asi que se marca en la salida:
+
+     RADAR / SAP  -> USD. Comprobado en la cabecera de `facturas_sap`:
+                     en los 370 documentos con moneda USD el `doc_total`
+                     es identico al `total_usd`; en los 440 en HNL la
+                     razon es 26,9 y en los 7 en CRC es 515. RADAR suma
+                     `total_usd`, no `total_linea`.
+     Firebase     -> lempiras (viaticos y caja chica, escritos a mano).
+
+   Cada monto sale con su unidad y su color -- verde el dolar, ocre el
+   lempira -- para que no se comparen dos plata distintas de un vistazo.
+   Eso fue justo lo que paso con `fixUsd`: ver su comentario. */
+function dineroHtml(txt, clase, unidad){
+  return '<span class="m '+clase+'">'+txt+'<i>'+unidad+'</i></span>';
+}
+function usd(v){ return v==null ? null : dineroHtml("$"+Math.round(v).toLocaleString("en-US"), "usd", "USD"); }
 function num(v){ return v==null ? null : Number(v).toLocaleString("es-HN"); }
 function pct(v){ return v==null ? null : (Math.round(v*10)/10)+"%"; }
 /* OJO: esta conversion ya NO se usa, y no se borra para que quede el porque.
