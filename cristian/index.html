@@ -31,7 +31,12 @@
   h1{font-size:19px;font-weight:600;margin:0;letter-spacing:-.01em;}
   .sello{margin-left:auto;font-size:11.5px;color:var(--tinta-suave);text-align:right;white-space:nowrap;}
 
-  .lienzo{padding:26px;max-width:1180px;}
+  /* Sin tope de ancho: con 1180px un monitor de 1360 dejaba 180px muertos a la
+     derecha, y en uno de 1920 sobraba media pantalla. La rejilla de widgets se
+     encarga de repartir: mas ancho = mas columnas, no columnas mas gordas. */
+  .lienzo{padding:22px 26px;}
+  /* Los bloques de texto corrido si tienen tope, que es donde el ancho molesta. */
+  .aviso{max-width:900px;}
 
   /* ── tarjetas de cifra ────────────────────────────────────────── */
   .cifras{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:18px;margin-bottom:30px;}
@@ -74,19 +79,24 @@
   /* `align-items:start` es lo que evita el hueco: sin eso, una tarjeta de un
      solo numero se estiraba hasta el alto de la lista de siete filas que le
      tocara al lado, y quedaba media tarjeta en blanco. Cada una pide su alto. */
-  .rejilla{display:grid;grid-template-columns:repeat(auto-fill,minmax(226px,1fr));
-    gap:14px;align-items:start;}
-  .wid{background:var(--tarjeta);border-radius:10px;padding:14px 16px;
+  .rejilla{display:grid;grid-template-columns:repeat(auto-fill,minmax(184px,1fr));
+    gap:12px;align-items:start;}
+  .wid{background:var(--tarjeta);border-radius:10px;padding:11px 13px;
     display:flex;flex-direction:column;}
-  .wid-cab{display:flex;align-items:baseline;gap:7px;margin-bottom:9px;}
+  .wid-cab{display:flex;align-items:baseline;gap:6px;margin-bottom:7px;}
   .wid-cab .et{font-size:11.5px;font-weight:600;color:var(--tinta-media);flex:1;min-width:0;line-height:1.3;}
   .wid-cab .id{font-size:9.5px;color:var(--tinta-suave);font-variant-numeric:tabular-nums;flex:0 0 auto;}
-  .wid-val{font-size:26px;font-weight:700;color:var(--verde);line-height:1.1;font-variant-numeric:tabular-nums;}
+  .wid-val{font-size:23px;font-weight:700;color:var(--verde);line-height:1.1;font-variant-numeric:tabular-nums;}
   .wid-sub{font-size:11px;color:var(--tinta-media);margin-top:4px;line-height:1.4;}
   .wid-lista{display:flex;flex-direction:column;gap:4px;font-size:11.5px;}
   .wid-lista .fila{display:flex;gap:8px;align-items:baseline;}
-  .wid-lista .fila .k{flex:1;min-width:0;color:var(--tinta-media);overflow:hidden;
-    text-overflow:ellipsis;white-space:nowrap;}
+  /* La etiqueta se parte en dos lineas en vez de recortarse. Al angostar las
+     tarjetas, "Unicamente para presupuesto del cliente" o el nombre de un
+     cliente no caben en una linea, y cortar con puntitos deja el dato
+     ilegible. Partirla cuesta un renglon solo en las filas que lo necesitan,
+     que es lo mismo que hace el alto del widget: lo pide el contenido. */
+  .wid-lista .fila .k{flex:1;min-width:0;color:var(--tinta-media);
+    overflow-wrap:anywhere;line-height:1.35;}
   .wid-lista .fila .v{font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap;}
   .wid.hueco{background:#FAFAFA;border:1px dashed var(--linea);}
   .wid.hueco .wid-val{color:var(--tinta-suave);font-size:20px;}
@@ -100,7 +110,11 @@
   /* Secciones por empresa: al costado y no apiladas, para que el ojo compare
      los tres numeros en la misma linea de base. */
   .wid-emp{display:flex;flex:1;align-items:stretch;min-width:0;}
-  .wid-emp .sec{flex:1;min-width:0;padding:0 14px;border-left:1px solid var(--linea);
+  /* `flex-wrap` + un minimo por seccion: en una tarjeta de una sola columna las
+     dos secciones se apilan en vez de aplastarse hasta que el monto no quepa. */
+  .wid-emp{flex-wrap:wrap;gap:10px 0;}
+  .wid-emp .sec{flex:1 1 76px;min-width:76px;padding:0 10px;
+    border-left:1px solid var(--linea);
     display:flex;flex-direction:column;justify-content:center;}
   /* Una lista no se centra: arranca arriba, como se lee. */
   .wid-emp.listas .sec{justify-content:flex-start;}
@@ -108,17 +122,34 @@
   .wid-emp .sec:first-child{padding-left:0;border-left:0;}
   .wid-emp .sec .emp{font-size:9.5px;font-weight:700;letter-spacing:.07em;
     text-transform:uppercase;color:var(--tinta-suave);margin-bottom:6px;}
-  .wid-emp .sec .n{font-size:20px;font-weight:700;color:var(--verde);line-height:1.15;
+  .wid-emp .sec .n{font-size:16px;font-weight:700;color:var(--verde);line-height:1.15;
     font-variant-numeric:tabular-nums;}
+  /* dentro de una seccion la unidad va mas chica: es donde el ancho aprieta */
+  .wid-emp .sec .n .m i{font-size:.58em;margin-left:.24em;}
   .wid-emp .sec .s{font-size:10.5px;color:var(--tinta-media);margin-top:3px;line-height:1.35;}
   /* Cero no se pinta como logro: queda gris para que no compita con los que si tienen. */
   .wid-emp .sec.cero .n{color:var(--tinta-suave);}
   /* Montasa HN esta retirada: entra apagada, y solo si tiene algo. */
   .wid-emp .sec.retirada{opacity:.58;}
-  .wid-tot{margin-top:11px;padding-top:9px;border-top:1px solid var(--linea);
+  .wid-tot{margin-top:9px;padding-top:8px;border-top:1px solid var(--linea);
     font-size:10.5px;color:var(--tinta-media);line-height:1.45;}
   .wid-tot code{font-size:10px;background:#F1F1EF;padding:1px 4px;border-radius:3px;}
-  .wid-nota{margin-top:9px;font-size:10px;color:var(--tinta-suave);line-height:1.45;}
+  /* ── Las notas ────────────────────────────────────────────────────
+     Las advertencias y los "por que" no se borran —son la mitad del valor
+     de esta auditoria— pero dejan de vivir en la tarjeta. Un dato de una
+     linea con tres lineas de explicacion debajo deja de ser un dato de una
+     linea, y Omar no viene a leer eso cada vez. Van detras del boton "?"
+     del encabezado: quien quiera el detalle lo abre. */
+  .wid-nota{display:none;margin-top:8px;padding-top:8px;
+    border-top:1px dashed var(--linea);
+    font-size:10.5px;color:var(--tinta-media);line-height:1.5;}
+  .wid.abierta .wid-nota{display:block;}
+  .wid-cab .mas{flex:0 0 auto;width:15px;height:15px;border-radius:50%;
+    border:1px solid var(--linea);background:none;cursor:pointer;padding:0;
+    font:inherit;font-size:9.5px;line-height:1;color:var(--tinta-suave);
+    display:flex;align-items:center;justify-content:center;}
+  .wid-cab .mas:hover{border-color:var(--tinta-suave);color:var(--tinta-media);}
+  .wid.abierta .wid-cab .mas{background:var(--tinta-suave);border-color:var(--tinta-suave);color:#fff;}
 
   /* ── Monedas ──────────────────────────────────────────────────────
      Cada monto dice su unidad y lleva color propio: los dolares en verde
@@ -1411,30 +1442,34 @@ const MAPA = {
    ---------------------------------------------------------------------
    No todos piden la misma caja, pero sólo se pide lo que hace falta: acá
    solamente se declara el ANCHO (`w2`, `w3` = dos o tres columnas de la
-   rejilla), y el alto lo pone el contenido. Hubo una clase `h2` de alto
+   rejilla), y el alto lo pone el contenido. **Lo que no está en esta tabla
+   ocupa una columna**, que es el caso normal: un conteo, un porcentaje o
+   dos secciones caben ahí. El ancho extra es para los que muestran tres o
+   cuatro empresas al costado, o etiquetas largas que no se pueden recortar
+   (nombres de clientes). Hubo una clase `h2` de alto
    doble y se quitó: forzaba 232px en tarjetas que llenaban 90, y el
    resultado era media tarjeta en blanco. Si un indicador necesita alto,
    es porque tiene filas — y entonces ya lo toma solo.
    ===================================================================== */
 const TAM = {
-  "1.1":"w2", "1.3":"w3", "1.4":"w2", "1.6":"w2",
-  "2.1":"w2", "2.2":"", "2.3":"w2", "2.4":"w2", "2.5":"w2", "2.6":"w2", "2.7":"w2", "2.8":"w2",
+  "1.1":"w2", "1.3":"w3", "1.4":"", "1.6":"w2",
+  "2.1":"w2", "2.2":"", "2.3":"w3", "2.4":"w2", "2.5":"w2", "2.6":"", "2.7":"w2", "2.8":"w2",
   "3.1":"w2", "3.2":"w2", "3.3":"w3", "3.4":"w2", "3.5":"w2", "3.7":"w2",
   "4.1":"w2", "4.4":"w2", "4.5":"w2",
-  "5.1":"w2", "5.2":"w2", "5.3":"w2",
-  "6.1":"w2", "6.2":"w2", "6.4":"w2",
-  "7.1":"w2", "7.2":"w2", "7.4":"w2",
-  "8.1":"w2", "8.2":"w2", "8.4":"w2",
-  "9.1":"w2",
-  "10.1":"w3", "10.2":"", "10.3":"w2",
-  "T1.1":"w2", "T1.2":"w2", "T1.3":"w2", "T1.4":"w2",
-  "T2.1":"w2", "T2.2":"w2",
-  "T3.1":"", "T3.2":"w2", "T3.3":"",
+  "5.1":"w2", "5.2":"", "5.3":"w2",
+  "6.1":"", "6.2":"w2", "6.4":"w2",
+  "7.1":"w2", "7.2":"", "7.4":"",
+  "8.1":"w2", "8.2":"w2", "8.4":"",
+  "9.1":"",
+  "10.1":"w3", "10.2":"", "10.3":"",
+  "T1.1":"", "T1.2":"", "T1.3":"", "T1.4":"",
+  "T2.1":"", "T2.2":"",
+  "T3.1":"", "T3.2":"", "T3.3":"",
   "T4.1":"", "T4.2":"", "T4.3":"w2",
-  "T5.1":"w2", "T5.2":"w2", "T5.3":"w2",
-  "T6.1":"w2", "T6.2":"w2", "T6.3":"",
-  "T7.1":"w2", "T7.2":"w3", "T7.3":"",
-  "T8.2":"w2", "T8.3":"w2"
+  "T5.1":"", "T5.2":"w2", "T5.3":"w2",
+  "T6.1":"", "T6.2":"", "T6.3":"",
+  "T7.1":"", "T7.2":"w3", "T7.3":"",
+  "T8.2":"", "T8.3":""
 };
 
 function pintarWidgets(){
@@ -1474,11 +1509,29 @@ function pintarWidgets(){
     const secs = (String(cuerpo).match(/class="sec[" ]/g) || []).length;
     if(secs >= 4) tam = tam.includes("w2") ? tam.replace("w2","w3") : (tam || "w3");
 
+    /* Se sacan las notas del cuerpo y se pegan al final, escondidas. Asi los
+       mapeadores siguen escribiendo su nota donde les queda natural y el
+       widget no crece por ellas. */
+    const notas = [];
+    cuerpo = String(cuerpo).replace(/<div class="wid-nota">([\s\S]*?)<\/div>/g,
+      (_, t)=>{ notas.push(t); return ""; });
+
     return `<div class="wid ${tam}${hueco?" hueco":""}">
-      <div class="wid-cab"><span class="et">${et}</span><span class="id">${id}</span></div>
-      ${cuerpo}</div>`;
+      <div class="wid-cab"><span class="et">${et}</span><span class="id">${id}</span>`
+      + (notas.length ? `<button class="mas" type="button" aria-label="Ver advertencias">?</button>` : "")
+      + `</div>
+      ${cuerpo}`
+      + (notas.length ? `<div class="wid-nota">${notas.join("<br><br>")}</div>` : "")
+      + `</div>`;
   }).join("");
 }
+
+/* El "?" de cada tarjeta. Por delegacion porque pintarWidgets() reemplaza el
+   HTML entero cada vez que llega una fuente. */
+document.getElementById("widgets").addEventListener("click", e=>{
+  const b = e.target.closest(".mas");
+  if(b) b.closest(".wid").classList.toggle("abierta");
+});
 
 /* ── Abrir y cerrar ───────────────────────────────────────────────── */
 const panel = document.getElementById("panel"), velo = document.getElementById("velo");

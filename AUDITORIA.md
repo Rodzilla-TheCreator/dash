@@ -406,6 +406,34 @@ Comprobado en el navegador: **cero textos recortados** en escritorio y en teléf
 cinco que había antes (nombres largos de deudores y de sistemas). Los que igual no caben
 ahora llevan el nombre completo en el `title`.
 
+### 23. ✅ Media pantalla sin usar, y tarjetas infladas por su propia explicación
+
+Tres cosas separadas que se veían como una sola:
+
+**El lienzo tenía `max-width:1180px`.** En un monitor de 1360 eso dejaba 180px muertos a la
+derecha, y en uno de 1920 sobraba media pantalla. Se quitó el tope: la rejilla reparte el
+ancho en más columnas, no en columnas más gordas. Pasó de 4 a **6 columnas** a 1360px, y el
+espacio muerto de 180px a 15 (la barra de scroll). Los bloques de texto corrido sí conservan
+tope, que es donde el ancho sí molesta.
+
+**El mínimo de un widget era muy grande.** Bajó de 226 a **184px**, con menos relleno y
+tipografía más chica. Y 22 indicadores que tenían ancho doble volvieron a una columna: un
+conteo o un porcentaje no necesitan dos.
+
+**Las notas inflaban la tarjeta.** Un dato de una línea con tres líneas de explicación debajo
+deja de ser un dato de una línea. Las notas **no se borraron** —son la mitad del valor de esta
+auditoría— pero se fueron detrás de un botón `?` en el encabezado. Son 23 tarjetas las que lo
+tienen; quien quiera el detalle lo abre.
+
+De paso, las etiquetas de las listas **se parten en dos líneas en vez de recortarse con
+puntitos**. Al angostar las tarjetas, *"Unicamente para presupuesto del cliente"* o el nombre
+de un cliente no caben en una línea, y cortarlos dejaba el dato ilegible. Cuesta un renglón
+sólo en las filas que lo necesitan.
+
+Comprobado a 1360px y en teléfono: **cero textos recortados, cero desbordes, cero scroll
+horizontal**. Las alturas van de 83 a 284px con mediana de 133, contra el bloque plano de
+232px de antes.
+
 ---
 
 ## 🟢 Comprobados y sanos
