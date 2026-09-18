@@ -346,6 +346,66 @@ lempiras**, y ni un `$` suelto en ninguno de los dos tableros.
 Lo que esto compra: los viáticos del taller (L 45,881) y la cartera de RADAR ($931,734) ya no
 se pueden comparar de un vistazo como si fueran la misma plata.
 
+### 20. 🔴 Hay **dos juegos de `empresa_id`** en la misma base, y `honduras` significa cosas distintas en cada uno
+
+Salió de una pregunta de Rodz mirando la pantalla: la tabla de flota de arriba decía
+*MT Rental / Monhaco / Honduras* y los indicadores de abajo decían *Monhaco / Monhagro /
+Costa Rica*. No era un problema de etiquetas.
+
+| tabla | valores de `empresa_id` |
+|---|---|
+| `equipos` (flota) | `monhaco` 219 · `mtrental` 89 · `honduras` 26 |
+| `clientes`, `facturas_sap`, `oportunidades` (comercial) | `honduras` 3,800 · `montasa` 3,314 · `costarica` 1,553 · `monhagro` 4 |
+
+**`honduras` está en los dos y no es lo mismo:** en la flota son 22 equipos, en lo comercial
+es Monhaco con 2,291 facturas. `mtrental` no existe del lado comercial, y `monhagro` y
+`costarica` no existen del lado de la flota.
+
+Esto es más grave que un tablero mal rotulado. Cualquiera que cruce flota con facturación por
+`empresa_id` —una consulta que parece obvia— va a unir cosas que no van juntas y el resultado
+no va a dar error. Y es exactamente el tipo de pregunta que le van a hacer a Jarvis.
+
+⚠️ **Mostrado, no arreglado.** Arreglarlo es migrar datos y eso es de Fabri. Mientras tanto,
+cada tabla se muestra **con el nombre que usa su propia fuente y con el `empresa_id` literal
+al lado**, y el aviso explica las dos particiones. Traducir una a la otra habría sido inventar
+una equivalencia que nadie confirmó.
+
+### 21. ✅ El ranking mostraba 4 vendedores y Oficina 6
+
+No faltaba gente: **Oficina lista los que facturaron cero** y acá se filtraban. De los 13
+vendedores que hay en SAP, **4 facturaron este mes**.
+
+✅ **Hecho.** Se muestran hasta 6 por empresa y el pie dice *"4 de 13 facturaron este mes.
+Los otros 9 están en SAP sin facturación, por eso no aparecen — el tablero de Oficina sí los
+lista, en cero"*. La diferencia entre los dos tableros deja de ser un misterio y pasa a ser
+una frase.
+
+De paso: la cuenta del pie sale del corte de **grupo**. La primera versión sumaba los ceros de
+las tres empresas y daba 13 en vez de 9, porque cada payload por empresa trae la lista
+completa de vendedores.
+
+### 22. ✅ Media pantalla en blanco
+
+Los widgets tenían dos cosas que les sobraban, y las dos eran suposiciones mías y no del
+contenido:
+
+1. Una clase `h2` de **alto doble fijo** (232px) aplicada a 20 indicadores. El ranking de
+   vendedores llenaba 90px y ocupaba 232.
+2. La rejilla estiraba cada tarjeta al alto de **la más alta de su fila**, así que un número
+   solo quedaba con media tarjeta vacía si le tocaba al lado de una lista de siete filas.
+
+✅ **Hecho.** Se quitó `h2` —el alto ahora lo pone el contenido— y la rejilla va con
+`align-items:start`. Las alturas pasaron de un bloque plano de 232px a un rango de **96 a
+242px** según lo que cada uno tenga que decir.
+
+Y el ancho también dejó de ser fijo: **si un indicador termina dibujando cuatro secciones**
+—pasa cuando Montasa HN, que está retirada, sí tiene número— **se ensancha solo** de dos a
+tres columnas. Son siete los que lo hacen.
+
+Comprobado en el navegador: **cero textos recortados** en escritorio y en teléfono, contra
+cinco que había antes (nombres largos de deudores y de sistemas). Los que igual no caben
+ahora llevan el nombre completo en el `title`.
+
 ---
 
 ## 🟢 Comprobados y sanos

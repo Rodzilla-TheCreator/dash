@@ -66,8 +66,17 @@
     margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--linea);
     font-size:11px;color:var(--tinta-media);}
   .leyenda-moneda .ojo{color:var(--tinta-suave);}
-  .rejilla{display:grid;grid-template-columns:repeat(auto-fill,minmax(226px,1fr));gap:14px;}
-  .wid{background:var(--tarjeta);border-radius:10px;padding:15px 16px;min-height:104px;
+  /* el empresa_id literal, al lado del nombre: chiquito pero legible */
+  table code,.aviso code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+    font-size:.82em;background:rgba(0,0,0,.05);padding:1px 4px;border-radius:3px;
+    color:var(--tinta-media);}
+  thead th code{background:rgba(255,255,255,.18);color:#fff;}
+  /* `align-items:start` es lo que evita el hueco: sin eso, una tarjeta de un
+     solo numero se estiraba hasta el alto de la lista de siete filas que le
+     tocara al lado, y quedaba media tarjeta en blanco. Cada una pide su alto. */
+  .rejilla{display:grid;grid-template-columns:repeat(auto-fill,minmax(226px,1fr));
+    gap:14px;align-items:start;}
+  .wid{background:var(--tarjeta);border-radius:10px;padding:14px 16px;
     display:flex;flex-direction:column;}
   .wid-cab{display:flex;align-items:baseline;gap:7px;margin-bottom:9px;}
   .wid-cab .et{font-size:11.5px;font-weight:600;color:var(--tinta-media);flex:1;min-width:0;line-height:1.3;}
@@ -87,13 +96,15 @@
      un span que no cabe se recorta solo, y en telefono todo cae a una columna. */
   .wid.w2{grid-column:span 2;}
   .wid.w3{grid-column:span 3;}
-  .wid.h2{min-height:232px;}
 
   /* Secciones por empresa: al costado y no apiladas, para que el ojo compare
      los tres numeros en la misma linea de base. */
   .wid-emp{display:flex;flex:1;align-items:stretch;min-width:0;}
   .wid-emp .sec{flex:1;min-width:0;padding:0 14px;border-left:1px solid var(--linea);
     display:flex;flex-direction:column;justify-content:center;}
+  /* Una lista no se centra: arranca arriba, como se lee. */
+  .wid-emp.listas .sec{justify-content:flex-start;}
+  .wid-emp.listas .sec .emp{margin-bottom:8px;}
   .wid-emp .sec:first-child{padding-left:0;border-left:0;}
   .wid-emp .sec .emp{font-size:9.5px;font-weight:700;letter-spacing:.07em;
     text-transform:uppercase;color:var(--tinta-suave);margin-bottom:6px;}
@@ -259,7 +270,9 @@
     <div class="leyenda-moneda">
       <span><span class="m usd">$0<i>USD</i></span> dolares, de RADAR y de SAP</span>
       <span><span class="m lps">L 0<i>LPS</i></span> lempiras, del taller y de caja chica</span>
-      <span class="ojo">No se convierten entre si: cada numero se muestra en la moneda en que lo guardaron.</span>
+      <span class="ojo">No se convierten entre sí: cada número se muestra en la moneda en que lo guardaron.</span>
+      <span class="ojo">Las secciones por empresa son Monhaco, Monhagro y Costa Rica — el corte
+        <b>comercial</b>. No es el mismo reparto que la tabla de flota de arriba.</span>
     </div>
     <div class="rejilla" id="widgets"></div>
   </section>
@@ -294,10 +307,12 @@ const RADAR_TOKEN = "CjXHIPSe6iJVnDQiF_yweLr7rJ3sQPdi";
 /* ── El corte con SQL. Fecha visible para que se note si envejece. ── */
 const CORTE = {
   fecha: "2026-09-18",
+  /* `id` es el empresa_id literal de la tabla `equipos`, y va a la vista a
+     proposito: son OTROS que los del lado comercial. Ver el aviso de abajo. */
   empresas: [
-    { nombre:"MT Rental",  renta:24,  disp:15, rep:24, mant:6, total:69  },
-    { nombre:"Monhaco",    renta:100, disp:6,  rep:23, mant:0, total:129 },
-    { nombre:"Honduras",   renta:8,   disp:10, rep:4,  mant:0, total:22  }
+    { nombre:"MT Rental", id:"mtrental", renta:24,  disp:15, rep:24, mant:6, total:69  },
+    { nombre:"Monhaco",   id:"monhaco",  renta:100, disp:6,  rep:23, mant:0, total:129 },
+    { nombre:"Honduras",  id:"honduras", renta:8,   disp:10, rep:4,  mant:0, total:22  }
   ],
   // usd = suma de precio_renta_mes; con = cuántos de esos equipos lo tienen
   plata: [
@@ -387,7 +402,7 @@ function pintarCorte(){
   }), {renta:0,disp:0,rep:0,mant:0,total:0});
 
   document.getElementById("tabla-empresas").innerHTML =
-    CORTE.empresas.map(e=>`<tr><td>${e.nombre}</td><td class="num">${e.renta}</td>
+    CORTE.empresas.map(e=>`<tr><td>${e.nombre} <code>${e.id}</code></td><td class="num">${e.renta}</td>
       <td class="num">${e.disp}</td><td class="num">${e.rep}</td><td class="num">${e.mant}</td>
       <td class="num">${e.total}</td></tr>`).join("")
     + `<tr class="total"><td>TOTAL</td><td class="num">${t.renta}</td><td class="num">${t.disp}</td>
@@ -405,7 +420,18 @@ function pintarCorte(){
        <td class="num">${conPrecio} de ${deTotal}</td></tr>`;
 
   document.getElementById("aviso-empresas").innerHTML =
-    `<b>Foto del ${CORTE.fecha}.</b> El reparto por empresa no lo entrega el endpoint de RADAR
+    `<b>⚠️ Estas tres empresas no son las mismas que las de los indicadores de abajo.</b>
+     La base guarda la flota con un juego de <code>empresa_id</code>
+     (<code>monhaco</code> 219 · <code>mtrental</code> 89 · <code>honduras</code> 26) y lo
+     comercial —clientes, facturas, oportunidades— con otro
+     (<code>honduras</code> 3,800 · <code>montasa</code> 3,314 · <code>costarica</code> 1,553 ·
+     <code>monhagro</code> 4). <b>Y <code>honduras</code> quiere decir cosas distintas en cada
+     lado:</b> acá son 22 equipos, allá es Monhaco con 2,291 facturas. Ni <code>mtrental</code>
+     existe del lado comercial, ni <code>monhagro</code> y <code>costarica</code> del lado de la
+     flota. Es un problema de datos y no del tablero: hay que preguntárselo a Fabri, y hasta
+     entonces cada tabla se muestra con el nombre que usa su propia fuente en vez de inventar
+     una traducción.<br><br>
+     <b>Foto del ${CORTE.fecha}.</b> El reparto por empresa no lo entrega el endpoint de RADAR
      — pedirlo por empresa devuelve la flota en cero — así que se consultó con SQL y quedó
      guardado. Los tres números de arriba sí son de ahora.`;
 
@@ -532,8 +558,12 @@ const pct  = n => n == null ? "—" : (n>0?"+":"") + Number(n).toFixed(1) + "%";
 /* Un número grande con su subtítulo. */
 const V = (valor, sub) => `<div class="wid-val">${valor}</div>` + (sub?`<div class="wid-sub">${sub}</div>`:"");
 /* Una lista de pares. */
+/* `title` con el texto completo: hay clientes cuyo nombre no cabe en ninguna
+   columna razonable, y recortar el nombre de un deudor sin manera de leerlo
+   entero es peor que una tarjeta ancha. */
 const L = (filas) => `<div class="wid-lista">` + filas.map(([k,v])=>
-  `<div class="fila"><span class="k">${k}</span><span class="v">${v}</span></div>`).join("") + `</div>`;
+  `<div class="fila"><span class="k" title="${String(k).replace(/"/g,"&quot;")}">${k}</span>`
+  + `<span class="v">${v}</span></div>`).join("") + `</div>`;
 
 /* Top N de una lista del payload, por una columna numérica. */
 function topLista(ruta, campoNombre, campoValor, n, formato){
@@ -820,7 +850,7 @@ const eqDe   = emp => emp ? T.equipos.filter(o=>o._emp === emp) : T.equipos;
 
 /* Listas de varias filas, una por empresa: para rankings partidos. */
 function seccionesLista(filas, pie){
-  return `<div class="wid-emp">` + filas.map(f=>
+  return `<div class="wid-emp listas">` + filas.map(f=>
     `<div class="sec"><div class="emp">${f.emp}</div>${f.html || '<div class="s">sin dato</div>'}</div>`
   ).join("") + `</div>` + (pie ? `<div class="wid-tot">${pie}</div>` : "");
 }
@@ -829,14 +859,25 @@ function rankEmpresa(ruta, campoNombre, campoValor, n, formato){
   const arma = p => {
     const a = pick(p, ruta);
     if(!Array.isArray(a) || !a.length) return null;
-    const top = a.slice().sort((x,y)=>(y[campoValor]||0)-(x[campoValor]||0))
-      .filter(x=>(x[campoValor]||0) > 0).slice(0, n||4);
-    if(!top.length) return null;
-    return L(top.map(x=>[String(x[campoNombre] ?? "—"), (formato||usd)(x[campoValor])]));
+    const vivos = a.filter(x=>(x[campoValor]||0) > 0);
+    if(!vivos.length) return null;
+    return L(vivos.sort((x,y)=>(y[campoValor]||0)-(x[campoValor]||0)).slice(0, n||6)
+      .map(x=>[String(x[campoNombre] ?? "—"), (formato||usd)(x[campoValor])]));
   };
   const filas = EMPRESAS.map(e=>({ emp:e.nombre, html:PAY[e.id] ? arma(PAY[e.id]) : null }));
   if(!filas.some(f=>f.html)) return null;
-  return seccionesLista(filas);
+  /* El tablero de Oficina lista 6 y acá salen menos. No es que falte gente: es
+     que allá entran los que facturaron cero. Se dice, en vez de dejar la duda.
+     La cuenta sale del corte de GRUPO —la misma lista que usa Oficina— y no de
+     sumar las empresas, porque cada payload por empresa trae la lista completa
+     de vendedores y sumarlos contaba a los mismos varias veces. */
+  const todos = pick(DATOS, ruta) || [];
+  const facturaron = todos.filter(x=>(x[campoValor]||0) > 0).length;
+  const enCero = todos.length - facturaron;
+  const pie = enCero
+    ? `${facturaron} de ${todos.length} facturaron este mes. Los otros ${enCero} están en SAP sin facturación, por eso no aparecen — el tablero de Oficina sí los lista, en cero.`
+    : "";
+  return seccionesLista(filas, pie);
 }
 
 const MAPA = {
@@ -1368,29 +1409,31 @@ const MAPA = {
 /* =====================================================================
    TAMAÑOS
    ---------------------------------------------------------------------
-   No todos piden la misma caja. Un número solo cabe en una columna; un
-   desglose por empresa necesita dos o tres, y un ranking de siete filas
-   necesita alto, no ancho. `w2`/`w3` son columnas de la rejilla y `h2`
-   es alto doble; se pueden combinar.
+   No todos piden la misma caja, pero sólo se pide lo que hace falta: acá
+   solamente se declara el ANCHO (`w2`, `w3` = dos o tres columnas de la
+   rejilla), y el alto lo pone el contenido. Hubo una clase `h2` de alto
+   doble y se quitó: forzaba 232px en tarjetas que llenaban 90, y el
+   resultado era media tarjeta en blanco. Si un indicador necesita alto,
+   es porque tiene filas — y entonces ya lo toma solo.
    ===================================================================== */
 const TAM = {
-  "1.1":"w2", "1.3":"w3 h2", "1.4":"w2 h2", "1.6":"w2",
-  "2.1":"w2", "2.2":"h2", "2.3":"w2", "2.4":"w2", "2.5":"w2", "2.6":"w2 h2", "2.7":"w2", "2.8":"w2",
-  "3.1":"w2", "3.2":"w2", "3.3":"w3", "3.4":"w2", "3.5":"h2", "3.7":"w2",
+  "1.1":"w2", "1.3":"w3", "1.4":"w2", "1.6":"w2",
+  "2.1":"w2", "2.2":"", "2.3":"w2", "2.4":"w2", "2.5":"w2", "2.6":"w2", "2.7":"w2", "2.8":"w2",
+  "3.1":"w2", "3.2":"w2", "3.3":"w3", "3.4":"w2", "3.5":"w2", "3.7":"w2",
   "4.1":"w2", "4.4":"w2", "4.5":"w2",
   "5.1":"w2", "5.2":"w2", "5.3":"w2",
   "6.1":"w2", "6.2":"w2", "6.4":"w2",
   "7.1":"w2", "7.2":"w2", "7.4":"w2",
   "8.1":"w2", "8.2":"w2", "8.4":"w2",
-  "9.1":"w2 h2",
-  "10.1":"w3", "10.2":"h2", "10.3":"w2 h2",
+  "9.1":"w2",
+  "10.1":"w3", "10.2":"", "10.3":"w2",
   "T1.1":"w2", "T1.2":"w2", "T1.3":"w2", "T1.4":"w2",
-  "T2.1":"w2 h2", "T2.2":"h2",
-  "T3.1":"h2", "T3.2":"w2 h2", "T3.3":"h2",
-  "T4.1":"h2", "T4.2":"h2", "T4.3":"w2 h2",
+  "T2.1":"w2", "T2.2":"w2",
+  "T3.1":"", "T3.2":"w2", "T3.3":"",
+  "T4.1":"", "T4.2":"", "T4.3":"w2",
   "T5.1":"w2", "T5.2":"w2", "T5.3":"w2",
-  "T6.1":"w2", "T6.2":"w2 h2", "T6.3":"h2",
-  "T7.1":"w2", "T7.2":"w3", "T7.3":"h2",
+  "T6.1":"w2", "T6.2":"w2", "T6.3":"",
+  "T7.1":"w2", "T7.2":"w3", "T7.3":"",
   "T8.2":"w2", "T8.3":"w2"
 };
 
@@ -1423,7 +1466,15 @@ function pintarWidgets(){
         ? "Este indicador todavía no está conectado a este tablero."
         : "Esperando a RADAR y al taller…");
     }
-    return `<div class="wid ${TAM[id]||""}${hueco?" hueco":""}">
+    /* El ancho declarado en TAM es un piso, no la última palabra: cuando un
+       indicador termina dibujando cuatro secciones —pasa cuando Montasa HN,
+       que está retirada, sí tiene número— dos columnas le quedan chicas y los
+       montos se aprietan. Se ensancha solo. */
+    let tam = TAM[id] || "";
+    const secs = (String(cuerpo).match(/class="sec[" ]/g) || []).length;
+    if(secs >= 4) tam = tam.includes("w2") ? tam.replace("w2","w3") : (tam || "w3");
+
+    return `<div class="wid ${tam}${hueco?" hueco":""}">
       <div class="wid-cab"><span class="et">${et}</span><span class="id">${id}</span></div>
       ${cuerpo}</div>`;
   }).join("");
