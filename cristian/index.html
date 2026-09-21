@@ -224,6 +224,10 @@
   .f-fb{background:var(--verde-claro);color:var(--verde-oscuro);}
   .f-radar{background:#EAF0F8;color:#2B5C9B;}
   .f-gap{background:#F0F0F0;color:#7A7A7A;}
+  /* `fix` = ese indicador no da dato ahora mismo. Pisa el color de la fuente a
+     proposito: lo que hay que ver de un golpe es cuales no van a mostrar nada,
+     no de que base salen. */
+  .opt .fuente.roto{background:var(--ambar-fondo);color:var(--ambar);font-weight:600;}
   .panel-pie{padding:13px 18px;border-top:1px solid var(--linea);font-size:11.5px;color:var(--tinta-media);}
   .panel-pie b{color:var(--verde);}
 </style>
@@ -245,7 +249,8 @@
     <button class="cerrar" id="cerrar" aria-label="Cerrar">&times;</button>
   </div>
   <div class="panel-cuerpo" id="catalogo"></div>
-  <div class="panel-pie"><b id="cuenta">0</b> marcados de <span id="total">0</span>. Se guardan en este navegador.</div>
+  <div class="panel-pie"><b id="cuenta">0</b> marcados de <span id="total">0</span>.
+    Se guardan en este navegador. <span id="resumen-fix"></span></div>
 </aside>
 
 <!-- ══ BARRA ══ -->
@@ -548,7 +553,10 @@ const TALLER = [
   { n:"T7", title:"Viáticos y viajes", items:[["T7.1","Viáticos registrados","fb"],["T7.2","Desglose de viáticos","fb"],["T7.3","Destinos más frecuentes","fb"],["T7.4","Kilómetros recorridos","fb"]]},
   { n:"T8", title:"Calidad de los datos", items:[["T8.1","Órdenes sin tiempo registrado","fb"],["T8.2","Órdenes con fechas inconsistentes","fb"],["T8.3","Equipos sin horómetro","fb"]]}
 ];
-const ETIQUETA = { fb:"taller", radar:"radar", gap:"falta" };
+/* Los `gap` tambien son de RADAR: lo que les pasa es que RADAR no los puede
+   calcular todavia, y eso ya lo dice la marca `fix`. Tener una tercera palabra
+   ("falta") daba "falta fix", que no se lee. */
+const ETIQUETA = { fb:"taller", radar:"radar", gap:"radar" };
 
 let elegidos = (()=>{ try{ const s=JSON.parse(localStorage.getItem("cristian_kpis"));
   return new Set(Array.isArray(s)?s:[]); }catch(e){ return new Set(); } })();
@@ -559,7 +567,7 @@ function pintarCatalogo(){
       `<div class="grupo">${g.n}. ${g.title}</div>` + g.items.map(([id,et,src]) =>
         `<label class="opt"><input type="checkbox" data-id="${id}"${elegidos.has(id)?" checked":""}>
          <span class="id">${id}</span><span class="et">${et}</span>
-         <span class="fuente f-${src}">${ETIQUETA[src]}</span></label>`).join("")).join("");
+         <span class="fuente f-${src}${ROTO[id]?" roto":""}">${ETIQUETA[src]}${ROTO[id]?" fix":""}</span></label>`).join("")).join("");
 
   document.getElementById("catalogo").innerHTML =
     bloque("Dash de Oficina", OFICINA) + bloque("Dash de Taller", TALLER);
@@ -567,6 +575,19 @@ function pintarCatalogo(){
   const total = [...OFICINA,...TALLER].reduce((a,g)=>a+g.items.length,0);
   document.getElementById("total").textContent = total;
   document.getElementById("cuenta").textContent = elegidos.size;
+
+  /* Cuántos no dan dato, dicho una vez en el pie en vez de hacer que alguien
+     cuente insignias ámbar a mano. */
+  const rotos = Object.values(ROTO).filter(Boolean).length;
+  const evaluados = Object.keys(ROTO).length;
+  const pie = document.getElementById("resumen-fix");
+  if(pie){
+    pie.innerHTML = evaluados
+      ? `<b>${rotos}</b> marcados <b>fix</b>: no dan dato todavía y el arreglo es del origen, no del tablero.`
+      : (DATOS || T
+          ? "Esperando la otra fuente para saber cuáles dan dato."
+          : "");
+  }
 
   document.querySelectorAll("#catalogo input").forEach(cb=>{
     cb.addEventListener("change", ()=>{
@@ -1500,6 +1521,77 @@ const TAM = {
   "T8.2":"", "T8.3":""
 };
 
+/* ═══════════════════════════════════════════════════════════════════
+   EVALUAR UN INDICADOR
+   -------------------------------------------------------------------
+   Devuelve el cuerpo dibujado y si salió hueco. Lo usan dos cosas: la
+   tarjeta y la insignia del panel escondido. Es a propósito que sea UNA
+   sola función — si la insignia dijera "radar" con su propia lógica y la
+   tarjeta saliera vacía, el panel estaría mintiendo sobre el tablero.
+   ═══════════════════════════════════════════════════════════════════ */
+function evaluar(id){
+  let cuerpo = null, hueco = false;
+  try{
+    const f = MAPA[id];
+    if(f){
+      const r = f();
+      if(r && r.hueco){ cuerpo = r.html; hueco = true; }
+      else cuerpo = r;
+    }
+  }catch(e){
+    /* que un indicador se caiga no debe tumbar el resto del tablero */
+    cuerpo = V("Error al calcular", e.message);
+    hueco = true;
+  }
+  if(!cuerpo){
+    hueco = true;
+    cuerpo = V("Sin dato", DATOS || T
+      ? "Este indicador todavía no está conectado a este tablero."
+      : "Esperando a RADAR y al taller…");
+  }
+  return { cuerpo, hueco };
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   QUÉ INDICADOR ESTÁ ROTO, EN VIVO
+   -------------------------------------------------------------------
+   El panel escondido decía "radar" o "taller" según de dónde SALE el
+   dato. Eso contesta la pregunta equivocada: a quien marca casillas no
+   le importa de qué base viene, le importa si va a ver un número. Y
+   había indicadores etiquetados "radar" que al marcarlos salen vacíos
+   —el 1.2, por ejemplo, porque RADAR no tiene metas cargadas—, o sea
+   que la etiqueta prometía algo que la tarjeta no cumplía.
+
+   Ahora la insignia dice `radar fix` o `taller fix` cuando ese indicador
+   NO da dato ahora mismo. «fix» y no «sin dato» porque casi ninguno está
+   roto en el tablero: les falta algo en el origen, y arreglarlo es
+   trabajo de Fabri o de Miguel.
+
+   La marca sólo se pone cuando la fuente YA CONTESTÓ. Mientras se espera
+   a RADAR o al taller, la insignia se queda como estaba: decir «fix» de
+   entrada, antes de que llegue el dato, sería alarmar por nada.
+   ═══════════════════════════════════════════════════════════════════ */
+const ROTO = {};
+
+/* No se mira la etiqueta del catálogo para saber a qué fuente espera cada
+   indicador, porque esa etiqueta miente en varios: el 5.1, el 5.2, el 6.1 y el
+   10.3 dicen «taller» y en realidad leen RADAR. Confiando en ella, ocho salían
+   marcados «fix» sólo porque Firebase había contestado antes que RADAR.
+
+   Así que se espera a las DOS y recién entonces se marca. Si una no llegó, no
+   se marca nada y el pie dice por qué: un «fix» falso en la presentación a Omar
+   es peor que no tener la marca. */
+function revisarVivos(){
+  const listo = !!DATOS && !!T;
+  for(const g of [...OFICINA, ...TALLER]){
+    for(const [id] of g.items){
+      if(!listo){ delete ROTO[id]; continue; }
+      ROTO[id] = evaluar(id).hueco;
+    }
+  }
+  pintarCatalogo();
+}
+
 function pintarWidgets(){
   const zona = document.getElementById("zona-widgets");
   const caja = document.getElementById("widgets");
@@ -1509,26 +1601,7 @@ function pintarWidgets(){
   zona.hidden = ids.length === 0;
 
   caja.innerHTML = ids.map(({ id, et })=>{
-    let cuerpo = null, hueco = false;
-    try{
-      const f = MAPA[id];
-      if(f){
-        const r = f();
-        if(r && r.hueco){ cuerpo = r.html; hueco = true; }
-        else cuerpo = r;
-      }
-    }catch(e){
-      /* que un indicador se caiga no debe tumbar el resto del tablero */
-      cuerpo = V("Error al calcular", e.message);
-      hueco = true;
-    }
-
-    if(!cuerpo){
-      hueco = true;
-      cuerpo = V("Sin dato", DATOS || T
-        ? "Este indicador todavía no está conectado a este tablero."
-        : "Esperando a RADAR y al taller…");
-    }
+    let { cuerpo, hueco } = evaluar(id);
     /* El ancho declarado en TAM es un piso, no la última palabra: cuando un
        indicador termina dibujando cuatro secciones —pasa cuando Montasa HN,
        que está retirada, sí tiene número— dos columnas le quedan chicas y los
@@ -1583,11 +1656,14 @@ async function cargarCaja(){
 pintarCorte();
 pintarCatalogo();
 pintarWidgets();
-/* Cada fuente repinta en cuanto llega: el tablero no espera a la mas lenta. */
-cargarVivo().then(pintarWidgets);
-cargarEmpresas().then(pintarWidgets);
-cargarTaller().then(pintarWidgets);
-cargarCaja().then(pintarWidgets);
+/* Cada fuente repinta en cuanto llega: el tablero no espera a la mas lenta.
+   Y de paso vuelve a revisar cuales dan dato, que es lo que decide si la
+   insignia del panel dice "radar" o "radar fix". */
+const alLlegar = () => { pintarWidgets(); revisarVivos(); };
+cargarVivo().then(alLlegar);
+cargarEmpresas().then(alLlegar);
+cargarTaller().then(alLlegar);
+cargarCaja().then(alLlegar);
 </script>
 </body>
 </html>

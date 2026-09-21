@@ -434,6 +434,37 @@ Comprobado a 1360px y en teléfono: **cero textos recortados, cero desbordes, ce
 horizontal**. Las alturas van de 83 a 284px con mediana de 133, contra el bloque plano de
 232px de antes.
 
+### 24. ✅ El panel decía de qué base sale el dato, no si hay dato
+
+La insignia de cada indicador en el panel escondido decía `radar` o `taller` — o
+sea, **de dónde sale**. Esa es la pregunta equivocada: a quien marca casillas no le importa de
+qué base viene, le importa si va a ver un número. Y había indicadores etiquetados `radar` que
+al marcarlos salen vacíos: el `1.2` es el caso claro, porque RADAR no tiene metas cargadas. La
+insignia prometía algo que la tarjeta no cumplía.
+
+✅ **Hecho.** Ahora dice `radar fix` o `taller fix` cuando ese indicador **no da dato en vivo**.
+Son **15 de 78**, y el pie del panel lo resume en una línea. Se eligió «fix» y no «sin dato»
+porque casi ninguno está roto en el tablero: les falta algo en el origen, y arreglarlo es
+trabajo de Fabri o de Miguel.
+
+Tres decisiones que valen más que el cambio:
+
+**La insignia y la tarjeta salen de la misma función.** Si la marca tuviera su propia lógica,
+podría decir «radar» mientras la tarjeta sale vacía, y entonces el panel estaría mintiendo
+sobre el tablero. Comprobado en el navegador: **cero desacuerdos** entre lo que marca la
+insignia y lo que renderiza la tarjeta, en los 78.
+
+**No se marca hasta que las dos fuentes contestaron.** La primera versión miraba la etiqueta
+del catálogo para saber a qué fuente esperaba cada indicador, y **esa etiqueta miente en
+cuatro**: el `5.1`, el `5.2`, el `6.1` y el `10.3` dicen «taller» y en realidad leen RADAR. Con
+eso, ocho salían marcados `fix` sólo porque Firebase había contestado antes que RADAR. Un
+`fix` falso en una presentación es peor que no tener la marca, así que ahora espera a las dos
+y mientras tanto el pie dice por qué no hay marcas.
+
+**Se retiró la etiqueta `falta`.** Los dos indicadores que la tenían (`4.2`, `4.3`) son de
+RADAR igual; lo que les pasa es que RADAR no los puede calcular, que es exactamente lo que
+dice `fix`. Tener una tercera palabra daba `falta fix`, que no se lee.
+
 ---
 
 ## 🟢 Comprobados y sanos
