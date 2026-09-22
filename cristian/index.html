@@ -59,8 +59,11 @@
 
   /* ── avisos ───────────────────────────────────────────────────── */
   .aviso{border-radius:8px;padding:13px 15px;font-size:12.5px;line-height:1.55;margin-top:14px;}
-  .aviso.ambar{background:var(--ambar-fondo);color:#7A5210;border-left:3px solid var(--ambar);}
   .aviso.rojo{background:var(--rojo-fondo);color:#8C2A20;border-left:3px solid var(--rojo);}
+  /* Para decir de dónde salió un número sin pintarlo de alarma. La procedencia
+     no es un problema: se lee si a alguien le interesa y no le grita a nadie. */
+  .aviso.neutro{background:none;border-left:0;color:var(--tinta-suave);
+    padding:8px 0 0;font-size:12px;}
   .aviso b{font-weight:600;}
   .pie{margin-top:34px;padding-top:16px;border-top:1px solid var(--linea);
     font-size:11.5px;color:var(--tinta-suave);line-height:1.6;}
@@ -289,7 +292,7 @@
           <tbody id="tabla-empresas"></tbody>
         </table>
       </div>
-      <div class="aviso ambar" id="aviso-empresas"></div>
+      <div class="aviso neutro" id="aviso-empresas"></div>
     </section>
 
     <section>
@@ -353,11 +356,18 @@ const RADAR_TOKEN = "CjXHIPSe6iJVnDQiF_yweLr7rJ3sQPdi";
 const CORTE = {
   fecha: "2026-09-18",
   /* `id` es el empresa_id literal de la tabla `equipos`, y va a la vista a
-     proposito: son OTROS que los del lado comercial. Ver el aviso de abajo. */
+     proposito: son OTROS que los del lado comercial.
+
+     La fila de MT Rental viene sumada de dos ids. En la flota, `honduras` NO es
+     Monhaco —eso es del lado comercial— sino MT Rental, y Fabrizio esta pasando
+     esos equipos a `mtrental`. Los 22 de `honduras` son el resto sin migrar.
+     Se muestran juntos porque son LA MISMA empresa: separarlos dibujaba una
+     tercera que no existe, y llamarla "Honduras" hacia pensar en Monhaco.
+     Cuando termine la migracion, esta fila queda con `mtrental` solo y los
+     numeros no cambian. */
   empresas: [
-    { nombre:"MT Rental", id:"mtrental", renta:24,  disp:15, rep:24, mant:6, total:69  },
-    { nombre:"Monhaco",   id:"monhaco",  renta:100, disp:6,  rep:23, mant:0, total:129 },
-    { nombre:"Honduras",  id:"honduras", renta:8,   disp:10, rep:4,  mant:0, total:22  }
+    { nombre:"MT Rental", id:"mtrental + honduras", renta:32,  disp:25, rep:28, mant:6, total:91  },
+    { nombre:"Monhaco",   id:"monhaco",             renta:100, disp:6,  rep:23, mant:0, total:129 }
   ],
   // usd = suma de precio_renta_mes; con = cuántos de esos equipos lo tienen
   plata: [
@@ -465,20 +475,14 @@ function pintarCorte(){
        <td class="num">${conPrecio} de ${deTotal}</td></tr>`;
 
   document.getElementById("aviso-empresas").innerHTML =
-    `<b>⚠️ Estas tres empresas no son las mismas que las de los indicadores de abajo.</b>
-     La base guarda la flota con un juego de <code>empresa_id</code>
-     (<code>monhaco</code> 219 · <code>mtrental</code> 89 · <code>honduras</code> 26) y lo
-     comercial —clientes, facturas, oportunidades— con otro
-     (<code>honduras</code> 3,800 · <code>montasa</code> 3,314 · <code>costarica</code> 1,553 ·
-     <code>monhagro</code> 4). <b>Y <code>honduras</code> quiere decir cosas distintas en cada
-     lado:</b> acá son 22 equipos, allá es Monhaco con 2,291 facturas. Ni <code>mtrental</code>
-     existe del lado comercial, ni <code>monhagro</code> y <code>costarica</code> del lado de la
-     flota. Es un problema de datos y no del tablero: hay que preguntárselo a Fabri, y hasta
-     entonces cada tabla se muestra con el nombre que usa su propia fuente en vez de inventar
-     una traducción.<br><br>
-     <b>Foto del ${CORTE.fecha}.</b> El reparto por empresa no lo entrega el endpoint de RADAR
-     — pedirlo por empresa devuelve la flota en cero — así que se consultó con SQL y quedó
-     guardado. Los tres números de arriba sí son de ahora.`;
+    `Foto del ${CORTE.fecha}. Son ${t.total} equipos y no todos los que tiene la tabla porque
+     no se cuentan los vendidos. El reparto por empresa no lo entrega el endpoint de RADAR
+     —pedirlo por empresa devuelve la flota en cero— así que se consultó con SQL y quedó
+     guardado.<br>
+     <b>Son dos empresas y no cuatro a propósito:</b> la tabla de equipos no tiene un solo
+     registro de Monhagro ni de Costa Rica. Monhagro arrancó en junio de 2026 y todavía no
+     carga flota; Costa Rica no está en ese módulo. Los indicadores de abajo son el corte
+     <b>comercial</b>, donde sí existen las cuatro.`;
 
   document.getElementById("aviso-plata").innerHTML =
     `<b>Los ${usd(potencial)} son solo de ${conPrecio} equipos de ${deTotal}.</b>
@@ -576,16 +580,25 @@ function pintarCatalogo(){
   document.getElementById("total").textContent = total;
   document.getElementById("cuenta").textContent = elegidos.size;
 
-  /* Cuántos no dan dato, dicho una vez en el pie en vez de hacer que alguien
-     cuente insignias ámbar a mano. */
-  const rotos = Object.values(ROTO).filter(Boolean).length;
-  const evaluados = Object.keys(ROTO).length;
+  /* Cuántos están marcados, dicho una vez en el pie en vez de hacer que alguien
+     cuente insignias a mano. Se dicen por separado los dos motivos: "no da
+     dato" y "da un dato mal cortado" no se arreglan con lo mismo ni se le
+     explican igual a Omar. */
+  const fijos  = Object.keys(ROTO_FIJO).filter(id=>ROTO[id]).length;
+  const vacios = Object.keys(ROTO).filter(id=>ROTO[id] && !ROTO_FIJO[id]).length;
+  const medidos = Object.keys(ROTO).some(id=>!ROTO_FIJO[id]);
   const pie = document.getElementById("resumen-fix");
   if(pie){
-    pie.innerHTML = evaluados
-      ? `<b>${rotos}</b> marcados <b>fix</b>: no dan dato todavía y el arreglo es del origen, no del tablero.`
+    const partes = [];
+    if(vacios) partes.push(`<b>${vacios}</b> que no dan dato`);
+    if(fijos)  partes.push(`<b>${fijos}</b> con el corte por empresa mal`);
+    pie.innerHTML = medidos
+      ? (partes.length
+          ? `Marcados <b>fix</b>: ${partes.join(" y ")}. El arreglo es del origen, no del tablero.`
+          : "Ninguno marcado <b>fix</b>.")
       : (DATOS || T
-          ? "Esperando la otra fuente para saber cuáles dan dato."
+          ? `Esperando la otra fuente para saber cuáles dan dato. Ya marcados <b>fix</b>:
+             ${fijos} con el corte por empresa mal.`
           : "");
   }
 
@@ -1571,7 +1584,27 @@ function evaluar(id){
    a RADAR o al taller, la insignia se queda como estaba: decir «fix» de
    entrada, antes de que llegue el dato, sería alarmar por nada.
    ═══════════════════════════════════════════════════════════════════ */
-const ROTO = {};
+/* Hay un segundo tipo de roto que la revision automatica NO puede ver: el que
+   SI dibuja un numero, pero el numero esta mal cortado. Esos se marcan a mano.
+
+   Fabrizio lo explico asi: el grupo son CUATRO empresas, y la operacion de
+   Montasa HN se mudo a Monhaco cuando dejo de facturar en octubre de 2025.
+   Mirando solo a Monhaco, aparece creciendo 46% mientras el grupo viene 44%
+   abajo. Un tablero que muestra ese 46% no esta vacio: esta mintiendo, que es
+   peor, porque nadie sospecha de un numero que se ve bien.
+
+   Estos dos van marcados hasta que se arreglen:
+     1.6  el pie del grupo dibuja el acumulado pero tira el año anterior, y
+          Montasa HN no sale porque su acumulado de este año es cero — que en
+          un comparativo interanual es justo el dato que hay que ver.
+     10.1 el corte real es HN (honduras + montasa + monhagro) contra CR. Hoy
+          lista las cuatro sueltas y no hay subtotal de HN.
+
+   Se marcan SIEMPRE, sin esperar a que contesten las fuentes: acá no se esta
+   adivinando si va a llegar el dato, ya se sabe que el corte esta mal. */
+const ROTO_FIJO = { "1.6":true, "10.1":true };
+
+const ROTO = Object.assign({}, ROTO_FIJO);
 
 /* No se mira la etiqueta del catálogo para saber a qué fuente espera cada
    indicador, porque esa etiqueta miente en varios: el 5.1, el 5.2, el 6.1 y el
@@ -1585,6 +1618,7 @@ function revisarVivos(){
   const listo = !!DATOS && !!T;
   for(const g of [...OFICINA, ...TALLER]){
     for(const [id] of g.items){
+      if(ROTO_FIJO[id]){ ROTO[id] = true; continue; }
       if(!listo){ delete ROTO[id]; continue; }
       ROTO[id] = evaluar(id).hueco;
     }

@@ -1,3 +1,7 @@
 # Secretos — nunca subir
 *.env
 .env*
+
+# Config de despliegue — lleva credenciales FTP, NUNCA subir
+.vscode/
+sftp.json
