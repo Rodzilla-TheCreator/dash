@@ -346,7 +346,8 @@
    LA TRAMPA GRANDE: `flota.ingresos_renta_mes` del endpoint NO es el
    potencial. Sale de líneas de factura con categoría renta — es lo que YA
    se cobró. El potencial es otra cosa y se calcula con `precio_renta_mes`,
-   que 144 de 220 equipos no tienen cargado.
+   que 29 de 221 equipos no tienen cargado. Eran 144 de 220 hasta el
+   2026-09-22, cuando se cargaron los 116 precios de Monhaco.
    ===================================================================== */
 
 const RADAR_API = "https://montasa-web.vercel.app/api/dashboard";
@@ -354,7 +355,7 @@ const RADAR_TOKEN = "CjXHIPSe6iJVnDQiF_yweLr7rJ3sQPdi";
 
 /* ── El corte con SQL. Fecha visible para que se note si envejece. ── */
 const CORTE = {
-  fecha: "2026-09-18",
+  fecha: "2026-09-22",
   /* `id` es el empresa_id literal de la tabla `equipos`, y va a la vista a
      proposito: son OTROS que los del lado comercial.
 
@@ -366,17 +367,28 @@ const CORTE = {
      Cuando termine la migracion, esta fila queda con `mtrental` solo y los
      numeros no cambian. */
   empresas: [
-    { nombre:"MT Rental", id:"mtrental + honduras", renta:32,  disp:25, rep:28, mant:6, total:91  },
+    { nombre:"MT Rental", id:"mtrental + honduras", renta:32,  disp:25, rep:29, mant:6, total:92  },
     { nombre:"Monhaco",   id:"monhaco",             renta:100, disp:6,  rep:23, mant:0, total:129 }
   ],
-  // usd = suma de precio_renta_mes; con = cuántos de esos equipos lo tienen
+  /* usd = suma de precio_renta_mes; con = cuantos de esos equipos lo tienen.
+
+     Este corte es el PRIMERO con los precios de Monhaco adentro: hasta el
+     2026-09-22 los 129 equipos de Monhaco estaban en cero y el potencial salia
+     cortado a la mitad. Se cargaron 116 desde el analisis de precios 2026, en
+     USD —el libro trae el encabezado "PRECIO RENTA (USD)"—, que es la misma
+     unidad que RADAR ya guardaba para MT Rental. Por eso los numeros saltan
+     tanto contra la foto anterior: no crecio nada, se dejo de ocultar. */
   plata: [
-    { estado:"En renta (ya entra)",     usd:46423, con:30, de:132 },
-    { estado:"Disponible (fácil)",      usd:24628, con:14, de:31  },
-    { estado:"En reparación (frenado)", usd:43293, con:26, de:51  },
-    { estado:"En mantenimiento",        usd:9850,  con:6,  de:6   }
+    { estado:"En renta (ya entra)",     usd:123833, con:124, de:132 },
+    { estado:"Disponible (fácil)",      usd:23938,  con:17,  de:31  },
+    { estado:"En reparación (frenado)", usd:60183,  con:45,  de:52  },
+    { estado:"En mantenimiento",        usd:9810,   con:6,   de:6   }
   ],
-  sinPrecioMonhaco: 129
+  /* De los que estan PARADOS y no tienen precio, de quien son. Se guarda el
+     reparto y no solo el total porque es lo unico que dice a quien hay que ir a
+     pedirle los precios que faltan, y despues de la carga de Monhaco eso se dio
+     vuelta: antes faltaba Monhaco entero, ahora falta MT Rental. */
+  paradosSinPrecio: { "MT Rental":15, "Monhaco":6 }
 };
 
 const fmt = n => n == null ? "—" : Number(n).toLocaleString("es-HN");
@@ -485,10 +497,11 @@ function pintarCorte(){
      <b>comercial</b>, donde sí existen las cuatro.`;
 
   document.getElementById("aviso-plata").innerHTML =
-    `<b>Los ${usd(potencial)} son solo de ${conPrecio} equipos de ${deTotal}.</b>
+    `<b>Los ${usd(potencial)} son de ${conPrecio} equipos de ${deTotal}.</b>
      Los otros ${deTotal-conPrecio} están parados igual, pero no tienen precio de renta cargado,
-     así que suman cero. <b>Monhaco no tiene precio en ninguno de sus ${CORTE.sinPrecioMonhaco}
-     equipos</b>, y es la flota más grande. El número real es más alto; cuánto más, no se sabe.`;
+     así que suman cero. <b>De esos, ${CORTE.paradosSinPrecio["MT Rental"]} son de MT Rental</b>
+     y ${CORTE.paradosSinPrecio["Monhaco"]} de Monhaco: los precios que faltan hay que pedirlos
+     del lado de MT Rental, no de Monhaco. El número real es más alto; cuánto más, no se sabe.`;
 }
 
 /* ── Conteos en vivo ──────────────────────────────────────────────── */
@@ -1106,7 +1119,7 @@ const MAPA = {
   "4.2": ()=> sinFuente("cuentas_por_pagar"),
   "4.3": ()=> sinFuente("cashflow_neto_proyectado"),
   "5.4": ()=> sinFuente("contratos_renta_activos",
-    "Los precios de renta tampoco están: ver el aviso de Monhaco arriba."),
+    "Los precios de renta ya están cargados; lo que falta es el contrato."),
   "5.5": ()=> sinFuente("equipos_ociosos_dias",
     "Cuántos están parados sí se sabe (5.1); cuántos días llevan, no."),
   "8.3": ()=> sinFuente("nps"),
@@ -1255,7 +1268,12 @@ const MAPA = {
       filas.push(["Equipos sin horómetro", `${fmt(sinHoro)} de ${fmt(T.equipos.length)}`,
                   luz(sinHoro > T.equipos.length*0.5, sinHoro>0)]);
     }
-    filas.push(["Precios de renta en Monhaco", `0 de ${CORTE.sinPrecioMonhaco} cargados`, "rojo"]);
+    /* Dejo de ser rojo el 2026-09-22, cuando se cargaron los precios de Monhaco.
+       Sigue en ambar y no en verde porque faltan los de MT Rental, que ahora son
+       los que frenan el potencial. */
+    const faltan = CORTE.paradosSinPrecio["MT Rental"] + CORTE.paradosSinPrecio["Monhaco"];
+    filas.push(["Equipos parados sin precio de renta", `${faltan} (${CORTE.paradosSinPrecio["MT Rental"]} de MT Rental)`,
+                luz(faltan > 25, faltan > 0)]);
     return `<div class="sem">` + filas.map(([et,v,c])=>
       `<div class="sem-fila"><span class="luz ${c}"></span><span class="et">${et}</span>`
       + `<span class="vl">${v}</span></div>`).join("") + `</div>`;
