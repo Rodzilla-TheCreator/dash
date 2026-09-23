@@ -407,7 +407,7 @@ const CORTE = {
   plata: [
     { estado:"En renta (ya entra)",     usd:122463, con:123, de:131 },
     { estado:"Disponible (fácil)",      usd:23938,  con:17,  de:17  },
-    { estado:"En reparación (frenado)", usd:60183,  con:45,  de:50  },
+    { estado:"En reparación (frenado)", usd:61933,  con:48,  de:50  },
     { estado:"En mantenimiento",        usd:11180,  con:7,   de:7   }
   ],
 
@@ -415,18 +415,19 @@ const CORTE = {
      dejar de contar lo que no es flota de renta; los 16 que se fueron no
      necesitan precio, no es que se lo debamos a nadie. Los 5 que quedan sí
      hay que ir a pedirlos. */
-  paradosSinPrecio: { "MT Rental":1, "Monhaco":4 },
+  paradosSinPrecio: { "MT Rental":1, "Monhaco":1 },
 
-  /* Son cinco: se nombran en vez de contarse. Un "faltan 5" obliga a que
-     alguien salga a buscar cuales; con la lista, el que los tenga los carga
-     en un minuto. Los tres primeros ni siquiera hay que preguntarlos: hay
-     una unidad identica que ya tiene precio, y esta anotada al lado. */
+  /* Quedan DOS: se nombran en vez de contarse, porque "faltan 2" obliga a que
+     alguien salga a averiguar cuales y con la lista se resuelve en un minuto.
+
+     Eran cinco hasta el 2026-09-23. Los otros tres se cargaron ese dia y no
+     hizo falta preguntarle a nadie: ET-1 tomo los $50/mes de sus 11 gemelos
+     ET-, y MT-117 y MT-124 los $850/mes de MT-126, que es el mismo modelo.
+     Estos dos si hay que preguntarlos: no existe ninguna unidad igual con
+     precio, y en la lista de Fabrizio TH-02 aparece solo con precio de venta. */
   faltanPrecio: [
-    { cod:"ET-1",   emp:"Monhaco",   equipo:"EP QDD10",       pista:"11 de sus 12 gemelos ET- estan a $50/mes" },
-    { cod:"MT-117", emp:"Monhaco",   equipo:"Baoli KBE18",    pista:"MT-126, mismo modelo, esta a $850/mes" },
-    { cod:"MT-124", emp:"Monhaco",   equipo:"Baoli KBE18",    pista:"MT-126, mismo modelo, esta a $850/mes" },
-    { cod:"ST-15",  emp:"Monhaco",   equipo:"Baoli ES20-N02", pista:"" },
-    { cod:"TH-02",  emp:"MT Rental", equipo:"Genie TH-2",     pista:"" }
+    { cod:"ST-15",  emp:"Monhaco",   equipo:"Baoli ES20-N02", pista:"no hay otra unidad igual" },
+    { cod:"TH-02",  emp:"MT Rental", equipo:"Genie TH-2",     pista:"la lista solo trae su precio de venta" }
   ]
 };
 
@@ -645,10 +646,11 @@ function pintarCorte(){
         `<div class="fila"><span class="k"><b>${e.cod}</b> · ${e.equipo} · ${e.emp}</span>`
         + `<span class="v">${e.pista || "hay que preguntarlo"}</span></div>`).join("")
     + `</div>`
-    + `<div style="margin-top:8px">Antes acá decían 21. Los otros ${CORTE.noRentables}
+    + `<div style="margin-top:8px">Acá decían 21 y después 5. De los 21, ${CORTE.noRentables}
        no eran flota de renta —pick-ups y camiones de la empresa, equipo de clientes que está
-       por servicio, y dos marcadores de taller— así que no les falta precio: nunca debieron
-       contarse.</div>`;
+       por servicio, y dos marcadores de taller—, así que nunca debieron contarse. De los 5
+       que quedaban, tres se cargaron el ${CORTE.fecha} copiando el precio de una unidad
+       idéntica. Estos dos hay que preguntarlos.</div>`;
 }
 
 /* ── Conteos en vivo ──────────────────────────────────────────────── */
