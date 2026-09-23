@@ -298,7 +298,7 @@
     </section>
 
     <section>
-      <h2>La plata: qué genera y qué podría generar</h2>
+      <h2>La plata: qué genera y qué podría generar <span class="ojo">— solo flota rentable</span></h2>
       <div class="caja">
         <table>
           <thead><tr>
@@ -357,7 +357,7 @@ const RADAR_TOKEN = "CjXHIPSe6iJVnDQiF_yweLr7rJ3sQPdi";
 
 /* ── El corte con SQL. Fecha visible para que se note si envejece. ── */
 const CORTE = {
-  fecha: "2026-09-22",
+  fecha: "2026-09-23",
   /* `id` es el empresa_id literal de la tabla `equipos`, y va a la vista a
      proposito: son OTROS que los del lado comercial.
 
@@ -369,28 +369,48 @@ const CORTE = {
      Cuando termine la migracion, esta fila queda con `mtrental` solo y los
      numeros no cambian. */
   empresas: [
-    { nombre:"MT Rental", id:"mtrental + honduras", renta:32,  disp:25, rep:29, mant:6, total:92  },
+    { nombre:"MT Rental", id:"mtrental + honduras", renta:31,  disp:25, rep:29, mant:7, total:92  },
     { nombre:"Monhaco",   id:"monhaco",             renta:100, disp:6,  rep:23, mant:0, total:129 }
   ],
-  /* usd = suma de precio_renta_mes; con = cuantos de esos equipos lo tienen.
 
-     Este corte es el PRIMERO con los precios de Monhaco adentro: hasta el
-     2026-09-22 los 129 equipos de Monhaco estaban en cero y el potencial salia
-     cortado a la mitad. Se cargaron 116 desde el analisis de precios 2026, en
-     USD —el libro trae el encabezado "PRECIO RENTA (USD)"—, que es la misma
-     unidad que RADAR ya guardaba para MT Rental. Por eso los numeros saltan
-     tanto contra la foto anterior: no crecio nada, se dejo de ocultar. */
+  /* LA TABLA DE ARRIBA CUENTA TODA LA FLOTA; ESTA SOLO LO RENTABLE.
+     -------------------------------------------------------------------
+     No es un descuido que los totales no coincidan. La composición es un
+     inventario y ahí las pick-ups cuentan. Pero el "potencial parado" es
+     plata que se dejó de ganar por no rentar algo, y una pick-up de la
+     empresa nunca se iba a rentar: contarla como equipo sin precio
+     inventaba un problema que no existe.
+
+     Se sacan 16 de 221, por esta regla:
+       · `MTV-` `CM-` `C-` `GR-`  vehículos de la empresa (9). Pick-ups,
+         camiones y la grúa del 97. La grúa es el único caso discutible:
+         si algún día se renta, hay que sacarla de esta lista.
+       · código que no arranca con letras+guion+número (7): equipo DE UN
+         CLIENTE que está acá por servicio —El Jordán, Chemical,
+         Corindplast, Miguel Orellana— más `TALLER-SPS` y
+         `TALLER-CHOLOMA`, que no son máquinas sino marcadores para
+         colgarle órdenes al taller.
+
+     `BC-` NO se excluye aunque sean aditamentos: 13 de 18 bar clamp ya
+     tienen precio cargado, o sea que sí se rentan. Y `TH-` tampoco: un
+     telehandler es flota rentable, lo que pasa es que le falta el dato.
+
+     usd = suma de precio_renta_mes; con = cuántos de esos lo tienen.
+     Los precios de Monhaco se cargaron el 2026-09-22; hasta entonces sus
+     129 equipos estaban en cero y el potencial salía cortado a la mitad. */
+  noRentables: 16,
   plata: [
-    { estado:"En renta (ya entra)",     usd:123833, con:124, de:132 },
-    { estado:"Disponible (fácil)",      usd:23938,  con:17,  de:31  },
-    { estado:"En reparación (frenado)", usd:60183,  con:45,  de:52  },
-    { estado:"En mantenimiento",        usd:9810,   con:6,   de:6   }
+    { estado:"En renta (ya entra)",     usd:122463, con:123, de:131 },
+    { estado:"Disponible (fácil)",      usd:23938,  con:17,  de:17  },
+    { estado:"En reparación (frenado)", usd:60183,  con:45,  de:50  },
+    { estado:"En mantenimiento",        usd:11180,  con:7,   de:7   }
   ],
-  /* De los que estan PARADOS y no tienen precio, de quien son. Se guarda el
-     reparto y no solo el total porque es lo unico que dice a quien hay que ir a
-     pedirle los precios que faltan, y despues de la carga de Monhaco eso se dio
-     vuelta: antes faltaba Monhaco entero, ahora falta MT Rental. */
-  paradosSinPrecio: { "MT Rental":15, "Monhaco":6 }
+
+  /* De los RENTABLES parados sin precio, de quién son. Pasó de 21 a 5 al
+     dejar de contar lo que no es flota de renta; los 16 que se fueron no
+     necesitan precio, no es que se lo debamos a nadie. Los 5 que quedan sí
+     hay que ir a pedirlos. */
+  paradosSinPrecio: { "MT Rental":1, "Monhaco":4 }
 };
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -587,10 +607,11 @@ function pintarCorte(){
 
   document.getElementById("aviso-plata").innerHTML =
     `<b>Los ${usd(potencial)} son de ${conPrecio} equipos de ${deTotal}.</b>
-     Los otros ${deTotal-conPrecio} están parados igual, pero no tienen precio de renta cargado,
-     así que suman cero. <b>De esos, ${CORTE.paradosSinPrecio["MT Rental"]} son de MT Rental</b>
-     y ${CORTE.paradosSinPrecio["Monhaco"]} de Monhaco: los precios que faltan hay que pedirlos
-     del lado de MT Rental, no de Monhaco. El número real es más alto; cuánto más, no se sabe.`;
+     Faltan <b>${deTotal-conPrecio}</b>: ${CORTE.paradosSinPrecio["Monhaco"]} de Monhaco y
+     ${CORTE.paradosSinPrecio["MT Rental"]} de MT Rental. Están parados igual pero suman cero.<br><br>
+     Antes acá decían 21. Los otros <b>${CORTE.noRentables} no eran flota de renta</b>: pick-ups y
+     camiones de la empresa, equipo de clientes que está por servicio, y dos marcadores de taller
+     que ni siquiera son máquinas. No les falta precio: nunca debieron contarse.`;
 }
 
 /* ── Conteos en vivo ──────────────────────────────────────────────── */
@@ -1404,8 +1425,13 @@ const MAPA = {
     /* Dejo de ser rojo el 2026-09-22, cuando se cargaron los precios de Monhaco.
        Sigue en ambar y no en verde porque faltan los de MT Rental, que ahora son
        los que frenan el potencial. */
-    const faltan = CORTE.paradosSinPrecio["MT Rental"] + CORTE.paradosSinPrecio["Monhaco"];
-    filas.push(["Equipos parados sin precio de renta", `${faltan} (${CORTE.paradosSinPrecio["MT Rental"]} de MT Rental)`,
+    /* Se nombran las dos empresas y no solo la peor: el reparto se da vuelta
+       cada vez que alguien carga precios, y un semáforo que dice "de MT Rental"
+       cuando el que debe es Monhaco manda a pedirlos al lugar equivocado. */
+    const pSP = CORTE.paradosSinPrecio;
+    const faltan = pSP["MT Rental"] + pSP["Monhaco"];
+    filas.push(["Equipos parados sin precio de renta",
+                `${faltan} · ${pSP["Monhaco"]} Monhaco, ${pSP["MT Rental"]} MT Rental`,
                 luz(faltan > 25, faltan > 0)]);
     return `<div class="sem">` + filas.map(([et,v,c])=>
       `<div class="sem-fila"><span class="luz ${c}"></span><span class="et">${et}</span>`
