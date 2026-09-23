@@ -307,7 +307,7 @@
           <tbody id="tabla-plata"></tbody>
         </table>
       </div>
-      <div class="aviso rojo" id="aviso-plata"></div>
+      <div class="aviso neutro" id="aviso-plata"></div>
     </section>
   </div>
 
@@ -410,7 +410,19 @@ const CORTE = {
      dejar de contar lo que no es flota de renta; los 16 que se fueron no
      necesitan precio, no es que se lo debamos a nadie. Los 5 que quedan sí
      hay que ir a pedirlos. */
-  paradosSinPrecio: { "MT Rental":1, "Monhaco":4 }
+  paradosSinPrecio: { "MT Rental":1, "Monhaco":4 },
+
+  /* Son cinco: se nombran en vez de contarse. Un "faltan 5" obliga a que
+     alguien salga a buscar cuales; con la lista, el que los tenga los carga
+     en un minuto. Los tres primeros ni siquiera hay que preguntarlos: hay
+     una unidad identica que ya tiene precio, y esta anotada al lado. */
+  faltanPrecio: [
+    { cod:"ET-1",   emp:"Monhaco",   equipo:"EP QDD10",       pista:"11 de sus 12 gemelos ET- estan a $50/mes" },
+    { cod:"MT-117", emp:"Monhaco",   equipo:"Baoli KBE18",    pista:"MT-126, mismo modelo, esta a $850/mes" },
+    { cod:"MT-124", emp:"Monhaco",   equipo:"Baoli KBE18",    pista:"MT-126, mismo modelo, esta a $850/mes" },
+    { cod:"ST-15",  emp:"Monhaco",   equipo:"Baoli ES20-N02", pista:"" },
+    { cod:"TH-02",  emp:"MT Rental", equipo:"Genie TH-2",     pista:"" }
+  ]
 };
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -606,12 +618,17 @@ function pintarCorte(){
      <b>comercial</b>, donde sí existen las cuatro.`;
 
   document.getElementById("aviso-plata").innerHTML =
-    `<b>Los ${usd(potencial)} son de ${conPrecio} equipos de ${deTotal}.</b>
-     Faltan <b>${deTotal-conPrecio}</b>: ${CORTE.paradosSinPrecio["Monhaco"]} de Monhaco y
-     ${CORTE.paradosSinPrecio["MT Rental"]} de MT Rental. Están parados igual pero suman cero.<br><br>
-     Antes acá decían 21. Los otros <b>${CORTE.noRentables} no eran flota de renta</b>: pick-ups y
-     camiones de la empresa, equipo de clientes que está por servicio, y dos marcadores de taller
-     que ni siquiera son máquinas. No les falta precio: nunca debieron contarse.`;
+    `Los ${usd(potencial)} son de ${conPrecio} equipos de ${deTotal}. Los
+     ${deTotal-conPrecio} que faltan están parados igual pero suman cero, y son estos:<br>`
+    + `<div class="wid-lista" style="margin-top:8px">`
+    + CORTE.faltanPrecio.map(e =>
+        `<div class="fila"><span class="k"><b>${e.cod}</b> · ${e.equipo} · ${e.emp}</span>`
+        + `<span class="v">${e.pista || "hay que preguntarlo"}</span></div>`).join("")
+    + `</div>`
+    + `<div style="margin-top:8px">Antes acá decían 21. Los otros ${CORTE.noRentables}
+       no eran flota de renta —pick-ups y camiones de la empresa, equipo de clientes que está
+       por servicio, y dos marcadores de taller— así que no les falta precio: nunca debieron
+       contarse.</div>`;
 }
 
 /* ── Conteos en vivo ──────────────────────────────────────────────── */
