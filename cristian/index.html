@@ -227,6 +227,8 @@
   .f-fb{background:var(--verde-claro);color:var(--verde-oscuro);}
   .f-radar{background:#EAF0F8;color:#2B5C9B;}
   .f-gap{background:#F0F0F0;color:#7A7A7A;}
+  /* Ni radar ni taller: sale de leer prosa, y conviene que se note. */
+  .f-texto{background:#F3EEF8;color:#6B4C8A;}
   /* `fix` = ese indicador no da dato ahora mismo. Pisa el color de la fuente a
      proposito: lo que hay que ver de un golpe es cuales no van a mostrar nada,
      no de que base salen. */
@@ -389,6 +391,93 @@ const CORTE = {
      pedirle los precios que faltan, y despues de la carga de Monhaco eso se dio
      vuelta: antes faltaba Monhaco entero, ahora falta MT Rental. */
   paradosSinPrecio: { "MT Rental":15, "Monhaco":6 }
+};
+
+/* ═══════════════════════════════════════════════════════════════════
+   LO QUE DICE EL TEXTO ESCRITO A MANO
+   -------------------------------------------------------------------
+   Tres indicadores que NO salen de una columna: salen de leer lo que
+   los vendedores escribieron en prosa y contarlo por categoría.
+
+   POR QUÉ HAY QUE LEERLO EN VEZ DE CONSULTARLO
+   RADAR tiene las columnas para esto y están vacías o mienten:
+     · `bloqueo`, `obstaculo`, `competidores`, `decisor` → 0 de 2,842.
+       Existen en el esquema y nadie las llenó nunca.
+     · `motivo_perdida` → 721 oportunidades marcadas "cerrado_perdido"
+       tienen como motivo "Oportunidad Abierta", que es el valor por
+       defecto que nadie cambió, y 542 están vacías. Sólo 144 de 1,411
+       traen un motivo de verdad.
+   Mientras tanto, 461 notas traen un `[MOTIVO: ...]` escrito adentro
+   del texto libre. O sea: el dato existe, está en el lugar equivocado,
+   y por eso el 2.6 del catálogo no da nada.
+
+   CÓMO SE CALCULÓ, Y QUÉ TAN CREÍBLE ES
+   Por reglas de palabras clave, no por un modelo, a propósito: estos
+   números los va a ver Omar y alguien va a preguntar por qué tal
+   oportunidad cayó en tal casilla. Con reglas se contesta; con un
+   modelo hay que creerle. Las reglas están en el repo de Jarvis, en
+   el guión que armó este corte.
+
+   ES UNA FOTO, NO UN VIVO. Igual que CORTE: se consultó con SQL de
+   sólo lectura y quedó pegada acá. NO se escribió nada en RADAR ni en
+   la app del taller. Si envejece, se nota por la fecha.
+   ═══════════════════════════════════════════════════════════════════ */
+const LECTURA = {
+  fecha: "2026-09-23",
+
+  /* De 1,411 oportunidades perdidas. El 55% no dice por qué se perdió:
+     ése es el hallazgo, no el reparto de abajo. */
+  perdidas: {
+    total: 1411, conMotivo: 605, sinMotivo: 770,
+    motivos: [
+      ["Cliente postergó la decisión",          133,  779197],
+      ["Falta de inventario / disponibilidad",  124,  252151],
+      ["Proyecto cancelado",                     87, 1037906],
+      ["Presupuesto insuficiente del cliente",   59,  642607],
+      ["Otro",                                   51,  239345],
+      ["Necesidades no alineadas",               46,  257687],
+      ["Sólo pedía precio de referencia",        44,  306368],
+      ["Precio muy alto",                        31,  258903],
+      ["Se fue con la competencia",              27,   93904],
+      ["Falta de seguimiento",                    3,     269]
+    ]
+  },
+
+  /* Las 1,097 abiertas, clasificadas por su ÚLTIMO seguimiento escrito.
+     "Sin nota" no es un limbo: son oportunidades vivas por $5.3M sobre
+     las que nadie escribió una línea. */
+  frenado: {
+    total: 1097, valor: 7236763, quietas30: 726, quietas90: 164, valor90: 2021033,
+    causas: [
+      ["Sin una sola nota escrita",      777, 5299983],
+      ["Nos toca mover a nosotros",      113,  796235],
+      ["No se entiende qué dice",         60,  185138],
+      ["Esperando decisión del cliente",  55,  399381],
+      ["Dice «pendiente» y nada más",     41,   95311],
+      ["El cliente no responde",          22,  130006],
+      ["Postergado a una fecha",          14,  311477],
+      ["Sin canal para contactarlo",      15,   19229]
+    ]
+  },
+
+  /* Qué pidió el cliente, leído de `descripcion` y del título. 567 de
+     2,842 oportunidades traen descripción; el resto entró sin decir qué
+     querían. */
+  demanda: {
+    total: 567, deUnUniverso: 2842,
+    pedidos: [
+      ["Montacargas",            293, 1798903],
+      ["No se entiende qué pidió",72,  838656],
+      ["Repuestos / llantas",     52,   49564],
+      ["Curso / certificación",   37,   36562],
+      ["Plataforma / tijera",     30,  144358],
+      ["Apilador / patineta",     26,  155142],
+      ["Manlift / articulada",    22,   48165],
+      ["Flete / traslado",        22,  154794],
+      ["Mantenimiento / taller",   9,    8835],
+      ["Telehandler",              4,    9070]
+    ]
+  }
 };
 
 const fmt = n => n == null ? "—" : Number(n).toLocaleString("es-HN");
@@ -570,10 +659,21 @@ const TALLER = [
   { n:"T7", title:"Viáticos y viajes", items:[["T7.1","Viáticos registrados","fb"],["T7.2","Desglose de viáticos","fb"],["T7.3","Destinos más frecuentes","fb"],["T7.4","Kilómetros recorridos","fb"]]},
   { n:"T8", title:"Calidad de los datos", items:[["T8.1","Órdenes sin tiempo registrado","fb"],["T8.2","Órdenes con fechas inconsistentes","fb"],["T8.3","Equipos sin horómetro","fb"]]}
 ];
+
+/* Va ARRIBA de Oficina y Taller en el panel, no al final, porque no es un
+   apéndice: son las tres preguntas que ningún otro indicador contesta, y
+   contestarlas no requirió un dato nuevo sino leer el que ya estaba. */
+const TEXTO = [
+  { n:"A", title:"Lo que dice el texto escrito a mano", items:[
+    ["A1","Por qué se pierden los negocios","texto"],
+    ["A2","Qué frena el pipeline abierto","texto"],
+    ["A3","Qué equipo pide la gente","texto"]
+  ]}
+];
 /* Los `gap` tambien son de RADAR: lo que les pasa es que RADAR no los puede
    calcular todavia, y eso ya lo dice la marca `fix`. Tener una tercera palabra
    ("falta") daba "falta fix", que no se lee. */
-const ETIQUETA = { fb:"taller", radar:"radar", gap:"radar" };
+const ETIQUETA = { fb:"taller", radar:"radar", gap:"radar", texto:"texto" };
 
 let elegidos = (()=>{ try{ const s=JSON.parse(localStorage.getItem("cristian_kpis"));
   return new Set(Array.isArray(s)?s:[]); }catch(e){ return new Set(); } })();
@@ -587,9 +687,10 @@ function pintarCatalogo(){
          <span class="fuente f-${src}${ROTO[id]?" roto":""}">${ETIQUETA[src]}${ROTO[id]?" fix":""}</span></label>`).join("")).join("");
 
   document.getElementById("catalogo").innerHTML =
-    bloque("Dash de Oficina", OFICINA) + bloque("Dash de Taller", TALLER);
+    bloque("Del texto escrito a mano", TEXTO)
+    + bloque("Dash de Oficina", OFICINA) + bloque("Dash de Taller", TALLER);
 
-  const total = [...OFICINA,...TALLER].reduce((a,g)=>a+g.items.length,0);
+  const total = [...TEXTO,...OFICINA,...TALLER].reduce((a,g)=>a+g.items.length,0);
   document.getElementById("total").textContent = total;
   document.getElementById("cuenta").textContent = elegidos.size;
 
@@ -987,6 +1088,38 @@ function rankEmpresa(ruta, campoNombre, campoValor, n, formato){
 }
 
 const MAPA = {
+  /* ── A · Del texto escrito a mano ────────────────────────────────
+     Los tres leen de LECTURA, que es una foto y no el vivo. Por eso
+     cada uno lleva su cobertura escrita abajo: un reparto de motivos
+     sin decir sobre cuántos se calculó invita a leerlo como si fuera
+     el total, y acá el total es justamente lo que falta. */
+  "A1": ()=>{
+    const p = LECTURA.perdidas;
+    return L(p.motivos.map(([c,n,v])=>[c, `${fmt(n)} · ${usd(v)}`]))
+      + `<div class="wid-tot">${fmt(p.conMotivo)} de ${fmt(p.total)} perdidas dicen por qué</div>`
+      + `<div class="wid-nota"><b>${fmt(p.sinMotivo)} no dicen nada</b> — el 55%. RADAR tiene
+         la columna <code>motivo_perdida</code> para esto, pero 721 perdidas la traen en
+         "Oportunidad Abierta", que es el valor por defecto. Lo que se cuenta acá salió de
+         leer las notas. Foto del ${LECTURA.fecha}.</div>`;
+  },
+  "A2": ()=>{
+    const f = LECTURA.frenado;
+    return L(f.causas.map(([c,n,v])=>[c, `${fmt(n)} · ${usd(v)}`]))
+      + `<div class="wid-tot">${fmt(f.total)} abiertas · ${usd(f.valor)}</div>`
+      + `<div class="wid-nota"><b>${fmt(f.quietas90)} llevan más de 90 días sin moverse</b>,
+         por ${usd(f.valor90)}. Los campos <code>bloqueo</code> y <code>obstaculo</code> existen
+         en RADAR y están en cero: esto se dedujo del último seguimiento escrito.
+         Foto del ${LECTURA.fecha}.</div>`;
+  },
+  "A3": ()=>{
+    const d = LECTURA.demanda;
+    return L(d.pedidos.map(([c,n,v])=>[c, `${fmt(n)} · ${usd(v)}`]))
+      + `<div class="wid-tot">${fmt(d.total)} de ${fmt(d.deUnUniverso)} oportunidades dicen qué querían</div>`
+      + `<div class="wid-nota">Leído de lo que el cliente pidió, no de lo que se le vendió.
+         Las otras ${fmt(d.deUnUniverso - d.total)} entraron sin descripción.
+         Foto del ${LECTURA.fecha}.</div>`;
+  },
+
   /* ── 1 · Ventas ──────────────────────────────────────────────── */
   "1.1": ()=> porEmpresa(p=>{
     const f = pick(p,"ventas.facturado") || {};
@@ -1532,6 +1665,9 @@ const MAPA = {
    es porque tiene filas — y entonces ya lo toma solo.
    ===================================================================== */
 const TAM = {
+  /* Los tres del texto son listas de 8 a 10 renglones con nota larga:
+     en una columna quedan apretados y la nota se vuelve ilegible. */
+  "A1":"w2", "A2":"w2", "A3":"w2",
   "1.1":"w2", "1.3":"w3", "1.4":"", "1.6":"w2",
   "2.1":"w2", "2.2":"", "2.3":"w3", "2.4":"w2", "2.5":"w2", "2.6":"", "2.7":"w2", "2.8":"w2",
   "3.1":"w2", "3.2":"w2", "3.3":"w3", "3.4":"w2", "3.5":"w2", "3.7":"w2",
@@ -1634,7 +1770,7 @@ const ROTO = Object.assign({}, ROTO_FIJO);
    es peor que no tener la marca. */
 function revisarVivos(){
   const listo = !!DATOS && !!T;
-  for(const g of [...OFICINA, ...TALLER]){
+  for(const g of [...TEXTO, ...OFICINA, ...TALLER]){
     for(const [id] of g.items){
       if(ROTO_FIJO[id]){ ROTO[id] = true; continue; }
       if(!listo){ delete ROTO[id]; continue; }
@@ -1647,7 +1783,7 @@ function revisarVivos(){
 function pintarWidgets(){
   const zona = document.getElementById("zona-widgets");
   const caja = document.getElementById("widgets");
-  const ids = [...OFICINA, ...TALLER].flatMap(g =>
+  const ids = [...TEXTO, ...OFICINA, ...TALLER].flatMap(g =>
     g.items.filter(([id])=>elegidos.has(id)).map(([id,et])=>({ id, et })));
 
   zona.hidden = ids.length === 0;
