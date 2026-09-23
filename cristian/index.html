@@ -101,10 +101,6 @@
   .wid-lista .fila .k{flex:1;min-width:0;color:var(--tinta-media);
     overflow-wrap:anywhere;line-height:1.35;}
   .wid-lista .fila .v{font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap;}
-  /* Tercera columna, para el dato que le da sentido al de al lado. Va en
-     gris y mas chica porque es contexto, no la cifra principal. */
-  .wid-lista .fila .x{color:var(--tinta-suave);font-size:10.5px;white-space:nowrap;
-    font-variant-numeric:tabular-nums;min-width:62px;text-align:right;}
   /* El renglon que dice QUE es la cifra de la lista. Sin esto, '$779,197'
      al lado de un motivo de perdida no dice si es lo que se perdio, lo que
      se cotizo o lo que se recupero. */
@@ -470,6 +466,10 @@ const LECTURA = {
      ése es el hallazgo, no el reparto de abajo. */
   perdidas: {
     total: 1411, conMotivo: 605, sinMotivo: 770,
+    /* "Otro" sale de la lista y se cuenta abajo. No se borra del dato: es que
+       una categoria que solo dice "no fue ninguna de las otras" no compite por
+       la mirada con las que si dicen algo. */
+    residuo: ["Otro"],
     motivos: [
       ["Cliente postergó la decisión",          133,  779197],
       ["Falta de inventario / disponibilidad",  124,  252151],
@@ -489,19 +489,20 @@ const LECTURA = {
      las que nadie escribió una línea. */
   frenado: {
     total: 1097, valor: 7236763, quietas30: 726, quietas90: 164, valor90: 2021033,
-    /* El cuarto numero es la MEDIANA de dias sin moverse, no el promedio: un
-       par de oportunidades de hace un ano corren el promedio y hacen parecer
-       que todo el pipeline esta muerto. Ordena por cantidad, no por dias, a
-       proposito: lo que hay que mirar primero es el bulto. */
+    /* Las dos que salen de la lista son las mas grandes, y por eso salen: con
+       777 arriba, las seis que dicen algo accionable quedaban aplastadas en el
+       fondo. El numero no se pierde, va al pie y en negrita, porque es el
+       hallazgo mas importante del widget. */
+    residuo: ["Sin una sola nota escrita", "No se entiende qué dice"],
     causas: [
-      ["Sin una sola nota escrita",      777, 5297872, 47],
-      ["Nos toca mover a nosotros",      113,  796235, 47],
-      ["No se entiende qué dice",         60,  185138, 54],
-      ["Esperando decisión del cliente",  55,  399381, 68],
-      ["Dice «pendiente» y nada más",     41,   95311, 70],
-      ["El cliente no responde",          22,  130006, 55],
-      ["Sin canal para contactarlo",      15,   19229, 55],
-      ["Postergado a una fecha",          14,  311477, 60]
+      ["Sin una sola nota escrita",      777, 5297872],
+      ["Nos toca mover a nosotros",      113,  796235],
+      ["No se entiende qué dice",         60,  185138],
+      ["Esperando decisión del cliente",  55,  399381],
+      ["Dice «pendiente» y nada más",     41,   95311],
+      ["El cliente no responde",          22,  130006],
+      ["Sin canal para contactarlo",      15,   19229],
+      ["Postergado a una fecha",          14,  311477]
     ]
   },
 
@@ -515,6 +516,7 @@ const LECTURA = {
      contiene fracasos. */
   demanda: {
     total: 567, deUnUniverso: 2842,
+    residuo: ["No se entiende qué pidió"],
     pedidos: [
       ["Montacargas",            293, 1798903],
       ["No se entiende qué pidió",72,  838656],
@@ -824,13 +826,11 @@ const V = (valor, sub) => `<div class="wid-val">${valor}</div>` + (sub?`<div cla
 /* `title` con el texto completo: hay clientes cuyo nombre no cabe en ninguna
    columna razonable, y recortar el nombre de un deudor sin manera de leerlo
    entero es peor que una tarjeta ancha. */
-/* Igual que L() pero con la tercera columna de contexto. */
+/* Igual que L() pero con un renglón arriba que dice QUÉ es la cifra de la
+   lista. Sin eso, "$779,197" al lado de un motivo de pérdida no dice si es lo
+   que se perdió, lo que se cotizó o lo que se recuperó. */
 const L3 = (leyenda, filas) =>
-  `<div class="wid-leyenda">${leyenda}</div><div class="wid-lista">`
-  + filas.map(([k,v,x])=>
-      `<div class="fila"><span class="k" title="${String(k).replace(/"/g,"&quot;")}">${k}</span>`
-      + `<span class="v">${v}</span>` + (x ? `<span class="x">${x}</span>` : "")
-      + `</div>`).join("") + `</div>`;
+  `<div class="wid-leyenda">${leyenda}</div>` + L(filas);
 
 const L = (filas) => `<div class="wid-lista">` + filas.map(([k,v])=>
   `<div class="fila"><span class="k" title="${String(k).replace(/"/g,"&quot;")}">${k}</span>`
@@ -1157,46 +1157,70 @@ const MAPA = {
      cada uno lleva su cobertura escrita abajo: un reparto de motivos
      sin decir sobre cuántos se calculó invita a leerlo como si fuera
      el total, y acá el total es justamente lo que falta. */
+  /* Los tres parten la lista en dos: lo que dice algo va arriba, y el resto
+     —"Otro", "no se entiende", "sin nota"— va al pie. No se descarta: se
+     cuenta igual, pero deja de competir por la mirada con las categorias
+     accionables. La particion sale de `residuo` en el dato, asi que los
+     numeros del pie no pueden quedar desfasados de la lista.
+
+     NO llevan ticket promedio, a proposito. Un promedio sobre "Montacargas"
+     mezcla un apilador de $3,000 con un telehandler de $60,000 y da $6,000,
+     que no es el precio de ninguno. Un promedio solo sirve cuando lo que
+     promedia se parece entre si, y aca no se parece. */
   "A1": ()=>{
     const p = LECTURA.perdidas;
+    const ver   = p.motivos.filter(m=>!p.residuo.includes(m[0]));
+    const resto = p.motivos.filter(m=> p.residuo.includes(m[0]));
+    const rn = resto.reduce((a,m)=>a+m[1],0), rv = resto.reduce((a,m)=>a+m[2],0);
     return L3(`<b>El dinero es el valor de las oportunidades que se perdieron</b> por ese
                motivo —el campo <code>valor</code> de RADAR, en USD—, no lo que costó
-               perderlas. A la derecha, el ticket promedio de cada motivo.`,
-      p.motivos.map(([c,n,v])=>[c, `${fmt(n)} · ${usd(v)}`, usd(Math.round(v/n))]))
+               perderlas.`,
+      ver.map(([c,n,v])=>[c, `${fmt(n)} · ${usd(v)}`]))
       + `<div class="wid-tot">${fmt(p.conMotivo)} de ${fmt(p.total)} perdidas dicen por qué ·
-         ${usd(p.motivos.reduce((a,m)=>a+m[2],0))} en total</div>`
-      + `<div class="wid-nota"><b>${fmt(p.sinMotivo)} no dicen nada</b> — el 55%. RADAR tiene
-         la columna <code>motivo_perdida</code> para esto, pero 721 perdidas la traen en
-         "Oportunidad Abierta", que es el valor por defecto. Lo que se cuenta acá salió de leer
-         las notas: 461 traen un <code>[MOTIVO: ...]</code> adentro del texto y 144 sí usaron la
-         columna, con otro vocabulario. Se unificaron los dos. Foto del ${LECTURA.fecha}.</div>`;
+         ${fmt(rn)} más quedaron en "Otro" (${usd(rv)})</div>`
+      + `<div class="wid-nota"><b>${fmt(p.sinMotivo)} no dicen nada</b> — el 55%. RADAR tiene la columna <code>motivo_perdida</code> para esto, pero 721 perdidas la
+         traen en "Oportunidad Abierta", que es el valor por defecto. Lo que se cuenta acá
+         salió de leer las notas: 461 traen un <code>[MOTIVO: ...]</code> adentro del texto y
+         144 sí usaron la columna, con otro vocabulario. Se unificaron los dos.
+         Foto del ${LECTURA.fecha}.</div>`;
   },
   "A2": ()=>{
     const f = LECTURA.frenado;
+    const ver   = f.causas.filter(c=>!f.residuo.includes(c[0]));
+    const sinN  = f.causas.find(c=>c[0] === "Sin una sola nota escrita");
+    const confu = f.causas.find(c=>c[0] === "No se entiende qué dice");
     return L3(`<b>El dinero es el valor del pipeline ABIERTO</b> detenido por esa causa: plata
                que todavía se puede ganar, no perdida. La causa sale de leer el último
-               seguimiento escrito. A la derecha, la mediana de días sin moverse.`,
-      f.causas.map(([c,n,v,d])=>[c, `${fmt(n)} · ${usd(v)}`, `${d} d`]))
-      + `<div class="wid-tot">${fmt(f.total)} abiertas · ${usd(f.valor)} en juego</div>`
-      + `<div class="wid-nota"><b>${fmt(f.quietas90)} llevan más de 90 días sin moverse</b>, por
-         ${usd(f.valor90)}. Y las ${fmt(f.causas[0][1])} sin una sola nota son el problema más
-         grande: ${usd(f.causas[0][2])} sobre los que nadie escribió una línea. Los campos
-         <code>bloqueo</code> y <code>obstaculo</code> existen en RADAR y están en cero.
-         Foto del ${LECTURA.fecha}.</div>`;
+               seguimiento escrito.`,
+      ver.map(([c,n,v])=>[c, `${fmt(n)} · ${usd(v)}`]))
+      /* Las 777 van en el pie VISIBLE y no en la nota: la nota vive detrás del
+         "?" y éste es el número más grande del tablero. Esconderlo sería
+         cambiarle el lugar para que nadie lo vea. */
+      + `<div class="wid-tot">${fmt(f.total)} abiertas · ${usd(f.valor)} en juego<br>
+         <b>${fmt(sinN[1])} sin una sola nota</b> (${usd(sinN[2])}) ·
+         ${fmt(confu[1])} con nota ilegible (${usd(confu[2])})</div>`
+      + `<div class="wid-nota">Las ${fmt(sinN[1])} sin nota salieron de la lista
+         porque con ellas arriba las seis que sí dicen qué hacer quedaban aplastadas en el
+         fondo; el número sigue a la vista en el pie. <b>${fmt(f.quietas90)} llevan más de 90 días sin moverse</b>,
+         por ${usd(f.valor90)}. Los campos <code>bloqueo</code> y <code>obstaculo</code>
+         existen en RADAR y están en cero. Foto del ${LECTURA.fecha}.</div>`;
   },
   "A3": ()=>{
     const d = LECTURA.demanda;
+    const ver   = d.pedidos.filter(x=>!d.residuo.includes(x[0]));
+    const resto = d.pedidos.filter(x=> d.residuo.includes(x[0]));
+    const rn = resto.reduce((a,x)=>a+x[1],0), rv = resto.reduce((a,x)=>a+x[2],0);
     return L3(`<b>El dinero es el valor de lo que pidieron y NO les vendimos.</b> Acá no hay
                nada ganado: el campo <code>descripcion</code> sólo está lleno en oportunidades
                <b>perdidas</b> —567 de 567—, así que esto es la demanda que no se atendió, no
-               la demanda total. A la derecha, el ticket promedio.`,
-      d.pedidos.map(([c,n,v])=>[c, `${fmt(n)} · ${usd(v)}`, usd(Math.round(v/n))]))
+               la demanda total.`,
+      ver.map(([c,n,v])=>[c, `${fmt(n)} · ${usd(v)}`]))
       + `<div class="wid-tot">${fmt(d.total)} perdidas dicen qué pedían ·
-         ${usd(d.pedidos.reduce((a,x)=>a+x[2],0))} sin vender</div>`
-      + `<div class="wid-nota">Por eso no se puede sacar tasa de cierre por tipo de equipo:
-         no hay con qué comparar. Si alguien llena <code>descripcion</code> también en las
-         ganadas, este widget contesta "de cada 10 que piden un montacargas, cuántos compran".
-         Hoy no. Foto del ${LECTURA.fecha}.</div>`;
+         ${fmt(rn)} escribieron algo que no se entiende (${usd(rv)})</div>`
+      + `<div class="wid-nota">No se puede sacar tasa de cierre por tipo de equipo: no hay con
+         qué comparar. Si alguien llena <code>descripcion</code> también en las ganadas, este
+         widget contesta "de cada 10 que piden un montacargas, cuántos compran". Hoy no.
+         Foto del ${LECTURA.fecha}.</div>`;
   },
 
   /* ── 1 · Ventas ──────────────────────────────────────────────── */
