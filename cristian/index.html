@@ -374,7 +374,7 @@ const CORTE = {
      Cuando termine la migracion, esta fila queda con `mtrental` solo y los
      numeros no cambian. */
   empresas: [
-    { nombre:"MT Rental", id:"mtrental + honduras", renta:31,  disp:25, rep:29, mant:7, total:92  },
+    { nombre:"MT Rental", id:"mtrental + honduras", renta:24,  disp:16, rep:25, mant:7, total:72  },
     { nombre:"Monhaco",   id:"monhaco",             renta:100, disp:6,  rep:23, mant:0, total:129 }
   ],
 
@@ -386,7 +386,16 @@ const CORTE = {
      empresa nunca se iba a rentar: contarla como equipo sin precio
      inventaba un problema que no existe.
 
-     Se sacan 16 de 221, por esta regla:
+     ANTES QUE NADA SE FILTRA POR ORGANIZACION. La tabla `equipos` no tiene
+     solo los de Montasa: hay una org llamada "DEMO Empresa de Prueba" con 24
+     montacargas inventados, todos con codigo `EQ-` y con `empresa_id` puesto
+     en `honduras`. Como `honduras` es justo el id que del lado de la flota
+     significa MT Rental, esos 20 vivos se colaban en esa fila con sus precios
+     de mentira e inflaban el potencial unos $24,000. Toda consulta de este
+     corte lleva `org_id = 11111111-1111-4111-8111-111111111111`, que es la
+     org real de Montasa Handling Co.
+
+     Despues se sacan 16 de 201, por esta regla:
        · `MTV-` `CM-` `C-` `GR-`  vehículos de la empresa (9). Pick-ups,
          camiones y la grúa del 97. La grúa es el único caso discutible:
          si algún día se renta, hay que sacarla de esta lista.
@@ -405,9 +414,9 @@ const CORTE = {
      129 equipos estaban en cero y el potencial salía cortado a la mitad. */
   noRentables: 16,
   plata: [
-    { estado:"En renta (ya entra)",     usd:122463, con:123, de:131 },
-    { estado:"Disponible (fácil)",      usd:23938,  con:17,  de:17  },
-    { estado:"En reparación (frenado)", usd:61933,  con:48,  de:50  },
+    { estado:"En renta (ya entra)",     usd:111720, con:116, de:124 },
+    { estado:"Disponible (fácil)",      usd:7480,   con:8,   de:8   },
+    { estado:"En reparación (frenado)", usd:54640,  con:44,  de:46  },
     { estado:"En mantenimiento",        usd:11180,  con:7,   de:7   }
   ],
 
