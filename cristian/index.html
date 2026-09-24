@@ -307,7 +307,7 @@
       <div class="caja">
         <table>
           <thead><tr>
-            <th>Estado</th><th class="num">USD/mes</th><th class="num">Equipos con precio</th>
+            <th>Estado</th><th class="num">USD/mes</th>
           </tr></thead>
           <tbody id="tabla-plata"></tbody>
         </table>
@@ -352,8 +352,10 @@
    LA TRAMPA GRANDE: `flota.ingresos_renta_mes` del endpoint NO es el
    potencial. Sale de líneas de factura con categoría renta — es lo que YA
    se cobró. El potencial es otra cosa y se calcula con `precio_renta_mes`,
-   que 29 de 221 equipos no tienen cargado. Eran 144 de 220 hasta el
-   2026-09-22, cuando se cargaron los 116 precios de Monhaco.
+   que 26 de 201 equipos vivos no tienen cargado. Eran 144 de 220 hasta el
+   2026-09-22, cuando se cargaron los 116 precios de Monhaco. De los 26 que
+   quedan, ninguno está parado: son flota que ya está rentada y equipo que
+   no se renta.
    ===================================================================== */
 
 const RADAR_API = "https://montasa-web.vercel.app/api/dashboard";
@@ -361,7 +363,7 @@ const RADAR_TOKEN = "CjXHIPSe6iJVnDQiF_yweLr7rJ3sQPdi";
 
 /* ── El corte con SQL. Fecha visible para que se note si envejece. ── */
 const CORTE = {
-  fecha: "2026-09-23",
+  fecha: "2026-09-24",
   /* `id` es el empresa_id literal de la tabla `equipos`, y va a la vista a
      proposito: son OTROS que los del lado comercial.
 
@@ -373,7 +375,7 @@ const CORTE = {
      Cuando termine la migracion, esta fila queda con `mtrental` solo y los
      numeros no cambian. */
   empresas: [
-    { nombre:"MT Rental", id:"mtrental + honduras", renta:24,  disp:16, rep:25, mant:7, total:72  },
+    { nombre:"MT Rental", id:"mtrental + honduras", renta:23,  disp:16, rep:25, mant:8, total:72  },
     { nombre:"Monhaco",   id:"monhaco",             renta:100, disp:6,  rep:23, mant:0, total:129 }
   ],
 
@@ -405,24 +407,41 @@ const CORTE = {
          colgarle órdenes al taller.
 
      `BC-` NO se excluye aunque sean aditamentos: 13 de 18 bar clamp ya
-     tienen precio cargado, o sea que sí se rentan. Y `TH-` tampoco: un
-     telehandler es flota rentable, lo que pasa es que le falta el dato.
+     tienen precio cargado, o sea que sí se rentan.
 
-     usd = suma de precio_renta_mes; con = cuántos de esos lo tienen.
+     ST-15 y TH-02 SÍ se excluyen, y no por regla sino porque Fabri lo dijo
+     el 2026-09-24 cuando se le pidieron sus precios: «esos equipos
+     quítelos». Yo los tenía adentro porque un telehandler es flota
+     rentable y supuse que solo faltaba cargarle el dato. No era eso. Al
+     salir, el potencial parado queda completo: 59 de 59.
+
+     De paso aclaró el otro pendiente: los precios van por MES, SEMANA y
+     DÍA. La hora no se guarda, así que no hay que pedirla.
+
+     usd = suma de precio_renta_mes.
+
+     Había una segunda columna, "equipos con precio", que era un marcador de
+     deuda: cuando faltaban 21 precios servía para ver cuánto del potencial
+     estaba sin medir. Ya no falta ninguno entre los parados, así que la
+     columna solo repetía el mismo número dos veces y se quitó. Quien sigue
+     vigilando eso es el semáforo del 10.3.
+
      Los precios de Monhaco se cargaron el 2026-09-22; hasta entonces sus
      129 equipos estaban en cero y el potencial salía cortado a la mitad. */
   plata: [
-    { estado:"En renta (ya entra)",     usd:111720, con:116, de:124 },
-    { estado:"Disponible (fácil)",      usd:7480,   con:8,   de:8   },
-    { estado:"En reparación (frenado)", usd:54640,  con:44,  de:46  },
-    { estado:"En mantenimiento",        usd:11180,  con:7,   de:7   }
+    { estado:"En renta (ya entra)",     usd:110760 },
+    { estado:"Disponible (fácil)",      usd:7480   },
+    { estado:"En reparación (frenado)", usd:54640  },
+    { estado:"En mantenimiento",        usd:12140  }
   ],
 
-  /* De los RENTABLES parados sin precio, de quién son. Pasó de 21 a 5 al
-     dejar de contar lo que no es flota de renta; los 16 que se fueron no
-     necesitan precio, no es que se lo debamos a nadie. Los 5 que quedan sí
-     hay que ir a pedirlos. */
-  paradosSinPrecio: { "MT Rental":1, "Monhaco":1 }
+  /* De los RENTABLES parados sin precio, de quién son. Fue de 21 a 5 al
+     dejar de contar lo que no es flota de renta, de 5 a 2 cuando Monhaco
+     cargó los suyos, y a CERO el 2026-09-24: los dos que quedaban eran
+     ST-15 y TH-02, y Fabri dijo que esos ni van en la lista. Se deja el
+     renglón y no se borra porque el semáforo tiene que poder volver a
+     ponerse en ámbar solo si alguien mete flota nueva sin precio. */
+  paradosSinPrecio: { "MT Rental":0, "Monhaco":0 }
 };
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -610,14 +629,10 @@ function pintarCorte(){
 
   const parados = CORTE.plata.filter(p=>!p.estado.startsWith("En renta"));
   const potencial = parados.reduce((a,p)=>a+p.usd,0);
-  const conPrecio = parados.reduce((a,p)=>a+p.con,0);
-  const deTotal   = parados.reduce((a,p)=>a+p.de,0);
 
   document.getElementById("tabla-plata").innerHTML =
-    CORTE.plata.map(p=>`<tr><td>${p.estado}</td><td class="num">${usd(p.usd)}</td>
-      <td class="num">${p.con} de ${p.de}</td></tr>`).join("")
-    + `<tr class="total"><td>Potencial parado</td><td class="num">${usd(potencial)}</td>
-       <td class="num">${conPrecio} de ${deTotal}</td></tr>`;
+    CORTE.plata.map(p=>`<tr><td>${p.estado}</td><td class="num">${usd(p.usd)}</td></tr>`).join("")
+    + `<tr class="total"><td>Potencial parado</td><td class="num">${usd(potencial)}</td></tr>`;
 
   document.getElementById("aviso-empresas").innerHTML =
     `Foto del ${CORTE.fecha}. Son ${t.total} equipos y no todos los que tiene la tabla porque
@@ -630,9 +645,9 @@ function pintarCorte(){
      <b>comercial</b>, donde sí existen las cuatro.`;
 
   /* El aviso de precios se saco: de 21 quedaron 2, y dos renglones no
-     justifican un parrafo debajo de la tabla. Los dos que faltan son ST-15
-     y TH-02, y estan en el semaforo del 10.3, que es donde se miran los
-     pendientes. */
+     justifican un parrafo debajo de la tabla. Esos dos eran ST-15 y TH-02, y
+     el 2026-09-24 Fabri los saco de la lista, asi que ya no falta ninguno.
+     El semaforo del 10.3 sigue vigilando por si entra flota nueva sin precio. */
 }
 
 /* ── Conteos en vivo ──────────────────────────────────────────────── */
@@ -1490,16 +1505,17 @@ const MAPA = {
       filas.push(["Equipos sin horómetro", `${fmt(sinHoro)} de ${fmt(T.equipos.length)}`,
                   luz(sinHoro > T.equipos.length*0.5, sinHoro>0)]);
     }
-    /* Dejo de ser rojo el 2026-09-22, cuando se cargaron los precios de Monhaco.
-       Sigue en ambar y no en verde porque faltan los de MT Rental, que ahora son
-       los que frenan el potencial. */
-    /* Se nombran las dos empresas y no solo la peor: el reparto se da vuelta
-       cada vez que alguien carga precios, y un semáforo que dice "de MT Rental"
-       cuando el que debe es Monhaco manda a pedirlos al lugar equivocado. */
+    /* Fue rojo hasta el 2026-09-22 (Monhaco cargó los suyos) y ámbar hasta el
+       2026-09-24, cuando Fabri sacó ST-15 y TH-02 de la lista. Ahora en verde.
+       Cuando hay pendientes se nombran LAS DOS empresas y no solo la peor: el
+       reparto se da vuelta cada vez que alguien carga precios, y un semáforo
+       que dice "de MT Rental" cuando el que debe es Monhaco manda a pedirlos
+       al lugar equivocado. */
     const pSP = CORTE.paradosSinPrecio;
     const faltan = pSP["MT Rental"] + pSP["Monhaco"];
     filas.push(["Equipos parados sin precio de renta",
-                `${faltan} · ${pSP["Monhaco"]} Monhaco, ${pSP["MT Rental"]} MT Rental`,
+                faltan ? `${faltan} · ${pSP["Monhaco"]} Monhaco, ${pSP["MT Rental"]} MT Rental`
+                       : "ninguno, la lista quedó completa",
                 luz(faltan > 25, faltan > 0)]);
     return `<div class="sem">` + filas.map(([et,v,c])=>
       `<div class="sem-fila"><span class="luz ${c}"></span><span class="et">${et}</span>`
@@ -1771,7 +1787,7 @@ const TAM = {
   "7.1":"w2", "7.2":"", "7.4":"",
   "8.1":"w2", "8.2":"w2", "8.4":"",
   "9.1":"",
-  "10.1":"w3", "10.2":"", "10.3":"",
+  "10.1":"w3", "10.2":"", "10.3":"w2",
   "T1.1":"", "T1.2":"", "T1.3":"", "T1.4":"",
   "T2.1":"", "T2.2":"",
   "T3.1":"", "T3.2":"", "T3.3":"",
