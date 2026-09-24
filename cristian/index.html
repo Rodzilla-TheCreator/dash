@@ -455,43 +455,38 @@ const CORTE = {
    la app del taller. Si envejece, se nota por la fecha.
    ═══════════════════════════════════════════════════════════════════ */
 const LECTURA = {
-  fecha: "2026-09-23",
+  fecha: "2026-09-24",
 
-  /* De 1,411 oportunidades perdidas. El 55% no dice por qué se perdió:
-     ése es el hallazgo, no el reparto de abajo. */
+  /* LAS 869 PERDIDAS DEL 2026-04-11 NO SE CUENTAN, Y ES EL AJUSTE MAS
+     IMPORTANTE DE TODO ESTE BLOQUE.
+     De las 1,411 marcadas `cerrado_perdido`, 869 se crearon EL MISMO DIA y
+     son una migracion: lineas de renta mensual, renovaciones y cobros que
+     entraron marcados como perdidos. "RENTA MES DE FEBRERO", "RENOVACION
+     MENSUAL", "COBRO POR DANOS". No son ventas que se perdieron, y valen
+     $6.1M de los $9.5M. Contarlas hacia parecer que el 55% de las perdidas
+     no decia por que; sacandolas, el 85% si lo dice. */
   perdidas: {
-    total: 1411, conMotivo: 605, sinMotivo: 770,
-    /* "Otro" sale de la lista y se cuenta abajo. No se borra del dato: es que
-       una categoria que solo dice "no fue ninguna de las otras" no compite por
-       la mirada con las que si dicen algo. */
+    total: 542, conMotivo: 461, sinMotivo: 81, migracion: 869,
     residuo: ["Otro"],
     motivos: [
-      ["Cliente postergó la decisión",          133,  779197],
-      ["Falta de inventario / disponibilidad",  124,  252151],
+      ["Cliente postergó la decisión",          133,  779206],
       ["Proyecto cancelado",                     87, 1037906],
-      ["Presupuesto insuficiente del cliente",   59,  642607],
-      ["Otro",                                   51,  239345],
-      ["Necesidades no alineadas",               46,  257687],
-      ["Sólo pedía precio de referencia",        44,  306368],
-      ["Precio muy alto",                        31,  258903],
-      ["Se fue con la competencia",              27,   93904],
+      ["Presupuesto insuficiente del cliente",   59,  642657],
+      ["Falta de inventario / disponibilidad",   52,   65957],
+      ["Otro",                                   44,  192881],
+      ["Necesidades no alineadas",               34,   63782],
+      ["Precio muy alto",                        27,  233365],
+      ["Se fue con la competencia",              22,   75790],
       ["Falta de seguimiento",                    3,     269]
     ]
   },
 
-  /* Las 1,097 abiertas, clasificadas por su ÚLTIMO seguimiento escrito.
-     "Sin nota" no es un limbo: son oportunidades vivas por $5.3M sobre
-     las que nadie escribió una línea. */
   frenado: {
-    total: 1097, valor: 7236763, quietas30: 726, quietas90: 164, valor90: 2021033,
-    /* Las dos que salen de la lista son las mas grandes, y por eso salen: con
-       777 arriba, las seis que dicen algo accionable quedaban aplastadas en el
-       fondo. El numero no se pierde, va al pie y en negrita, porque es el
-       hallazgo mas importante del widget. */
+    total: 1115, valor: 7293819, quietas30: 726, quietas90: 164, valor90: 2021033,
     residuo: ["Sin una sola nota escrita", "No se entiende qué dice"],
     causas: [
       ["Sin una sola nota escrita",      777, 5297872],
-      ["Nos toca mover a nosotros",      113,  796235],
+      ["Nos toca mover a nosotros",      113,  796238],
       ["No se entiende qué dice",         60,  185138],
       ["Esperando decisión del cliente",  55,  399381],
       ["Dice «pendiente» y nada más",     41,   95311],
@@ -501,28 +496,30 @@ const LECTURA = {
     ]
   },
 
-  /* Qué pidió el cliente, leído de `descripcion` y del título.
+  /* A3 SE REARMO SOBRE `linea_negocio`, NO SOBRE `descripcion`.
+     `descripcion` solo esta llena en el 20% de las perdidas reales y ademas
+     solo existe en las perdidas, asi que no habia con que comparar. En
+     cambio `linea_negocio` esta en el 77% Y en todas las etapas, y son las
+     MISMAS ocho lineas del formulario de montasa.com/registro.
 
-     OJO CON LO QUE ESTO ES Y LO QUE NO: `descripcion` está llena en 567
-     oportunidades y las 567 son `cerrado_perdido`. Cero en ganadas, cero en
-     abiertas. Comprobado por etapa. Así que esto NO es la demanda del
-     mercado: es la demanda que no se atendió. Leerlo como "lo que piden
-     nuestros clientes" sería sacar conclusiones de una muestra que solo
-     contiene fracasos. */
+     Eso desbloquea la pregunta que antes no se podia contestar: de cada 10
+     que piden algo, cuantos compran. Y la respuesta incomoda es que Venta
+     de Equipo cierra 1 de cada 10 y es donde se pierde mas plata.
+
+     Los numeros son [linea, perdidas, USD perdido, ganadas, abiertas]. La
+     tasa de cierre se calcula, no se guarda, para que no pueda quedar
+     desfasada de los conteos de al lado. */
   demanda: {
-    total: 567, deUnUniverso: 2842,
-    residuo: ["No se entiende qué pidió"],
-    pedidos: [
-      ["Montacargas",            293, 1798903],
-      ["No se entiende qué pidió",72,  838656],
-      ["Repuestos / llantas",     52,   49564],
-      ["Curso / certificación",   37,   36562],
-      ["Plataforma / tijera",     30,  144358],
-      ["Apilador / patineta",     26,  155142],
-      ["Manlift / articulada",    22,   48165],
-      ["Flete / traslado",        22,  154794],
-      ["Mantenimiento / taller",   9,    8835],
-      ["Telehandler",              4,    9070]
+    perdidasSinLinea: 127, fueraDelCatalogo: 5, fueraUsd: 294658,
+    lineas: [
+      ["Renta y Leasing Operativo", 124, 340500,  43, 94],
+      ["Repuestos y Suministros",    87,  79772,  37, 36],
+      ["Venta de Equipo",            76,1446890,   8, 86],
+      ["Renta por Hora",             51, 624524,  40, 17],
+      ["Certificación de Operador",  38,  14295,  19, 91],
+      ["Mano de Obra",               24,  25355,  42, 33],
+      ["Revisiones IHTT",             5,  95500,  14,  4],
+      ["Fletes",                      5,   2741,   1,  3]
     ]
   }
 };
@@ -712,7 +709,7 @@ const TEXTO = [
   { n:"A", title:"Lo que dice el texto escrito a mano", items:[
     ["A1","Por qué se pierden los negocios","texto"],
     ["A2","Qué frena el pipeline abierto","texto"],
-    ["A3","Qué pedían los negocios que perdimos","texto"]
+    ["A3","Qué línea pide la gente, y cuánto se cierra","texto"]
   ]}
 ];
 /* Los `gap` tambien son de RADAR: lo que les pasa es que RADAR no los puede
@@ -1160,16 +1157,15 @@ const MAPA = {
     const resto = p.motivos.filter(m=> p.residuo.includes(m[0]));
     const rn = resto.reduce((a,m)=>a+m[1],0), rv = resto.reduce((a,m)=>a+m[2],0);
     return L3(`<b>El dinero es el valor de las oportunidades que se perdieron</b> por ese
-               motivo —el campo <code>valor</code> de RADAR, en USD—, no lo que costó
-               perderlas.`,
+               motivo —el campo <code>valor</code> de RADAR, en USD—, no lo que costó perderlas.`,
       ver.map(([c,n,v])=>[c, `${fmt(n)} · ${usd(v)}`]))
       + `<div class="wid-tot">${fmt(p.conMotivo)} de ${fmt(p.total)} perdidas dicen por qué ·
          ${fmt(rn)} más quedaron en "Otro" (${usd(rv)})</div>`
-      + `<div class="wid-nota"><b>${fmt(p.sinMotivo)} no dicen nada</b> — el 55%. RADAR tiene la columna <code>motivo_perdida</code> para esto, pero 721 perdidas la
-         traen en "Oportunidad Abierta", que es el valor por defecto. Lo que se cuenta acá
-         salió de leer las notas: 461 traen un <code>[MOTIVO: ...]</code> adentro del texto y
-         144 sí usaron la columna, con otro vocabulario. Se unificaron los dos.
-         Foto del ${LECTURA.fecha}.</div>`;
+      + `<div class="wid-nota"><b>No se cuentan las ${fmt(p.migracion)} pérdidas del 2026-04-11</b>,
+         que se crearon todas el mismo día y son una migración: líneas de renta mensual,
+         renovaciones y cobros que entraron marcados como perdidos. Valían $6.1M de los $9.5M, y
+         contarlas hacía parecer que el 55% no decía por qué. Sin ellas, el 85% sí lo dice y solo
+         ${fmt(p.sinMotivo)} quedan sin motivo. Foto del ${LECTURA.fecha}.</div>`;
   },
   "A2": ()=>{
     const f = LECTURA.frenado;
@@ -1180,34 +1176,37 @@ const MAPA = {
                que todavía se puede ganar, no perdida. La causa sale de leer el último
                seguimiento escrito.`,
       ver.map(([c,n,v])=>[c, `${fmt(n)} · ${usd(v)}`]))
-      /* Las 777 van en el pie VISIBLE y no en la nota: la nota vive detrás del
-         "?" y éste es el número más grande del tablero. Esconderlo sería
-         cambiarle el lugar para que nadie lo vea. */
       + `<div class="wid-tot">${fmt(f.total)} abiertas · ${usd(f.valor)} en juego<br>
          <b>${fmt(sinN[1])} sin una sola nota</b> (${usd(sinN[2])}) ·
          ${fmt(confu[1])} con nota ilegible (${usd(confu[2])})</div>`
-      + `<div class="wid-nota">Las ${fmt(sinN[1])} sin nota salieron de la lista
-         porque con ellas arriba las seis que sí dicen qué hacer quedaban aplastadas en el
-         fondo; el número sigue a la vista en el pie. <b>${fmt(f.quietas90)} llevan más de 90 días sin moverse</b>,
-         por ${usd(f.valor90)}. Los campos <code>bloqueo</code> y <code>obstaculo</code>
-         existen en RADAR y están en cero. Foto del ${LECTURA.fecha}.</div>`;
+      + `<div class="wid-nota">Las ${fmt(sinN[1])} sin nota salieron de la lista porque con ellas
+         arriba las seis que sí dicen qué hacer quedaban aplastadas en el fondo; el número sigue a
+         la vista en el pie. <b>${fmt(f.quietas90)} llevan más de 90 días sin moverse</b>, por
+         ${usd(f.valor90)}. Los campos <code>bloqueo</code> y <code>obstaculo</code> existen en
+         RADAR y están en cero. Foto del ${LECTURA.fecha}.</div>`;
   },
   "A3": ()=>{
     const d = LECTURA.demanda;
-    const ver   = d.pedidos.filter(x=>!d.residuo.includes(x[0]));
-    const resto = d.pedidos.filter(x=> d.residuo.includes(x[0]));
-    const rn = resto.reduce((a,x)=>a+x[1],0), rv = resto.reduce((a,x)=>a+x[2],0);
-    return L3(`<b>El dinero es el valor de lo que pidieron y NO les vendimos.</b> Acá no hay
-               nada ganado: el campo <code>descripcion</code> sólo está lleno en oportunidades
-               <b>perdidas</b> —567 de 567—, así que esto es la demanda que no se atendió, no
-               la demanda total.`,
-      ver.map(([c,n,v])=>[c, `${fmt(n)} · ${usd(v)}`]))
-      + `<div class="wid-tot">${fmt(d.total)} perdidas dicen qué pedían ·
-         ${fmt(rn)} escribieron algo que no se entiende (${usd(rv)})</div>`
-      + `<div class="wid-nota">No se puede sacar tasa de cierre por tipo de equipo: no hay con
-         qué comparar. Si alguien llena <code>descripcion</code> también en las ganadas, este
-         widget contesta "de cada 10 que piden un montacargas, cuántos compran". Hoy no.
-         Foto del ${LECTURA.fecha}.</div>`;
+    /* La tasa se calcula acá y no se guarda: si alguien recalcula el corte y
+       actualiza los conteos, el porcentaje no puede quedarse viejo. */
+    const filas = d.lineas.map(([c,p,v,g,a])=>{
+      const cerr = p + g;
+      return [c, `${fmt(p)} · ${usd(v)}`, cerr ? Math.round(100*g/cerr) : null, a];
+    }).sort((x,y)=> (x[2]===null?-1:x[2]) - (y[2]===null?-1:y[2]));
+    return L3(`<b>Ordenado de la peor tasa de cierre a la mejor.</b> El dinero es lo que se
+               perdió en esa línea. La tasa es cuántas de las CERRADAS se ganaron: si dice 10%,
+               de cada 10 clientes que pidieron eso, 9 se fueron sin comprar.`,
+      filas.map(([c,v,t,a])=>[`${c} · ${t===null?"—":t+"% cierre"}`, v]))
+      + `<div class="wid-tot">${fmt(d.lineas.reduce((s,x)=>s+x[1],0))} perdidas con línea ·
+         ${fmt(d.lineas.reduce((s,x)=>s+x[4],0))} siguen abiertas</div>`
+      + `<div class="wid-nota"><b>Venta de Equipo cierra ${
+           Math.round(100*8/(8+76))}% y es donde más plata se pierde</b>: ${usd(1446890)} en 76
+         oportunidades, con 86 todavía abiertas. Se rearmó sobre <code>linea_negocio</code> y no
+         sobre <code>descripcion</code>, que sólo está llena en el 20% y sólo en las perdidas —
+         sin nada ganado contra qué comparar. Quedan fuera ${fmt(d.perdidasSinLinea)} perdidas sin
+         línea y ${fmt(d.fueraDelCatalogo)} con un valor que no es ninguna de las ocho
+         (${usd(d.fueraUsd)}): alguien escribió "Montacargas" o "Plataformas aereas" en un campo
+         que debería ser catálogo. Foto del ${LECTURA.fecha}.</div>`;
   },
 
   /* ── 1 · Ventas ──────────────────────────────────────────────── */
