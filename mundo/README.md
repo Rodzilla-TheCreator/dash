@@ -5,11 +5,29 @@
 > que no se rompen, y la tarea pendiente que hay que ir a buscar a otro repo.
 
 Un **mundo isométrico pixel-art** que muestra la operación real de Montasa /
-Monhaco / Monhagro como un lugar recorrible, en vez de tiles de números.
+Monhaco como un lugar recorrible, en vez de tiles de números.
 
 Un solo archivo: `mundo/index.html` (CSS + JS embebidos, canvas 2D, sin
 librerías, sin build, sin npm). Se sirve igual que el resto del repo desde
-GitHub Pages. Se entra desde el botón **MUNDO ▸** del header del dash.
+GitHub Pages. Se abre en `mundo/`.
+
+> **Ya no hay botón en el dash.** El dash de la raíz es ahora el Tablero de
+> Flota de Cristian, y no se le agregó nada que no pidiera — incluido ese
+> botón. Al Mundo se entra por su URL.
+
+## Dos vistas, no tres empresas
+
+La pastilla de arriba elige **Oficina** o **Taller**, que son los dos
+distritos del mundo. Antes elegía empresa entre Montasa, Monhaco y Monhagro,
+y eso estaba mal por dos lados: **Monhagro no tiene un solo equipo cargado**
+— arrancó en junio de 2026 y no tiene nodo — y **elegir escondía la mitad de
+la operación**, que es una sola: un mecánico arregla lo que esté en el taller,
+sea de MT Rental o de Monhaco.
+
+Ahora se leen las **dos empresas siempre** y se dibujan juntas; cada equipo
+se queda con la suya y la ficha la dice. El nodo de Firebase se llama
+`montasa` por historia — la app es anterior a que la renta se separara en
+MT Rental — y se rotula **MT Rental**, que es de quien es esa flota.
 
 ---
 
@@ -144,10 +162,29 @@ y al revés. Los 8 KPIs que RADAR todavía no calcula
 (`4.2 4.3 5.4 5.5 6.2 6.4 8.3 9.2`) se dibujan **sin energía**, con el cable
 tachado, se cuelguen o no.
 
-### Monhagro
+### Los mecánicos
 
-`NODO_EMPRESA.monhagro === null`. Sus zonas de flota se dibujan **en
-construcción**: andamios, sin techo. Es honesto y se explica solo.
+Al lado de cada equipo con una orden **en curso** va el mecánico que la
+tiene, con su nombre. Una orden está en curso si no tiene fecha de cierre
+**y** su estado no dice "Completado": las dos cosas hacen falta, porque hay
+preventivos marcados Completado a los que nadie les puso fecha, y contarlos
+como abiertos ponía gente trabajando en equipos que ya habían salido.
+
+Se dibujan hasta dos por equipo y el rótulo dice `+N` si hay más. Tocarlos
+abre qué están haciendo **en ese equipo**, no su historial — el que toca
+está parado frente a una máquina, y esa es la pregunta.
+
+**Los que no se pueden colgar de ningún equipo también salen.** Ocho órdenes
+en curso apuntan a `__cliente__` (máquina del cliente, no es flota nuestra) o
+a un id que ya no existe en `equipos`. Van a una bahía aparte al fondo del
+taller, con el motivo escrito. Dejarlas fuera hacía desaparecer a media
+docena de mecánicos que sí están trabajando, y el taller se veía más vacío
+de lo que está.
+
+> El amarre orden → equipo va por `eq.id`, **no** por la llave con la que el
+> equipo está guardado: el nodo `equipos` es un arreglo en Firebase, así que
+> esa llave es el índice (`0`, `1`, `2`…) y no identifica nada. Compararlos
+> daba cero coincidencias y el mundo reportaba que ninguna orden tenía equipo.
 
 ---
 

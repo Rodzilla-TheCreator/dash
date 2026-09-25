@@ -24,7 +24,7 @@ del repo. Respetala.
 
 ```
 dash/
-  index.html                  el dashboard original (tiles de KPIs) + botón MUNDO
+  index.html                  el Tablero de Flota de Cristian (ya no hay botón MUNDO)
   README.md
   bitacora/                   app SGI de control interno (fork de la de Christian)
     docs/ESQUEMA-BASE-DE-DATOS.md   ← el esquema real, confirmado
@@ -98,9 +98,16 @@ Tipos: `decision`, `encargo`, `mejora`, `proceso`, `informe`, `herramienta`,
 
 ### Los datos
 
-Firebase Realtime Database (`montasa-app`), por REST. Nodos por empresa
-(`equipos`, `preventivos`, `correctivos`) y el nodo `/bitacora/*` compartido
-con la app SGI. **El esquema real está en `bitacora/docs/ESQUEMA-BASE-DE-DATOS.md`** —
+Firebase Realtime Database (`montasa-app`), por REST. **Se leen las dos
+empresas siempre** — `montasa` (que es MT Rental) y `monhaco` — con sus
+`equipos`, `preventivos` y `correctivos`, más el nodo `/bitacora/*`
+compartido con la app SGI. Ya no se elige empresa: la pastilla de arriba
+elige **vista** (Oficina o Taller).
+
+⚠️ Las llaves de Firebase solo son únicas DENTRO de su empresa, así que al
+juntar las dos hay que prefijarlas (`montasa:...`, `monhaco:...`). Sin eso,
+dos equipos con la misma llave en nodos distintos se pisan y uno desaparece
+del mapa sin avisar. **El esquema real está en `bitacora/docs/ESQUEMA-BASE-DE-DATOS.md`** —
 no lo adivines, está confirmado ahí.
 
 ---

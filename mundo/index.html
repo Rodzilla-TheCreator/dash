@@ -144,10 +144,9 @@
     <div class="title display">MUNDO MONTASA<small id="zone-name">Cargando</small></div>
     <div class="status"><span class="dot" id="conn-dot"></span><span id="conn-txt">CONECTANDO</span></div>
   </div>
-  <div class="pills" role="tablist" aria-label="Seleccionar empresa">
-    <button class="pill active" data-company="montasa" role="tab" aria-selected="true">Montasa</button>
-    <button class="pill" data-company="monhaco" role="tab" aria-selected="false">Monhaco</button>
-    <button class="pill" data-company="monhagro" role="tab" aria-selected="false">Monhagro</button>
+  <div class="pills" role="tablist" aria-label="Qué parte del mundo ver">
+    <button class="pill active" data-vista="oficina" role="tab" aria-selected="true">Oficina</button>
+    <button class="pill" data-vista="taller" role="tab" aria-selected="false">Taller</button>
   </div>
 </div>
 
@@ -174,7 +173,7 @@
    autocontenida (sin build, sin bundler, GitHub Pages), asi que la unica
    forma de reusar estas reglas es duplicarlas. SI CAMBIAN EN ../index.html
    HAY QUE CAMBIARLAS AQUI TAMBIEN — se actualizan juntas.
-   Bloques copiados: getJSON, NODO_EMPRESA, bucketEstado, primerCampo,
+   Bloques copiados: getJSON, EMPRESAS, bucketEstado, primerCampo,
    aFecha, aNumero, diasDesde, evaluarEquipo, CC_FB, CC_SEDES, fmtL,
    RADAR_*, fixUsd, NO_DISP, KPI_GROUPS, decidirCajaChica.
    ===================================================================== */
@@ -186,8 +185,29 @@ async function getJSON(path){
   return await r.json();
 }
 
-/* Cada empresa es un nodo raiz distinto en la base. Monhagro aun no existe. */
-const NODO_EMPRESA = { montasa: "montasa", monhaco: "monhaco", monhagro: null };
+/* LAS DOS EMPRESAS QUE TIENEN FLOTA, Y SON DOS.
+   ---------------------------------------------------------------------
+   Antes el mundo pedia elegir una de tres y mostraba esa. Dos problemas:
+
+   · MONHAGRO NO EXISTE ACA. No es que este vacia: no tiene un nodo. Arranco
+     en junio de 2026 y todavia no carga flota. Ofrecerla como opcion hacia
+     que el mundo se dibujara en obra, con andamios, como si le faltara
+     construccion — cuando lo que falta son datos de la empresa.
+   · ELEGIR ESCONDIA LA MITAD. La operacion es una sola: un mecanico arregla
+     lo que este en el taller, sea de quien sea. Partirla por empresa era
+     una pregunta de contabilidad metida en un mapa del piso.
+
+   Ahora se leen las dos SIEMPRE y se dibujan juntas. Cada equipo se queda
+   con su `_empresa` para que la ficha pueda decir de quien es.
+
+   El nodo se llama `montasa` por historia: la app de taller se hizo antes de
+   que la renta se separara en MT Rental. La flota que vive en ese nodo es la
+   de MT Rental, asi que se lee `montasa` y se rotula "MT Rental". */
+const EMPRESAS = [
+  { nodo:"montasa", nombre:"MT Rental", sede:"SPS" },
+  { nodo:"monhaco", nombre:"Monhaco",   sede:"Choloma" }
+];
+const NOMBRE_EMPRESA = {}; EMPRESAS.forEach(function(e){ NOMBRE_EMPRESA[e.nodo] = e.nombre; });
 
 function bucketEstado(estadoRaw){
   const e = (estadoRaw||"").toString().trim().toUpperCase();
@@ -268,7 +288,8 @@ function evaluarEquipo(eq, ultimoDeHistorial){
 
 /* --- Bitacora SGI (nodo aparte, sin empresa) --- */
 const CC_FB    = DB_BASE + "/bitacora";
-const CC_SEDES = { montasa: ["SPS"], monhaco: ["Choloma"], monhagro: [] };
+/* Las sedes de las dos empresas, juntas: ya no se elige empresa. */
+const CC_SEDES = EMPRESAS.map(function(e){ return e.sede; });
 function fmtL(monto){
   const n = aNumero(monto);
   return n == null ? (monto==null?"—":String(monto))
@@ -277,7 +298,9 @@ function fmtL(monto){
 
 /* --- RADAR --- */
 const RADAR_API     = "https://montasa-web.vercel.app/api/dashboard";
-const RADAR_EMPRESA = { montasa:"hn", monhaco:"honduras", monhagro:"monhagro" };
+/* `all` y no una empresa: pedirle la flota por empresa a este endpoint
+   devuelve ceros (esta pedido a Fabrizio). Con `all` contesta bien. */
+const RADAR_EMPRESA_TODAS = "all";
 /* Token publico por decision del dueño (ver README y seccion 6 del spec). */
 const RADAR_TOKEN   = "CjXHIPSe6iJVnDQiF_yweLr7rJ3sQPdi";
 function radarToken(){ if(RADAR_TOKEN) return RADAR_TOKEN; try{ return (localStorage.getItem("dash_radar_token")||"").trim(); }catch(e){ return ""; } }
@@ -373,7 +396,11 @@ function estacionDe(estado){
 }
 
 /* ===================== ESTADO GLOBAL ===================== */
-let activeCompany = "montasa";
+/* Lo que antes era "que empresa" ahora es "que parte del mundo":
+   `oficina` (el edificio: la gente, los papeles) o `taller` (el distrito de
+   equipos: taller, patio y los que estan en cliente). Son dos negocios
+   distintos y ahora tambien son dos vistas distintas. */
+let vista = "oficina";
 const state = {
   equipos:{}, preventivos:{}, correctivos:{},
   caja:null, viajes:null, almacen:null,     // null = sin cargar, "error" = fallo
@@ -396,23 +423,42 @@ function evalCached(eq, ultimo){
    se deja vacio y el mundo lo dibuja apagado. NUNCA se inventa relleno.
    ===================================================================== */
 async function cargarFlota(){
-  const nodo = NODO_EMPRESA[activeCompany];
   state.equipos = {}; state.preventivos = {}; state.correctivos = {};
-  if(!nodo){ state.flotaErr = null; return; }        // monhagro: no existe el nodo
-  try{
-    const [eq, pv, cr] = await Promise.all([
-      getJSON(nodo + "/equipos"),
-      getJSON(nodo + "/preventivos").catch(()=>({})),
-      getJSON(nodo + "/correctivos").catch(()=>({}))
-    ]);
-    state.equipos     = eq || {};
-    state.preventivos = pv || {};
-    state.correctivos = cr || {};
-    state.flotaErr = null;
-  }catch(e){
-    console.error("[Mundo] flota:", e.message);
-    state.flotaErr = e.message;
+  const errores = [];
+  /* Las llaves de Firebase solo son unicas DENTRO de su empresa, asi que al
+     juntar las dos hay que prefijarlas. Sin esto, dos equipos con la misma
+     llave en nodos distintos se pisan y uno desaparece del mapa sin avisar. */
+  function volcar(destino, nodo, obj){
+    Object.keys(obj || {}).forEach(function(k){
+      const r = obj[k];
+      if(!r || typeof r !== "object") return;
+      const copia = Object.assign({}, r);
+      copia._empresa = nodo;
+      copia._nombreEmpresa = NOMBRE_EMPRESA[nodo] || nodo;
+      if(copia.id == null) copia.id = k;
+      destino[nodo + ":" + k] = copia;
+    });
   }
+  await Promise.all(EMPRESAS.map(async function(e){
+    try{
+      const [eq, pv, cr] = await Promise.all([
+        getJSON(e.nodo + "/equipos"),
+        getJSON(e.nodo + "/preventivos").catch(()=>({})),
+        getJSON(e.nodo + "/correctivos").catch(()=>({}))
+      ]);
+      volcar(state.equipos,     e.nodo, eq);
+      volcar(state.preventivos, e.nodo, pv);
+      volcar(state.correctivos, e.nodo, cr);
+    }catch(err){
+      console.error("[Mundo] flota " + e.nodo + ":", err.message);
+      errores.push(e.nombre + ": " + err.message);
+    }
+  }));
+  /* Si UNA de las dos falla, el mundo no se apaga entero: se dibuja lo que
+     si llego y el error dice de quien es. Apagarlo todo por una mitad
+     esconderia la mitad sana. */
+  state.flotaErr = errores.length ? errores.join(" · ") : null;
+  state.flotaParcial = errores.length > 0 && Object.keys(state.equipos).length > 0;
 }
 /* Los nodos del mundo pasaron a ser objetos con llave (ver nucleo.js); acá
    se leen igual, y un arreglo viejo también se entiende. */
@@ -433,7 +479,7 @@ async function cargarRadar(){
   const tok = radarToken();
   if(!tok){ state.radar = "no-token"; return; }
   try{
-    const emp = RADAR_EMPRESA[activeCompany] || "hn";
+    const emp = RADAR_EMPRESA_TODAS;
     const r = await fetch(RADAR_API + "?empresa=" + emp, { headers:{ Authorization:"Bearer "+tok }, cache:"no-store" });
     if(r.status===401 || r.status===403){ state.radar = "bad-token"; return; }
     if(!r.ok) throw new Error("HTTP " + r.status);
@@ -615,8 +661,10 @@ function papel(tint){
    Omar (camisa cuadriculada manga larga, siempre), Fabrizio y Elia. En las
    demás oficinas van dos personas sin nombre todavía.
    ===================================================================== */
-const PIEL = { omar:"#c69a72", fabri:"#b8865c", elia:"#d3a67f", rodz:"#c28f68", gen:"#a8825f", gen2:"#8d6a48" };
-const PELO = { omar:"#9aa0a4", fabri:"#241c19", elia:"#3b2016", rodz:"#1e1a18", gen:"#332b28", gen2:"#4a3a2c" };
+const PIEL = { omar:"#c69a72", fabri:"#b8865c", elia:"#d3a67f", rodz:"#c28f68", gen:"#a8825f", gen2:"#8d6a48",
+               mec:"#a8825f", mec2:"#8d6a48" };
+const PELO = { omar:"#9aa0a4", fabri:"#241c19", elia:"#3b2016", rodz:"#1e1a18", gen:"#332b28", gen2:"#4a3a2c",
+               mec:"#2b2320", mec2:"#3a2f28" };
 
 function persona(tipo){
   const key = "pj_" + tipo;
@@ -657,6 +705,23 @@ function persona(tipo){
     ops.push([5,8,2,2,"#eae7e0"]);                                   // cuello de camisa
     ops.push([4,15,2,4,"#2f3439"], [6,15,2,4,"#2f3439"]);            // pantalón
     ops.push([3,19,3,1,"#17191a"], [6,19,3,1,"#17191a"]);            // zapatos
+  }else if(tipo === "mec" || tipo === "mec2"){
+    /* El mecanico. Se distingue de lejos y a proposito: overol azul, casco
+       amarillo y chaleco reflectivo. En un patio lleno de montacargas, una
+       figura mas en gris no se ve; el casco es lo que hace que a un metro de
+       zoom se entienda que ESE equipo tiene a alguien encima.
+       El casco se dibuja ENCIMA del pelo, tapandolo: si no, salia un gorro
+       flotando sobre la cabeza. */
+    const OVEROL = tipo === "mec2" ? "#2b4f7a" : "#32598c";
+    const CASCO  = "#f5c542", REFLEJO = "#d8e84a";
+    ops.push([3,0,6,2,CASCO], [2,1,8,1,CASCO], [3,1,1,2,CASCO], [8,1,1,2,CASCO]);
+    ops.push([3,2,6,1,shade(CASCO,0.78)]);                           // ala del casco
+    ops.push([3,8,6,7,OVEROL], [2,8,1,5,OVEROL], [9,8,1,5,OVEROL]);  // overol y mangas
+    ops.push([4,9,4,1,REFLEJO], [4,12,4,1,REFLEJO]);                 // las dos bandas
+    ops.push([5,8,2,1,shade(OVEROL,1.3)]);                           // peto
+    ops.push([2,13,1,1,piel], [9,13,1,1,piel]);                      // manos
+    ops.push([4,15,2,4,shade(OVEROL,0.82)], [6,15,2,4,shade(OVEROL,0.82)]);
+    ops.push([3,19,3,1,"#17191a"], [6,19,3,1,"#17191a"]);            // botas
   }else{
     const ropa = { fabri:"#2f4f6d", elia:"#7a3f6b", gen:"#4a5054", gen2:"#3f4a44" }[tipo] || "#4a5054";
     ops.push([3,8,6,7,ropa], [2,8,1,5,ropa], [9,8,1,5,ropa]);
@@ -719,9 +784,15 @@ function barraUrgencia(px, py, ev){
    ===================================================================== */
 const ZONAS = [
   /* --- distrito de equipos (montacargas) --- */
-  { id:"taller",  nombre:"TALLER",           dist:"equipos", x:0,  y:0,  w:12, d:10, piso:"#2a2d2f", linea:"#34383b" },
-  { id:"patio",   nombre:"PATIO",            dist:"equipos", x:16, y:0,  w:18, d:12, piso:"#25282a", linea:"#31353800" },
-  { id:"campo",   nombre:"CAMPO / CLIENTES", dist:"equipos", x:38, y:0,  w:22, d:13, piso:"#1f2426", linea:"#2a2f3100" },
+  /* El taller se agrando y las otras dos se corrieron. Motivo: antes el mundo
+     mostraba UNA empresa y en el taller habia una decena de equipos; ahora
+     muestra las dos y son 48. En una zona de 12 de ancho eso son tres columnas
+     y dieciseis filas, o sea una fila india diagonal que se sale de la pantalla
+     y no deja ver nada. Con 22 de ancho entran seis columnas y queda un taller
+     que se parece a un taller. */
+  { id:"taller",  nombre:"TALLER",           dist:"equipos", x:0,  y:0,  w:22, d:26, piso:"#2a2d2f", linea:"#34383b" },
+  { id:"patio",   nombre:"PATIO",            dist:"equipos", x:26, y:0,  w:18, d:12, piso:"#25282a", linea:"#31353800" },
+  { id:"campo",   nombre:"CAMPO / CLIENTES", dist:"equipos", x:48, y:0,  w:22, d:13, piso:"#1f2426", linea:"#2a2f3100" },
   /* --- el edificio (todo lo demás) --- */
   { id:"bullpen", nombre:"BULLPEN",          dist:"edificio", x:20, y:37, w:12, d:10, piso:"#2f3335", linea:"#3c4144" }
 ];
@@ -822,6 +893,11 @@ function rejilla(n, cols, x0, y0, dx, dy){
 /* --------- un montacargas dibujable + tappable --------- */
 function ponerEquipo(gx, gy, eq, ev, opt){
   opt = opt || {};
+  /* Si nadie paso el trabajo a mano, se busca solo. Asi ninguna zona se
+     olvida de mostrar al mecanico por no acordarse de pasarlo. */
+  if(opt.trabajo === undefined && eq && eq._empresa){
+    opt.trabajo = (enCurso.porEquipo || {})[eq._empresa + ":" + (eq.id || "")] || null;
+  }
   const body = opt.body || "#f5a524";
   const fantasma = (ev && ev.color === "nodata");
   const p = w2s(gx, gy);
@@ -840,12 +916,53 @@ function ponerEquipo(gx, gy, eq, ev, opt){
       ctx.drawImage(img, sx, sy);
     }
     if(opt.barra && ev) barraUrgencia(p.x, sy - 3, ev);
-  }, { x:sx-3, y:sy-30, w:FK_W+6, h:FK_H+34 }, function(){ fichaEquipo(eq, ev); });
+  }, { x:sx-3, y:sy-30, w:FK_W+6, h:FK_H+34 }, function(){ fichaEquipo(eq, ev, opt.trabajo); });
   if(opt.codigo !== false){
     /* con barra el rotulo va ARRIBA de la barra, para que nunca la tape */
     label(p.x, sy - (opt.barra ? 45 : 6), (ev && ev.codigo) || eq.codigo || eq.id || "?",
       { size:8.5, col: fantasma ? "#565b5f" : "#8b9096" });
   }
+  if(opt.trabajo && opt.trabajo.length) ponerMecanicos(gx, gy, opt.trabajo);
+}
+
+/* Los mecanicos que en este momento tienen las manos en ESTE equipo.
+   ---------------------------------------------------------------------
+   Van al lado del fierro y no en una lista aparte a proposito: la pregunta
+   que contestan es "quien esta con el MT-54", y esa pregunta se hace
+   mirando el MT-54. Una lista de nombres en un panel obliga a cruzar dos
+   cosas en la cabeza.
+
+   Se dibujan hasta DOS aunque la orden nombre cuatro. Tres sprites pegados
+   a un montacargas de 24 pixeles se vuelven una mancha, y el numero real
+   sale en el rotulo ("+2") y en la ficha al tocar. */
+function ponerMecanicos(gx, gy, trabajo){
+  const nombres = [];
+  trabajo.forEach(function(t){
+    t.tecnicos.forEach(function(n){ if(nombres.indexOf(n) < 0) nombres.push(n); });
+  });
+  if(!nombres.length){
+    /* Hay orden abierta pero nadie firmo. Es un dato que falta, no un
+       equipo tranquilo: se marca y se ve. */
+    const p0 = w2s(gx, gy);
+    label(p0.x, p0.y + HH + 9, "SIN MEC\u00c1NICO ASIGNADO",
+      { col:"#f5a524", size:7.5, w:"700", box:true });
+    return;
+  }
+  nombres.slice(0, 2).forEach(function(n, i){
+    const mx = gx + 0.95 + i*0.75, my = gy + 0.5 + i*0.35;
+    const p = w2s(mx, my);
+    const sx = Math.round(p.x - 6), sy = Math.round(p.y + HH - 20);
+    push(mx, my, function(){
+      sombra(mx, my, 7);
+      ctx.drawImage(persona(i ? "mec2" : "mec"), sx, sy);
+    }, { x:sx-4, y:sy-4, w:20, h:28 }, function(){ fichaMecanico(n, trabajo); });
+  });
+  /* Un solo rotulo para los dos: dos nombres uno encima del otro sobre un
+     montacargas no se leen. El primero, y cuantos mas hay. */
+  const p = w2s(gx + 1.1, gy + 0.6);
+  const extra = nombres.length > 1 ? "  +" + (nombres.length - 1) : "";
+  label(p.x, Math.round(p.y + HH - 20) - 7, nombres[0].toUpperCase() + extra,
+    { col:"#f5c542", size:7.5, w:"700", box:true });
 }
 
 /* --------- ZONA 1: TALLER --------- */
@@ -859,8 +976,7 @@ function zonaTaller(mant){
   });
   rotuloZona(z);
 
-  if(!NODO_EMPRESA[activeCompany]){ enConstruccion(z, "Sin nodo de flota"); return; }
-  if(state.flotaErr){ zonaApagada(z, "No se pudo leer equipos"); return; }
+  if(state.flotaErr && !state.flotaParcial){ zonaApagada(z, state.flotaErr); return; }
 
   const lista = mant.taller;
   if(!lista.length){
@@ -868,11 +984,44 @@ function zonaTaller(mant){
     return;
   }
   /* el mas urgente primero, arriba a la izquierda */
-  const pos = rejilla(lista.length, 3, z.x+1.6, z.y+1.4, 3.4, 2.8);
+  const pos = rejilla(lista.length, 6, z.x+1.6, z.y+1.4, 3.4, 2.8);
   lista.forEach(function(it, i){
     const p = pos[i] || { gx:z.x+1.6, gy:z.y+1.4 + i*2.8 };
     ponerEquipo(p.gx, p.gy, it.eq, it.ev, { barra:true, body:"#e5534b" });
   });
+  /* Debajo de la ULTIMA fila de equipos, no del borde nominal de la zona:
+     con 48 montacargas la rejilla se sale de la zona por abajo, y la bahia
+     quedaba plantada en medio de los fierros. */
+  const filas = Math.ceil(lista.length / 6);
+  mecanicosSinEquipo(z, z.y + 1.4 + filas * 2.8 + 1.4);
+}
+
+/* La bahia de los que trabajan en algo que el mapa no puede dibujar.
+   No es un caso raro que se pueda ignorar: son ocho ordenes y seis
+   mecanicos. Si no salen, el taller se ve mas vacio de lo que esta. */
+function mecanicosSinEquipo(z, y0){
+  const sueltas = enCurso.sueltas || [];
+  if(!sueltas.length) return;
+  const nombres = [];
+  sueltas.forEach(function(t){
+    t.tecnicos.forEach(function(n){ if(nombres.indexOf(n) < 0) nombres.push(n); });
+  });
+  if(!nombres.length) return;
+  nombres.slice(0, 6).forEach(function(n, i){
+    const gx = z.x + 1.2 + (i % 3) * 1.5, gy = y0 + Math.floor(i / 3) * 1.2;
+    const p = w2s(gx, gy);
+    const sx = Math.round(p.x - 6), sy = Math.round(p.y + HH - 20);
+    push(gx, gy, function(){
+      sombra(gx, gy, 7);
+      ctx.drawImage(persona(i % 2 ? "mec2" : "mec"), sx, sy);
+    }, { x:sx-4, y:sy-4, w:20, h:28 }, function(){ fichaMecanico(n, sueltas); });
+    label(p.x, sy - 7, n.split(" ")[0].toUpperCase(), { col:"#f5c542", size:7, box:true });
+  });
+  const c = w2s(z.x + z.w/2, y0 - 0.9);
+  label(c.x, c.y, "TRABAJANDO EN ALGO QUE NO ESTA EN LA FLOTA \u00b7 " + sueltas.length,
+    { col:"#f5a524", size:9, w:"700", fam:"disp", box:true });
+  label(c.x, c.y + 11, "equipo del cliente, o el registro ya no existe",
+    { col:"#8b9096", size:8, box:true });
 }
 
 /* --------- ZONA 2: PATIO --------- */
@@ -890,8 +1039,7 @@ function zonaPatio(mant){
   });
   rotuloZona(z);
 
-  if(!NODO_EMPRESA[activeCompany]){ enConstruccion(z, "Sin nodo de flota"); return; }
-  if(state.flotaErr){ zonaApagada(z, "No se pudo leer equipos"); return; }
+  if(state.flotaErr && !state.flotaParcial){ zonaApagada(z, state.flotaErr); return; }
 
   const lista = mant.patio;
   const c = centroZona(z);
@@ -919,8 +1067,7 @@ function zonaCampo(mant){
   });
   rotuloZona(z);
 
-  if(!NODO_EMPRESA[activeCompany]){ enConstruccion(z, "Sin nodo de flota"); return; }
-  if(state.flotaErr){ zonaApagada(z, "No se pudo leer equipos"); return; }
+  if(state.flotaErr && !state.flotaParcial){ zonaApagada(z, state.flotaErr); return; }
 
   const grupos = mant.campo;      // [{nombre, sondeado, items:[]}]
   const c = centroZona(z);
@@ -1325,25 +1472,12 @@ function zonaApagada(z, msg){
   label(c.x, c.y, msg, { col:"#e5534b", size:11, w:"700", fam:"disp" });
   label(c.x, c.y+13, "sin datos — no se dibuja nada inventado", { col:"#565b5f", size:8.5 });
 }
-/* MONHAGRO: NODO_EMPRESA.monhagro === null. Andamios y sin techo (spec 3.7). */
-function enConstruccion(z, msg){
-  push(z.x, z.y, function(){
-    ctx.save(); ctx.globalAlpha = 0.72;
-    const cols = Math.max(2, Math.floor(z.w/4)), rows = Math.max(2, Math.floor(z.d/4));
-    for(let j=0;j<rows;j++) for(let i=0;i<cols;i++){
-      const bx = z.x + 1 + i*4, by = z.y + 1 + j*4;
-      isoBox(bx, by, 0.35, 0.35, 34, "#7a6a3a", { line:"#8f7c44" });
-      isoBox(bx+2.4, by, 0.35, 0.35, 34, "#7a6a3a", { line:"#8f7c44" });
-      isoBox(bx, by+2.4, 0.35, 0.35, 34, "#7a6a3a", { line:"#8f7c44" });
-      isoBox(bx, by, 3, 0.25, 5, "#8f7c44", { z:22 });
-      isoBox(bx, by, 0.25, 3, 5, "#8f7c44", { z:22 });
-    }
-    ctx.restore();
-  });
-  const c = centroZona(z);
-  label(c.x, c.y - 30, "EN CONSTRUCCIÓN", { col:"#f5a524", size:12, w:"800", fam:"disp", box:true });
-  label(c.x, c.y - 16, msg, { col:"#8b9096", size:9, box:true });
-}
+/* Aca vivia `enConstruccion`, que dibujaba andamios sobre una zona vacia.
+   Existia para UNA sola cosa: Monhagro, que no tiene nodo en la base. Al
+   dejar de ofrecerse como empresa nadie la llamaba, y una funcion de setenta
+   lineas que no se ejecuta es peor que no tenerla: el que la lee cree que el
+   mundo puede entrar en obra y busca cuando. Esta en el historial si vuelve
+   a hacer falta.
 
 /* Colores de los objetos donde cuelgan los KPIs, en la oficina de Omar. */
 const KIND_COL = { cuadro:"#4f8fe0", pizarra:"#3ecf7e", carpeta:"#a9741f",
@@ -1388,6 +1522,67 @@ function objetoKpi(sx, sy, kind, fix, on){
 /* =====================================================================
    6. DE LOS DATOS A LA ESCENA
    ===================================================================== */
+/* =====================================================================
+   QUIEN TIENE LAS MANOS EN QUE EQUIPO, AHORA MISMO
+   ---------------------------------------------------------------------
+   Una orden esta EN CURSO si no tiene fecha de cierre y su estado no dice
+   "Completado". Las dos condiciones hacen falta y no es redundante: hay
+   preventivos marcados Completado a los que nadie les puso fecha de cierre,
+   y contarlos como abiertos ponia mecanicos trabajando en equipos que ya
+   habian salido del taller. Al 25 de septiembre de 2026 son 34 ordenes de
+   verdad en curso, con diez mecanicos.
+
+   El amarre con el equipo es por `equipoId`, que es la llave de Firebase, y
+   esa llave solo es unica DENTRO de su empresa: por eso se busca por
+   `empresa:llave`. Cuando la orden no trae `equipoId` se intenta por el
+   texto de `equipo`, que es campo libre y falla seguido — esos quedan sin
+   amarrar y se cuentan aparte en vez de colgarse del equipo equivocado. */
+function computeEnCurso(){
+  const porEquipo = {};
+  const sueltas = [];
+  /* DOS indices, y los dos van por `eq.id`, NO por la llave con la que el
+     equipo esta guardado: el nodo `equipos` es un arreglo en Firebase, asi
+     que esa llave es el indice (0, 1, 2...) y no identifica nada. */
+  const porId = {}, porCodigo = {};
+  Object.keys(state.equipos || {}).forEach(function(k){
+    const eq = state.equipos[k];
+    const clave = eq._empresa + ":" + (eq.id || "");
+    porId[clave] = eq;
+    const cod = String(eq.codigo || "").trim().toUpperCase();
+    if(cod) porCodigo[eq._empresa + "|" + cod] = clave;
+  });
+  ["correctivos","preventivos"].forEach(function(nodo){
+    const reg = state[nodo] || {};
+    Object.keys(reg).forEach(function(k){
+      const o = reg[k];
+      const est = String(o.estado || "").trim().toLowerCase();
+      const cerrada = !!String(o.fechaCierre || "").trim() || est.indexOf("completad") === 0;
+      if(cerrada) return;
+      const tec = String(o.tecnico || "").split(",")
+        .map(function(t){ return t.trim(); }).filter(Boolean);
+      const ficha = { correlativo:o.correlativo || "?", estado:o.estado || "sin estado",
+                      sistema:o.sistema || "", tecnicos:tec, nodo:nodo,
+                      falla:o.falla || o.diagnostico || "" };
+      let llave = null;
+      if(o.equipoId) llave = o._empresa + ":" + o.equipoId;
+      if((!llave || !porId[llave]) && o.equipo){
+        /* `equipo` viene como "MT-54 - BAOLI KBG18": interesa el codigo */
+        const cod = String(o.equipo).split(/[-\u2013\u2014|]/)[0].trim().toUpperCase();
+        const alt = porCodigo[o._empresa + "|" + cod];
+        if(alt) llave = alt;
+      }
+      if(!llave || !porId[llave]){
+        ficha.motivo = (o.equipoId === "__cliente__")
+          ? "equipo del cliente" : "el equipo ya no esta en la flota";
+        sueltas.push(ficha);
+        return;
+      }
+      (porEquipo[llave] = porEquipo[llave] || []).push(ficha);
+    });
+  });
+  return { porEquipo:porEquipo, sueltas:sueltas };
+}
+
 function computeFlotaMundo(){
   const equipos = state.equipos || {};
   const ultimo = {};
@@ -1444,7 +1639,7 @@ function computeFlotaMundo(){
 }
 
 function computePapeles(){
-  const sedes = CC_SEDES[activeCompany] || [];
+  const sedes = CC_SEDES;
   const out = { por:{}, err:false, sinSede:false, total:0 };
   ESTACIONES.forEach(function(st){ out.por[st.id] = []; });
   if(state.caja === "error" || state.viajes === "error"){ out.err = true; return out; }
@@ -1495,8 +1690,10 @@ function computeBodega(){
   return out;
 }
 
+let enCurso = { porEquipo:{}, sueltas:[] };
 function buildScene(){
   scene = { items:[], labels:[] };
+  enCurso = computeEnCurso();
   const flota   = computeFlotaMundo();
   const papeles = computePapeles();
   const bodega  = computeBodega();
@@ -1504,25 +1701,36 @@ function buildScene(){
 
   const datos = { flota:flota, papeles:papeles, bodega:bodega };
 
-  /* distrito de equipos: todo lo que es montacargas */
-  zonaTaller(flota);
-  zonaPatio(flota);
-  zonaCampo(flota);
-  /* el edificio: todo lo que no lo es */
-  zonaEdificio(datos);
+  /* Una vista, un distrito. Son dos negocios distintos y ahora tambien son
+     dos mapas distintos: el fierro por un lado, la gente y los papeles por
+     el otro. */
+  if(vista === "taller"){
+    zonaTaller(flota);
+    zonaPatio(flota);
+    zonaCampo(flota);
+  }else{
+    zonaEdificio(datos);
+  }
   /* La entrada generica "MI OFICINA" ya no se dibuja: ocupaba el ancla S, que
      ahora es la oficina de AI PLANNING, y las dos se pisaban en pantalla.
      Tampoco tiene sentido en el modelo nuevo — la oficina de cada quien es la
      de SU area, no una puerta aparte. La funcion queda por si hace falta
      recuperar la entrada en otro lado; ver el comentario en entradaEdificio(). */
-  pulsos = computePulsos(datos);
+  /* Los pulsos son papeles cruzando el edificio: en el taller no hay nada
+     que puedan cruzar, y seguian animandose sobre un mapa donde el edificio
+     ni se dibuja. */
+  pulsos = (vista === "taller") ? [] : computePulsos(datos);
 
   /* "Otros / interno": no tienen zona propia en el spec, pero tampoco
      pueden desaparecer. Van al fondo del patio, en ambar. */
-  if(flota.otros && flota.otros.length && NODO_EMPRESA[activeCompany] && !state.flotaErr){
+  /* Antes esto cortaba en diez con `.slice(0, 10)`. Se quito: el mundo existe
+     para que se vea TODO el fierro, y un equipo que no se dibuja es un equipo
+     del que nadie se acuerda. Si son muchos, que se vea que son muchos. */
+  if(vista === "taller" && flota.otros && flota.otros.length
+     && !(state.flotaErr && !state.flotaParcial)){
     const z = ZONA.patio;
     const y0 = z.y + z.d - 2.2;
-    flota.otros.slice(0, 10).forEach(function(it, i){
+    flota.otros.forEach(function(it, i){
       ponerEquipo(z.x + 1.5 + (i%5)*3.2, y0 + Math.floor(i/5)*1.9, it.eq, it.ev, { body:"#a9741f" });
     });
     label(w2s(z.x + z.w/2, y0).x, w2s(z.x + z.w/2, y0).y - 46,
@@ -1671,7 +1879,7 @@ function irAZona(id){
 }
 function renderZoneNav(flota, papeles, bodega){
   const nav = document.getElementById("zones");
-  const hayFlota = !!NODO_EMPRESA[activeCompany];
+  const hayFlota = !(state.flotaErr && !state.flotaParcial);
   const negs = bodega.err ? "!" : bodega.sedes.reduce((a,s)=>a + s.productos.filter(p=>p.neto<0).length, 0);
   const cont = {
     taller:  { n: hayFlota ? flota.taller.length : "—", alerta: flota.taller.some(function(x){ return x.ev.color === "crit" || x.ev.color === "nodata"; }) },
@@ -1686,11 +1894,15 @@ function renderZoneNav(flota, papeles, bodega){
     finanzas:{ n: papeles.err ? "!" : (papeles.por.rev ? papeles.por.rev.length : 0), alerta: !papeles.err && papeles.por.rev.length > 0 },
     almacen: { n: negs, alerta: negs > 0 }
   };
-  nav.innerHTML = ZONAS.map(function(z){
+  /* La vista manda: `taller` muestra el distrito de equipos, `oficina` el
+     edificio. Antes salian las once juntas y la separacion se deshacia en
+     cuanto alguien tocaba un boton. */
+  const distrito = (vista === "taller") ? "equipos" : "edificio";
+  const visibles = ZONAS.filter(function(z){ return z.dist === distrito; });
+  nav.innerHTML = visibles.map(function(z){
     const c = cont[z.id] || { n:"" };
-    const sep = (z.id === "bullpen") ? ' style="border-left:2px solid var(--amber-dim);margin-left:5px"' : "";
     return '<button class="zbtn' + (z.id === zonaActiva ? " active" : "") + (c.alerta ? " alert" : "") +
-      '" data-zona="' + z.id + '"' + sep + '>' + z.nombre.split(" / ")[0] + ' <b>' + c.n + '</b></button>';
+      '" data-zona="' + z.id + '">' + z.nombre.split(" / ")[0] + ' <b>' + c.n + '</b></button>';
   }).join("");
   [...nav.querySelectorAll(".zbtn")].forEach(function(b){
     b.onclick = function(){ irAZona(b.dataset.zona); };
@@ -1727,8 +1939,17 @@ function fichaEquipo(eq, ev){
     ["Horómetro", horo != null ? horo.toLocaleString("es-HN") + " h" : "—"],
     ["Cliente", cliente != null ? cliente : "—"],
     ["Ubicación", ubic != null ? ubic : "—"],
-    ["Marca / modelo", [eq.marca, eq.modelo].filter(Boolean).join(" ") || "—"]
+    ["Marca / modelo", [eq.marca, eq.modelo].filter(Boolean).join(" ") || "—"],
+    ["Empresa", eq._nombreEmpresa || "—"]
   ];
+  /* Lo que se le esta haciendo AHORA, si hay alguien con las manos adentro. */
+  (trabajo || []).forEach(function(t){
+    pares.push([
+      "En curso · " + t.correlativo,
+      [t.estado, t.sistema, (t.tecnicos.join(", ") || "sin mecánico asignado")]
+        .filter(Boolean).join(" · ")
+    ]);
+  });
   let nota = "";
   if(ev.color === "nodata"){
     nota = '<div class="note warn">Este equipo se dibuja como fantasma porque la base no tiene ' +
@@ -1740,6 +1961,26 @@ function fichaEquipo(eq, ev){
   }
   abrirFicha('<div class="kicker">' + esc(zonaTxt) + '</div><h2 class="display">' +
     esc(ev.codigo) + '</h2>' + rows(pares) + nota);
+}
+
+/* Al tocar al mecanico se cuenta que esta haciendo EN ESE EQUIPO, no su
+   historial: el que toca esta parado frente a una maquina y esa es la
+   pregunta. El historial por tecnico ya lo da `taller-tiempos`. */
+function fichaMecanico(nombre, trabajo){
+  const mias = (trabajo || []).filter(function(t){ return t.tecnicos.indexOf(nombre) >= 0; });
+  const pares = mias.map(function(t){
+    return [t.correlativo + " · " + (t.nodo === "correctivos" ? "Correctivo" : "Preventivo"),
+            [t.estado, t.sistema].filter(Boolean).join(" · ") || "—"];
+  });
+  const acomp = [];
+  mias.forEach(function(t){
+    t.tecnicos.forEach(function(n){ if(n !== nombre && acomp.indexOf(n) < 0) acomp.push(n); });
+  });
+  if(acomp.length) pares.push(["Con", acomp.join(", ")]);
+  const falla = (mias[0] && mias[0].falla) ? mias[0].falla : "";
+  const nota = falla ? '<div class="note">' + esc(String(falla).slice(0, 220)) + '</div>' : "";
+  abrirFicha('<div class="kicker">Mecánico</div><h2 class="display">' +
+    esc(nombre) + '</h2>' + rows(pares) + nota);
 }
 
 function fichaPapel(r, st){
@@ -1892,22 +2133,26 @@ async function refrescar(){
   }finally{ cargando = false; }
 }
 
-async function cambiarEmpresa(key){
-  activeCompany = key;
+/* Cambiar de vista NO recarga nada: los datos son los mismos, lo que cambia
+   es a donde mira la camara. Antes cambiar de pastilla volvia a pedir todo a
+   Firebase y a RADAR, y habia que esperar dos segundos para ver algo que ya
+   estaba en memoria. */
+const ZONA_DE_VISTA = { oficina:"bullpen", taller:"taller" };
+function cambiarVista(cual){
+  vista = cual;
   [...document.querySelectorAll(".pill")].forEach(function(b){
-    const on = b.dataset.company === key;
+    const on = b.dataset.vista === cual;
     b.classList.toggle("active", on);
     b.setAttribute("aria-selected", on ? "true" : "false");
   });
-  state.radar = null;
   cerrarFicha();
-  document.getElementById("hint").style.display = "";
-  document.getElementById("hint").textContent = "Cargando " + key + "…";
-  await refrescar();
-  irAZona(zonaActiva);
+  /* Se redibuja la escena entera y no solo la barra: la vista tambien decide
+     que zona queda activa, y el rotulo de arriba lee de ahi. */
+  buildScene();
+  irAZona(ZONA_DE_VISTA[cual] || "bullpen");
 }
 [...document.querySelectorAll(".pill")].forEach(function(b){
-  b.onclick = function(){ if(b.dataset.company !== activeCompany) cambiarEmpresa(b.dataset.company); };
+  b.onclick = function(){ if(b.dataset.vista !== vista) cambiarVista(b.dataset.vista); };
 });
 
 /* boot */
