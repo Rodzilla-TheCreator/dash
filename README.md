@@ -1,17 +1,30 @@
-# Dash de Omar
+# Dash
 
-Tablero de operaciones para Omar (Montasa / Monhaco / Monhagro).
-Página web autocontenida (un solo archivo `index.html` con CSS y JS embebidos) + PWA.
+El tablero de la raíz es el **Tablero de Flota** que pidió Cristian: cuántos equipos
+hay, cuáles generan renta, cuáles están parados y cuánta plata representan. Página
+autocontenida (un solo `index.html` con CSS y JS adentro).
 
-- **Flota** y **Mantenimientos**: leen Firebase Realtime Database por REST.
-- **Caja Chica**: lee/escribe el Apps Script de Christian vía JSONP.
-- **Finanzas / Mecánicos / Almacén**: sin conectar (muestran "Sin conectar").
+- **En vivo**: los conteos salen de RADAR (`/api/dashboard`) cada vez que se abre.
+- **Corte**: el reparto por empresa y el dinero potencial son una **foto fechada**
+  hecha con SQL, porque el endpoint no los entrega abiertos por empresa.
+- **Taller y Oficina**: leen Firebase Realtime Database por REST.
 
-Se despliega con GitHub Pages. Refresca datos cada 60 s.
+Se despliega con GitHub Pages.
+
+> **Hubo otro dash acá y ya no está.** Era el de Omar, con tiles de KPIs, caja chica
+> y el botón de MUNDO. Se quitó el 25 de septiembre de 2026: el tablero de Cristian
+> lo reemplazó en la raíz y **no se le mezcló nada** de aquel, a propósito. Lo que
+> Omar necesitaba ver quedó en el reporte que se le mandó aparte.
+>
+> Consecuencia a tener presente: **al Mundo ya no se entra desde el dash.** Se abre
+> directo en `mundo/`. Si alguna vez hace falta el botón, hay que agregarlo a mano.
 
 ## Módulos
 
-- `index.html` — el dash (tiles de KPIs).
+- `index.html` — el Tablero de Flota (el de Cristian).
+- `cristian/` — **solo un cartel que redirige a la raíz.** El tablero vivía ahí y el
+  link viejo anda repartido en WhatsApp y en pantallas de inicio; un 404 no le explica
+  nada a nadie.
 - `mundo/` — **Mundo Montasa**: la misma operación como un mundo isométrico
   pixel-art recorrible (taller, patio, campo/clientes, contabilidad, bodega,
   oficina). Se entra desde el botón **MUNDO ▸** del header. Ver
