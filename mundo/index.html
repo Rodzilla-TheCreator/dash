@@ -2665,111 +2665,96 @@ function renderLeyenda(flota){
   const cuerpo = document.getElementById("leyenda-cuerpo");
   if(!cuerpo) return;
   const H = [];
-  if(vista === "taller"){
-    const todos = [].concat(flota.taller||[], flota.patio||[], flota.otros||[],
-                            (flota.campo||[]).reduce(function(a,g){ return a.concat(g.items); }, []));
-    const fant = todos.filter(function(x){ return x.ev.color === "nodata"; }).length;
-    const sinCod = todos.filter(function(x){ return x.ev.sinCodigo; }).length;
-    const conMec = Object.keys(enCurso.porEquipo || {}).length;
-    H.push('<h4>Cómo está armado</h4>');
-    H.push('<div class="li"><b>El centro es nuestro.</b> Arriba lo <b>disponible</b> ' +
-           '—parqueado, sin nadie que lo use— y abajo el <b>taller</b>, lo que está en ' +
-           'mal estado.</div>');
-    H.push('<div class="li"><b>El anillo son los clientes.</b> Cada sitio es uno, y lo que ' +
-           'está adentro es lo que tiene rentado. Un equipo que se rompe entra al centro; ' +
-           'el mapa es el viaje que hace el fierro.</div>');
-    H.push('<h4>De quién es el que está en el taller</h4>');
-    H.push('<div class="li"><span class="sw" style="background:#f5c542"></span>' +
-           '<span><b>Tocá un montacargas del centro</b> y si es de un cliente sale una ' +
-           'línea amarilla en arco hasta su sitio. Si no sale nada, es nuestro.</span></div>');
-    H.push('<div class="nota">A la mayoría no le sale línea, y no es que se haya ' +
-           'perdido el dato: en la lista semilla de la app de taller esos equipos ya venían ' +
-           'con <b>TALLER MONTASA</b> en el campo de cliente. Son nuestros, nunca estuvieron ' +
-           'rentados.</div>');
+  const todos = [].concat(flota.taller || [], flota.patio || [], flota.otros || [],
+                          (flota.campo || []).reduce(function(a, g){ return a.concat(g.items); }, []));
+  const fant   = todos.filter(function(x){ return x.ev.color === "nodata"; }).length;
+  const sinCod = todos.filter(function(x){ return x.ev.sinCodigo; }).length;
+  const conMec = Object.keys(enCurso.porEquipo || {}).length;
+  const sinAsig = Object.keys(enCurso.porEquipo || {}).filter(function(k){
+    return !(enCurso.porEquipo[k] || []).some(function(t){ return t.tecnicos.length; }); }).length;
+  const contradicen = todos.filter(function(x){
+    const t = (enCurso.porEquipo || {})[x.eq._empresa + ":" + (x.eq.id || "")];
+    return t && t.length && bucketEstado(x.eq.estado) !== "mant"; }).length;
+  const sueltas = (enCurso.sueltas || []).length;
 
-    H.push('<h4>El color del chasis dice DÓNDE está</h4>');
-    H.push('<div class="li"><span class="sw" style="background:#e5534b"></span>' +
-           '<span>Rojo: en el <b>taller</b>.</span></div>');
-    H.push('<div class="li"><span class="sw" style="background:#3ecf7e"></span>' +
-           '<span>Verde: <b>disponible</b>, parqueado.</span></div>');
-    H.push('<div class="li"><span class="sw" style="background:#4f8fe0"></span>' +
-           '<span>Azul: <b>en renta</b>, en el sitio de un cliente.</span></div>');
-    H.push('<div class="li"><span class="sw" style="background:#a9741f"></span>' +
-           '<span>Ámbar: <b>otros / interno</b> — pick-ups, camión, la grúa.</span></div>');
-    H.push('<div class="li"><span class="sw fant"></span><span><b>Transparente y punteado ' +
-           '— no se sabe nada de él.</b> La base no tiene ni fecha de último ' +
-           'mantenimiento ni horómetro con qué comparar. Tapa el color de la zona.</span></div>');
-    H.push('<div class="nota">Así están <b>' + fant + ' de ' + todos.length + '</b>. ' +
-           'Son tantos porque <b>ningún equipo</b> tiene cargada la fecha de último ' +
-           'mantenimiento: los pocos que no son fantasma es porque pasaron por una orden ' +
-           'de la app y de ahí se saca la fecha. Un cliente entero en transparente ' +
-           '—San Juan Textil, por ejemplo— significa que a esos equipos nunca se les ' +
-           'abrió una orden acá.</div>');
-
-    H.push('<h4>La barra vertical dice CÓMO está</h4>');
-    H.push('<div class="li">Solo la llevan los del <b>taller</b>. Mide qué tan pasado está ' +
-           'del intervalo de mantenimiento (' + INTERVALO_DIAS + ' días ó ' + INTERVALO_HORAS +
-           ' horas, lo que llegue primero).</div>');
-    H.push('<div class="li"><span class="sw" style="background:#3ecf7e"></span>' +
-           '<span>Al día.</span></div>');
-    H.push('<div class="li"><span class="sw" style="background:#f5a524"></span>' +
-           '<span>Se acerca.</span></div>');
-    H.push('<div class="li"><span class="sw" style="background:#e5534b"></span>' +
-           '<span>Pasado. La barra <b>se sale del marco</b> a propósito.</span></div>');
-    H.push('<div class="li"><span class="sw" style="background:#565b5f"></span>' +
-           '<span><b>Gris: no hay con qué calcularlo.</b> Es la misma falta de dato que el ' +
-           'chasis transparente, dicha en la barra.</span></div>');
-
-    H.push('<h4>Los mecánicos</h4>');
-    H.push('<div class="li"><span class="sw" style="background:#f5c542"></span>' +
-           '<span>Casco amarillo: alguien con las manos en ese equipo <b>ahora</b>. ' +
-           'Tocalo y dice qué está haciendo.</span></div>');
-    const sinAsig = Object.keys(enCurso.porEquipo || {}).filter(function(k){
-      return !enCurso.porEquipo[k].some(function(t){ return t.tecnicos.length; }); }).length;
-    const contradicen = todos.filter(function(x){
-      const t = (enCurso.porEquipo || {})[x.eq._empresa + ":" + (x.eq.id || "")];
-      return t && t.length && bucketEstado(x.eq.estado) !== "mant"; }).length;
-    if(contradicen){
-      H.push('<div class="li"><span class="sw" style="background:transparent;' +
-             'border:1.5px solid #f5a524;border-radius:50%"></span><span><b>Aro \u00e1mbar</b> ' +
-             '\u2014 tiene orden abierta pero <b>no figura en el taller</b>. La app no le cambi\u00f3 ' +
-             'el estado.</span></div>');
-      H.push('<div class="nota">Son <b>' + contradicen + '</b>. Pasa por dos caminos: la orden ' +
-             'se cre\u00f3 marcando "finalizar", o alguien cambi\u00f3 el estado a mano mientras estaba ' +
-             'abierta. El tablero de flota los cuenta como libres para rentar.</div>');
-    }
-    H.push('<div class="li"><span class="sw fant"></span><span><b>Mec\u00e1nico transparente</b> ' +
-           '\u2014 hay una orden abierta en ese equipo y <b>nadie figura como responsable</b>. ' +
-           'Mismo c\u00f3digo que el montacargas: transparente = falta un dato.</span></div>');
-    H.push('<div class="nota">' + conMec + ' equipos con mec\u00e1nico encima' +
-           (sinAsig ? ', ' + sinAsig + ' con orden abierta y sin responsable' : '') + '. ' +
-           'Los que trabajan en algo que el mapa no puede dibujar \u2014m\u00e1quina del cliente, o ' +
-           'registro borrado\u2014 van a una bah\u00eda aparte al fondo del taller.</div>');
-
-    if(sinCod){
-      H.push('<h4>Nombres</h4>');
-      H.push('<div class="li"><span class="sw" style="background:#f5a524"></span>' +
-             '<span>En ámbar: <b>no tiene código de flota</b>. En la base ese campo trae ' +
-             'el número de serie o la marca, no un MT-## ni un E-##.</span></div>');
-      H.push('<div class="nota">' + sinCod + ' equipos así. No se les inventó un código: ' +
-             'ese dato no existe, hay que cargarlo en la app.</div>');
-    }
-  }else{
-    H.push('<h4>El edificio</h4>');
-    H.push('<div class="li"><b>Bullpen</b> — el centro. Ahí vive Jarvis, y cada oficina ' +
-           'tiene su puerta mirando hacia él.</div>');
-    H.push('<div class="li">Las ocho oficinas alrededor, una por área.</div>');
-    H.push('<h4>Lo que cuelga en las paredes</h4>');
-    H.push('<div class="li"><span class="sw" style="background:#4f8fe0"></span>' +
-           '<span>Con dato: el KPI está calculado y se lee.</span></div>');
-    H.push('<div class="li"><span class="sw fant"></span><span><b>Sin energía</b> — monitor ' +
-           'apagado, marco vacío: RADAR todavía no calcula ese número. El hueco se ve ' +
-           'feo a propósito.</span></div>');
-    H.push('<h4>Los papeles que cruzan</h4>');
-    H.push('<div class="li">Un gasto de caja chica sale de la oficina que lo pidió, entra al ' +
-           'bullpen y sigue a la que decide. Se mueve porque su estado cambió en la base, ' +
-           'no porque una animación lo diga.</div>');
+  function li(sw, txt){
+    H.push('<div class="li">' + (sw || "") + '<span>' + txt + '</span></div>');
   }
+  function cuad(col){ return '<span class="sw" style="background:' + col + '"></span>'; }
+  const fantasma = '<span class="sw fant"></span>';
+  const aro = function(col){
+    return '<span class="sw" style="background:transparent;border:1.5px solid ' + col +
+           ';border-radius:50%"></span>'; };
+
+  H.push('<h4>C\u00f3mo est\u00e1 armado</h4>');
+  li("", '<b>El centro es nuestro.</b> Arriba lo <b>disponible</b> y abajo el <b>taller</b>.');
+  li("", '<b>El anillo son los clientes.</b> Cada sitio es uno y adentro est\u00e1 lo que tiene ' +
+         'rentado. Un equipo que se rompe entra al centro: el mapa es el viaje que hace el fierro.');
+
+  H.push('<h4>El color del chasis dice D\u00d3NDE est\u00e1</h4>');
+  li(cuad("#e5534b"), 'Rojo: en el <b>taller</b>.');
+  li(cuad("#3ecf7e"), 'Verde: <b>disponible</b>, parqueado.');
+  li(cuad("#4f8fe0"), 'Azul: <b>en renta</b>, en el sitio de un cliente.');
+  li(cuad("#a9741f"), '\u00c1mbar: <b>otros / interno</b> \u2014 pick-ups, cami\u00f3n, la gr\u00faa.');
+  li(fantasma, '<b>Transparente: no se sabe nada de \u00e9l.</b> La base no tiene ni fecha de ' +
+               '\u00faltimo mantenimiento ni hor\u00f3metro con qu\u00e9 comparar. Tapa el color de la zona.');
+  H.push('<div class="nota">As\u00ed est\u00e1n <b>' + fant + ' de ' + todos.length + '</b>. Son tantos ' +
+         'porque <b>ning\u00fan equipo</b> tiene cargada la fecha de \u00faltimo mantenimiento: los pocos ' +
+         'que no son fantasma es porque cerraron una orden en la app y de ah\u00ed sale la fecha. ' +
+         'Una orden ABIERTA no cuenta \u2014 el trabajo todav\u00eda no se hizo.</div>');
+
+  H.push('<h4>El m\u00e1stil dice C\u00d3MO est\u00e1</h4>');
+  li("", 'Solo en el <b>taller</b>. El m\u00e1stil es la regla y <b>las horquillas la medida</b>: ' +
+         'al d\u00eda van en el piso, y se van subiendo mientras se acerca el intervalo (' +
+         INTERVALO_DIAS + ' d\u00edas \u00f3 ' + INTERVALO_HORAS + ' horas, lo que llegue primero).');
+  li(cuad("#3ecf7e"), 'Abajo y verde: al d\u00eda.');
+  li(cuad("#f5a524"), 'A media altura y \u00e1mbar: se acerca.');
+  li(cuad("#e5534b"), 'Arriba del todo y rojo: pasado.');
+  li(fantasma, 'En el piso y en gris: no hay con qu\u00e9 calcularlo.');
+
+  H.push('<h4>Los mec\u00e1nicos</h4>');
+  li(cuad("#f5c542"), 'Casco amarillo: <b>trabajando ahora</b> en ese equipo.');
+  li(cuad("#7d8288"), 'Casco gris: asignado pero <b>detenido</b> \u2014 en pausa, o esperando ' +
+                      'repuestos. El motivo va escrito debajo.');
+  li(fantasma, 'Transparente: hay orden abierta y <b>nadie figura como responsable</b>.');
+  H.push('<div class="nota">' + conMec + ' equipos con alguien encima' +
+         (sinAsig ? ', ' + sinAsig + ' sin responsable' : '') +
+         (sueltas ? '. Otras ' + sueltas + ' \u00f3rdenes son de m\u00e1quinas que el mapa no puede ' +
+                    'dibujar \u2014 del cliente, o el registro ya no existe: van a una bah\u00eda al ' +
+                    'fondo del taller' : '') + '.</div>');
+
+  if(contradicen){
+    H.push('<h4>Lo que no cuadra</h4>');
+    li(aro("#f5a524"), '<b>Aro \u00e1mbar</b>: tiene orden abierta y <b>no figura en el taller</b>.');
+    H.push('<div class="nota">Son <b>' + contradicen + '</b>. La app solo pone el equipo en ' +
+           'mantenimiento si la orden se crea sin marcar \u201cfinalizar\u201d, y solo lo devuelve si ' +
+           'al cerrar segu\u00eda en mantenimiento. Por uno de esos dos caminos quedan como libres ' +
+           '\u2014 y el tablero de flota los cuenta como disponibles para rentar.</div>');
+  }
+
+  H.push('<h4>Para encontrar algo</h4>');
+  li("", 'Arriba a la izquierda. Escrib\u00ed el c\u00f3digo \u2014 <b>MT-113</b>, <b>mt113</b> y ' +
+         '<b>113</b> llegan al mismo lado \u2014 o abr\u00ed el \u2630 para verlos por tipo. Al elegir ' +
+         'uno, la c\u00e1mara vuela y le pinta un aro.');
+
+  H.push('<h4>De qui\u00e9n es cada cosa</h4>');
+  li(cuad("#f5c542"), '<b>Toc\u00e1 un montacargas del centro</b>: si es de un cliente sale una ' +
+                      'l\u00ednea amarilla en arco hasta su sitio. Si no sale nada, es nuestro.');
+  li(aro("#4f8fe0"), '<b>Toc\u00e1 el sitio de un cliente</b>: la ficha junta lo que tiene en su ' +
+                     'planta con lo que tiene ac\u00e1, y los que est\u00e1n con nosotros quedan ' +
+                     'marcados con aro azul sobre el mapa.');
+  H.push('<div class="nota">A la mayor\u00eda no le sale l\u00ednea, y no es que se haya perdido el ' +
+         'dato: en la lista semilla de la app de taller esos equipos ya ven\u00edan con ' +
+         '<b>TALLER MONTASA</b> en el campo de cliente. Son nuestros, nunca estuvieron rentados.</div>');
+
+  if(sinCod){
+    H.push('<h4>Nombres</h4>');
+    li(cuad("#f5a524"), 'Sin c\u00f3digo de flota: en la base ese campo trae el n\u00famero de serie ' +
+                        'o la marca, no un MT-## ni un E-##.');
+    H.push('<div class="nota">' + sinCod + ' equipos as\u00ed. No se les invent\u00f3 un c\u00f3digo: ese ' +
+           'dato no existe, hay que cargarlo en la app.</div>');
+  }
+
   cuerpo.innerHTML = H.join("");
 }
 const leyEl = document.getElementById("leyenda");
