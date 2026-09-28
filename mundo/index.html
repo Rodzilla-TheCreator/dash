@@ -66,6 +66,45 @@
   .pill:last-child{border-right:0;}
   .pill.active{background:var(--amber);color:#1a1a1a;}
 
+  /* ---------- panel del equipo (izquierda) ---------- */
+  #eqp{position:fixed;left:10px;top:74px;z-index:7;width:264px;
+    background:rgba(23,25,26,0.95);border:1px solid var(--panel-line);
+    backdrop-filter:blur(3px);max-height:calc(100vh - 150px);
+    display:none;flex-direction:column;}
+  #eqp.abierto{display:flex;}
+  #eqp-cab{display:flex;align-items:flex-start;gap:8px;padding:9px 10px;
+    background:var(--panel);border-bottom:1px solid var(--panel-line);}
+  #eqp-cab h3{font-family:'Barlow Condensed',sans-serif;font-size:19px;font-weight:700;
+    letter-spacing:.5px;color:var(--ink);line-height:1.05;flex:1;min-width:0;
+    overflow-wrap:anywhere;}
+  #eqp-cab .kick{display:block;font-size:9px;letter-spacing:1.4px;text-transform:uppercase;
+    color:var(--ink-dim);font-weight:600;margin-bottom:2px;}
+  #eqp-x{background:transparent;border:0;color:var(--ink-dim);font-size:15px;
+    cursor:pointer;line-height:1;padding:2px 3px;flex:0 0 auto;}
+  #eqp-cuerpo{padding:9px 10px 12px;overflow-y:auto;font-size:11.5px;line-height:1.45;}
+  #eqp .fila{display:flex;gap:8px;justify-content:space-between;
+    padding:3.5px 0;border-bottom:1px solid rgba(255,255,255,.045);}
+  #eqp .fila span{color:var(--ink-dim);flex:0 0 auto;}
+  #eqp .fila b{color:var(--ink);font-weight:600;text-align:right;overflow-wrap:anywhere;}
+  #eqp h5{margin:11px 0 4px;font-family:'Barlow Condensed',sans-serif;font-size:10px;
+    letter-spacing:1.2px;text-transform:uppercase;color:#8b9096;font-weight:700;}
+  #eqp .aviso{margin-top:9px;padding:7px 9px;font-size:10.5px;line-height:1.4;
+    background:rgba(245,165,36,.09);border-left:2px solid var(--amber);color:#c9ced2;}
+  #eqp .aviso.gris{background:rgba(255,255,255,.04);border-left-color:#565b5f;}
+  #eqp .tag{display:inline-block;font-size:9px;letter-spacing:.8px;text-transform:uppercase;
+    font-weight:700;padding:2px 5px;margin-top:4px;}
+  #eqp .orden{padding:7px 0;border-bottom:1px solid rgba(255,255,255,.045);}
+  #eqp .orden .q{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;
+    color:var(--ink);letter-spacing:.4px;}
+  #eqp .orden .m{color:#f5c542;}
+  #eqp .orden .m.quieto{color:#8b9096;}
+  #eqp-ver{width:100%;margin-top:10px;background:transparent;border:1px solid var(--amber);
+    color:var(--amber);font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:11px;
+    letter-spacing:1.1px;text-transform:uppercase;padding:7px;cursor:pointer;}
+  @media(max-width:760px){
+    #eqp{left:6px;right:6px;width:auto;top:auto;bottom:52px;max-height:56vh;}
+  }
+
   /* ---------- leyenda ----------
      Arriba a la derecha y ABIERTA por defecto: si hay que ir a buscarla, no
      es una leyenda. En pantalla angosta arranca cerrada, que ahi el mapa vale
@@ -174,6 +213,14 @@
     <button class="pill" data-vista="taller" role="tab" aria-selected="false">Taller</button>
   </div>
 </div>
+
+<aside id="eqp" aria-live="polite">
+  <div id="eqp-cab">
+    <h3><span class="kick" id="eqp-kick"></span><span id="eqp-nom"></span></h3>
+    <button id="eqp-x" aria-label="Cerrar">&#10005;</button>
+  </div>
+  <div id="eqp-cuerpo"></div>
+</aside>
 
 <div id="leyenda">
   <button id="leyenda-tit" aria-expanded="true">Qué estoy viendo <span class="chev">▼</span></button>
@@ -1724,6 +1771,7 @@ function computeEnCurso(){
       const corriendo = /en proceso/i.test(est);
       const ficha = { correlativo:o.correlativo || "?", estado:o.estado || "sin estado",
                       sistema:o.sistema || "", tecnicos:tec, nodo:nodo, corriendo:corriendo,
+                      donde:String(o.ubicacion || "").trim().toLowerCase(),
                       falla:o.falla || o.diagnostico || "" };
       let llave = null;
       if(o.equipoId) llave = o._empresa + ":" + o.equipoId;
@@ -2035,10 +2083,54 @@ window.addEventListener("keydown", function(e){
 });
 /* rueda = zoom por enteros (escritorio) */
 cv.addEventListener("wheel", function(e){ e.preventDefault(); zoom(e.deltaY < 0 ? 1 : -1); }, { passive:false });
+/* EL ZOOM IBA DE 1 A 4 Y DE UNO EN UNO, y por eso no se podia alejar: con el
+   anillo de clientes el mundo mide mas de 200 casillas de punta a punta, y en
+   escala 1 no entra ni la mitad en una pantalla. El minimo ahora se CALCULA
+   --lo que haga falta para que quepa el distrito entero, con un margen-- y los
+   pasos son multiplicativos, que es como se comporta cualquier mapa: cada
+   click acerca o aleja un cuarto, no un entero. */
+/* La caja DE LO QUE DE VERDAD SE DIBUJO, no la de las zonas.
+   Las cajas de zona mienten por dos lados: `campo` declara un cuadrado de
+   112x112 para que la camara sepa a donde ir, pero los clientes viven en un
+   anillo y el centro del cuadrado esta vacio; y en isometrico las esquinas
+   del cuadrado se estiran mucho mas que el contenido. Encuadrando por la caja
+   el mundo salia al 0.12 -- cabia entero y no se leia nada. */
+function cajaVisible(){
+  let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9, n = 0;
+  scene.items.forEach(function(it){
+    const q = w2s(it.gx, it.gy);
+    if(q.x < x0) x0 = q.x; if(q.x > x1) x1 = q.x;
+    if(q.y < y0) y0 = q.y; if(q.y > y1) y1 = q.y;
+    n++;
+  });
+  return n ? { x0:x0, x1:x1, y0:y0, y1:y1 } : null;
+}
+function escalaMinima(){
+  const c = cajaVisible();
+  if(!c) return 0.35;
+  /* 150 px de alto se los comen la barra de arriba y la de zonas */
+  const s = Math.min(CW / (c.x1 - c.x0 + 120), (CH - 150) / (c.y1 - c.y0 + 120));
+  /* Piso en 0.28: mas lejos que eso el montacargas es un pixel y el mapa deja
+     de servir para lo que sirve. Si no cabe, se arrastra. */
+  return Math.max(0.28, Math.min(1.2, s));
+}
 function zoom(dir){
-  const n = Math.max(1, Math.min(4, cam.scale + dir));
-  if(n === cam.scale) return;
+  const min = escalaMinima();
+  const n = Math.max(min, Math.min(4, cam.scale * (dir > 0 ? 1.25 : 0.8)));
+  if(Math.abs(n - cam.scale) < 0.001) return;
   cam.scale = n; dirty = true;
+}
+/* Encuadra el distrito entero. Es lo que se quiere al entrar a una vista:
+   ver todo y despues acercarse, no aparecer pegado a un montacargas. */
+function encuadrar(){
+  cam.scale = escalaMinima();
+  const c = cajaVisible();
+  if(c){
+    cam.x = (c.x0 + c.x1) / 2;
+    cam.y = (c.y0 + c.y1) / 2;
+    cam.tx = cam.x; cam.ty = cam.y;
+  }
+  dirty = true;
 }
 document.getElementById("zin").onclick  = function(){ zoom(1); };
 document.getElementById("zout").onclick = function(){ zoom(-1); };
@@ -2252,6 +2344,7 @@ document.getElementById("leyenda-tit").onclick = function(){
 const sheet = document.getElementById("sheet");
 const sheetBody = document.getElementById("sheet-body");
 document.getElementById("sheet-close").onclick = cerrarFicha;
+document.getElementById("eqp-x").onclick = cerrarPanelEquipo;
 function abrirFicha(html){ sheetBody.innerHTML = html; sheet.classList.add("open"); }
 function cerrarFicha(){ sheet.classList.remove("open"); }
 function esc(s){ return String(s == null ? "—" : s).replace(/[&<>"]/g, function(c){
@@ -2262,72 +2355,87 @@ function rows(pairs){
 }
 
 const ETQ_URG = { ok:"al día", warn:"por vencer", crit:"vencido", nodata:"SIN DATOS" };
-function fichaEquipo(eq, ev){
+function fichaEquipo(eq, ev, trabajo){
   const b = bucketEstado(eq.estado);
-  const zonaTxt = { mant:"Taller", disp:"Patio", renta:"Campo / cliente", uso:"Otros / interno" }[b];
-  const cliente = primerCampo(eq, CAMPOS_CLIENTE);
-  const ubic    = primerCampo(eq, CAMPOS_UBICACION);
-  const horo    = aNumero(primerCampo(eq, CAMPOS_HOROMETRO_ACT));
-  const pares = [
-    ["Estado en la base", eq.estado || "—"],
-    ["Zona del mundo", zonaTxt],
-    ["Mantenimiento", ETQ_URG[ev.color] + (ev.urgencia != null ? " · " + ev.etiqueta : "")],
-    ["Urgencia", ev.urgencia != null ? Math.round(ev.urgencia * 100) + "%" : "—"],
-    ["Horómetro", horo != null ? horo.toLocaleString("es-HN") + " h" : "—"],
-    ["Cliente", cliente != null ? cliente : "—"],
-    ["Ubicación", ubic != null ? ubic : "—"],
-    ["Marca / modelo", [eq.marca, eq.modelo].filter(Boolean).join(" ") || "—"],
-    ["Empresa", eq._nombreEmpresa || "—"]
-  ];
-  /* Lo que se le esta haciendo AHORA, si hay alguien con las manos adentro. */
-  (trabajo || []).forEach(function(t){
-    pares.push([
-      "En curso · " + t.correlativo,
-      [t.estado, t.sistema, (t.tecnicos.join(", ") || "sin mecánico asignado")]
-        .filter(Boolean).join(" · ")
-    ]);
-  });
-  let nota = "";
-  if(ev.color === "nodata"){
-    nota = '<div class="note warn">Este equipo se dibuja como fantasma porque la base no tiene ' +
-           'ni fecha de último mantenimiento ni horómetro comparable. No es que esté bien: ' +
-           'es que no se sabe. Cargar el dato en la app de mantenimientos lo devuelve al mundo.</div>';
-  }else if(ev.color === "crit"){
-    nota = '<div class="note warn">Pasado del intervalo (' + INTERVALO_DIAS + ' días / ' +
-           INTERVALO_HORAS + ' h). La barra se sale del marco a propósito.</div>';
-  }
-  abrirFicha('<div class="kicker">' + esc(zonaTxt) + '</div><h2 class="display">' +
-    esc(ev.codigo) + '</h2>' + rows(pares) + nota);
-}
+  const zonaTxt = { mant:"En el taller", disp:"Disponible", renta:"En cliente", uso:"Otros / interno" }[b];
+  const ubic  = primerCampo(eq, CAMPOS_UBICACION);
+  const horo  = aNumero(primerCampo(eq, CAMPOS_HOROMETRO_ACT));
+  const duenio = clienteDe(eq);
+  const H = [];
 
-/* Al tocar al mecanico se cuenta que esta haciendo EN ESE EQUIPO, no su
-   historial: el que toca esta parado frente a una maquina y esa es la
-   pregunta. El historial por tecnico ya lo da `taller-tiempos`. */
-function fichaMecanico(nombre, trabajo){
-  /* "sin asignar" no es un mecanico: es el fantasma. Sus ordenes son
-     justamente las que NO tienen a nadie. */
-  const fantasma = (nombre === "sin asignar");
-  const mias = (trabajo || []).filter(function(t){
-    return fantasma ? !t.tecnicos.length : t.tecnicos.indexOf(nombre) >= 0; });
-  const pares = mias.map(function(t){
-    return [t.correlativo + " · " + (t.nodo === "correctivos" ? "Correctivo" : "Preventivo"),
-            [t.estado, t.sistema].filter(Boolean).join(" · ") || "—"];
-  });
-  const acomp = [];
-  mias.forEach(function(t){
-    t.tecnicos.forEach(function(n){ if(n !== nombre && acomp.indexOf(n) < 0) acomp.push(n); });
-  });
-  if(acomp.length) pares.push(["Con", acomp.join(", ")]);
-  const falla = (mias[0] && mias[0].falla) ? mias[0].falla : "";
-  const nota = falla ? '<div class="note">' + esc(String(falla).slice(0, 220)) + '</div>' : "";
-  const aviso = fantasma
-    ? '<div class="note warn">Hay trabajo abierto en este equipo y <b>nadie figura ' +
-      'como responsable</b>. No es que no lo estén atendiendo: es que la orden no ' +
-      'tiene técnico cargado. Se arregla en la app de taller.</div>'
-    : '';
-  abrirFicha('<div class="kicker">' + (fantasma ? "Orden sin responsable" : "Mecánico") +
-    '</div><h2 class="display">' + esc(fantasma ? "Sin asignar" : nombre) + '</h2>' +
-    rows(pares) + aviso + nota);
+  function fila(k, v){ H.push('<div class="fila"><span>' + esc(k) + '</span><b>' + esc(v) + '</b></div>'); }
+
+  fila("Empresa", eq._nombreEmpresa || "\u2014");
+  fila("Estado", eq.estado || "\u2014");
+  fila("D\u00f3nde est\u00e1", zonaTxt);
+  fila("Ubicaci\u00f3n", ubic != null ? ubic : "\u2014");
+  fila("Due\u00f1o", duenio || "Nuestro");
+  fila("Marca / modelo", [eq.marca, eq.modelo].filter(Boolean).join(" ") || "\u2014");
+  if(eq.serie) fila("Serie", eq.serie);
+
+  H.push('<h5>Mantenimiento</h5>');
+  fila("Estado", ETQ_URG[ev.color] + (ev.urgencia != null ? " \u00b7 " + ev.etiqueta : ""));
+  fila("Urgencia", ev.urgencia != null ? Math.round(ev.urgencia * 100) + "%" : "\u2014");
+  fila("Hor\u00f3metro", horo != null ? horo.toLocaleString("es-HN") + " h" : "\u2014");
+
+  /* Lo que se le esta haciendo AHORA. `ubicacion` de la orden es el dato que
+     dice si la maquina vino al taller (`plantel`) o si mandamos al mecanico
+     hasta donde esta (`campo`) -- son dos operaciones distintas y cuestan
+     distinto. Cuando el campo viene vacio se dice, no se supone. */
+  const ts = trabajo || [];
+  if(ts.length){
+    H.push('<h5>' + (ts.length === 1 ? "Orden abierta" : ts.length + " \u00f3rdenes abiertas") + '</h5>');
+    ts.forEach(function(t){
+      const quienes = t.tecnicos.length ? t.tecnicos.join(", ") : "sin responsable";
+      const donde = t.donde === "campo" ? "fuimos hasta el equipo"
+                  : t.donde === "plantel" ? "vino al taller"
+                  : "no dice si vino o fuimos";
+      H.push('<div class="orden">' +
+        '<div class="q">' + esc(t.correlativo) + ' \u00b7 ' +
+          esc(t.nodo === "correctivos" ? "Correctivo" : "Preventivo") + '</div>' +
+        '<div>' + esc(t.estado) + (t.sistema ? ' \u00b7 ' + esc(t.sistema) : '') + '</div>' +
+        '<div class="m' + (t.corriendo && t.tecnicos.length ? '' : ' quieto') + '">' +
+          esc(quienes) + '</div>' +
+        '<div style="color:#6f757a">' + esc(donde) + '</div>' +
+      '</div>');
+    });
+  }
+
+  if(ev.color === "nodata"){
+    H.push('<div class="aviso">Se dibuja <b>transparente</b> porque la base no tiene ni fecha ' +
+           'de \u00faltimo mantenimiento ni hor\u00f3metro con qu\u00e9 comparar. No es que est\u00e9 bien: ' +
+           'es que no se sabe.</div>');
+  }else if(ev.color === "crit"){
+    H.push('<div class="aviso">Pasado del intervalo (' + INTERVALO_DIAS + ' d\u00edas / ' +
+           INTERVALO_HORAS + ' h). La barra se sale del marco a prop\u00f3sito.</div>');
+  }
+  if(ev.sinCodigo){
+    H.push('<div class="aviso">Este equipo <b>no tiene c\u00f3digo de flota</b>. En la base ese ' +
+           'campo trae ' + (ev.serie ? 'el n\u00famero de serie' : 'la marca') + ', no un MT-## ni ' +
+           'un E-##. Hay que cargarlo en la app.</div>');
+  }
+  if(b === "mant" && !duenio){
+    H.push('<div class="aviso gris">No sale l\u00ednea a ning\u00fan cliente: para la base este equipo ' +
+           'es nuestro. Ojo que cuando una m\u00e1quina entra al taller, la app le <b>pisa</b> el ' +
+           'campo de cliente con el nombre del taller \u2014 puede ser que fuera de alguien.</div>');
+  }
+
+  document.getElementById("eqp-kick").textContent = zonaTxt;
+  document.getElementById("eqp-nom").textContent = ev.codigo;
+  const cuerpo = document.getElementById("eqp-cuerpo");
+  cuerpo.innerHTML = H.join("");
+  if(duenio && sitiosCliente[duenio]){
+    const btn = document.createElement("button");
+    btn.id = "eqp-ver";
+    btn.textContent = "Ver de qui\u00e9n es \u2192";
+    btn.onclick = function(){ mostrarArco(eq); };
+    cuerpo.appendChild(btn);
+  }
+  document.getElementById("eqp").classList.add("abierto");
+  cerrarFicha();
+}
+function cerrarPanelEquipo(){
+  document.getElementById("eqp").classList.remove("abierto");
 }
 
 function fichaPapel(r, st){
@@ -2496,7 +2604,11 @@ function cambiarVista(cual){
   /* Se redibuja la escena entera y no solo la barra: la vista tambien decide
      que zona queda activa, y el rotulo de arriba lee de ahi. */
   buildScene();
-  irAZona(ZONA_DE_VISTA[cual] || "bullpen");
+  /* Al cambiar de vista se encuadra el distrito entero en vez de caer sobre
+     una zona: lo primero que se quiere ver es el conjunto. */
+  zonaActiva = ZONA_DE_VISTA[cual] || "bullpen";
+  document.getElementById("zone-name").textContent = (ZONA[zonaActiva]||{}).nombre || "";
+  encuadrar();
 }
 [...document.querySelectorAll(".pill")].forEach(function(b){
   b.onclick = function(){ if(b.dataset.vista !== vista) cambiarVista(b.dataset.vista); };
