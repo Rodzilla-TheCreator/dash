@@ -66,6 +66,31 @@
   .pill:last-child{border-right:0;}
   .pill.active{background:var(--amber);color:#1a1a1a;}
 
+  /* ---------- leyenda ----------
+     Arriba a la derecha y ABIERTA por defecto: si hay que ir a buscarla, no
+     es una leyenda. En pantalla angosta arranca cerrada, que ahi el mapa vale
+     mas que el texto. */
+  #leyenda{position:fixed;right:10px;top:74px;z-index:6;width:212px;
+    background:rgba(23,25,26,0.93);border:1px solid var(--panel-line);
+    backdrop-filter:blur(3px);max-height:calc(100vh - 150px);display:flex;flex-direction:column;}
+  #leyenda-tit{width:100%;background:var(--panel);border:0;border-bottom:1px solid var(--panel-line);
+    color:var(--amber);font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:11px;
+    letter-spacing:1.2px;text-transform:uppercase;padding:7px 10px;cursor:pointer;text-align:left;
+    display:flex;align-items:center;justify-content:space-between;gap:8px;}
+  #leyenda-tit .chev{transition:transform .15s;font-size:9px;}
+  #leyenda.cerrada #leyenda-cuerpo{display:none;}
+  #leyenda.cerrada #leyenda-tit .chev{transform:rotate(-90deg);}
+  #leyenda-cuerpo{padding:9px 10px 11px;overflow-y:auto;font-size:11px;line-height:1.45;color:var(--ink-dim);}
+  #leyenda h4{margin:9px 0 5px;font-family:'Barlow Condensed',sans-serif;font-size:10px;
+    letter-spacing:1.2px;text-transform:uppercase;color:#8b9096;font-weight:700;}
+  #leyenda h4:first-child{margin-top:0;}
+  #leyenda .li{display:flex;gap:7px;align-items:flex-start;margin:4px 0;}
+  #leyenda .sw{flex:0 0 auto;width:11px;height:11px;margin-top:2px;border:1px solid #2a2d2f;}
+  #leyenda .sw.fant{background:#4a4f52;opacity:.34;border:1px dashed #565b5f;}
+  #leyenda b{color:var(--ink);font-weight:600;}
+  #leyenda .nota{color:#6f757a;font-size:10px;margin-top:3px;}
+  @media(max-width:760px){ #leyenda{width:186px;top:70px;right:6px;} }
+
   /* ---------- navegador de zonas ---------- */
   #zones{
     position:fixed;left:0;right:0;bottom:0;z-index:5;
@@ -148,6 +173,11 @@
     <button class="pill active" data-vista="oficina" role="tab" aria-selected="true">Oficina</button>
     <button class="pill" data-vista="taller" role="tab" aria-selected="false">Taller</button>
   </div>
+</div>
+
+<div id="leyenda">
+  <button id="leyenda-tit" aria-expanded="true">Qué estoy viendo <span class="chev">▼</span></button>
+  <div id="leyenda-cuerpo"></div>
 </div>
 
 <div id="zoom">
@@ -254,9 +284,49 @@ function aNumero(v){
 }
 function diasDesde(fecha){ return (Date.now() - fecha.getTime()) / 86400000; }
 
+/* CODIGO DE FLOTA: MT-54, E-01, BC-7. Es como se llama un equipo cuando
+   alguien lo nombra en voz alta. */
+const RE_CODIGO = /^[A-Za-z]{1,4}-\d+$/;
+
+/* Los que NO son equipos: marcadores para colgarle ordenes al taller. Tienen
+   ficha de equipo, estado y todo, pero no existen como maquina. Contarlos
+   inflaba el taller y dejaba dos fantasmas parados ahi para siempre. */
+function esMarcadorDeTaller(eq){
+  return /^TALLER[-_ ]/i.test(String(eq && eq.codigo || "").trim());
+}
+
+/* Como se llama un equipo EN PANTALLA.
+   ---------------------------------------------------------------------
+   195 de 217 traen su codigo de flota y ahi no hay nada que pensar. Los 22
+   que faltan traen otra cosa en ese campo, y son dos casos distintos:
+
+     · SIETE TIENEN EL NUMERO DE SERIE de codigo -- `B16010H00164`,
+       `010352h5584` -- y se nota porque `codigo` y `serie` son identicos.
+       Un numero de serie no es un nombre: nadie dice "andá a ver el
+       010352h5584". Se muestra la marca y el modelo, que al menos dice que
+       maquina es.
+     · TRECE TRAEN MARCA Y MODELO de codigo: `Baoli KBD70`, `Towmotor
+       Gp25s`, `PATRULLA`. Eso ya es legible, se deja.
+
+   En los dos casos el equipo queda MARCADO como sin codigo de flota, y el
+   mundo lo dice. NO se inventa un MT-##: ese dato no existe en ningun lado,
+   y ponerle uno de adorno seria exactamente lo que este mapa no debe hacer. */
+function nombreEquipo(eq){
+  const cod = String(eq.codigo || "").trim();
+  if(RE_CODIGO.test(cod)) return { nombre:cod, sinCodigo:false };
+  const serie = String(eq.serie || "").trim();
+  const esSerie = cod && serie && cod.toLowerCase() === serie.toLowerCase();
+  if(esSerie){
+    const mm = [eq.marca, eq.modelo].filter(Boolean).join(" ").trim();
+    return { nombre: mm || cod, sinCodigo:true, serie:cod };
+  }
+  return { nombre: cod || String(eq.id || "?"), sinCodigo:true };
+}
+
 /* devuelve {codigo, urgencia, color, etiqueta} para un equipo */
 function evaluarEquipo(eq, ultimoDeHistorial){
-  const codigo = eq.codigo || eq.id || "?";
+  const nom = nombreEquipo(eq);
+  const codigo = nom.nombre;
   const horoAct = aNumero(primerCampo(eq, CAMPOS_HOROMETRO_ACT));
   const fechaUlt = aFecha(primerCampo(eq, CAMPOS_ULT_FECHA_EQUIPO)) ||
                    (ultimoDeHistorial ? ultimoDeHistorial.fecha : null);
@@ -283,7 +353,7 @@ function evaluarEquipo(eq, ultimoDeHistorial){
   }
   let color = "nodata";
   if(urgencia != null) color = urgencia >= 1 ? "crit" : (urgencia >= UMBRAL_AMARILLO ? "warn" : "ok");
-  return { codigo, urgencia, color, etiqueta };
+  return { codigo, urgencia, color, etiqueta, sinCodigo:nom.sinCodigo, serie:nom.serie };
 }
 
 /* --- Bitacora SGI (nodo aparte, sin empresa) --- */
@@ -662,9 +732,9 @@ function papel(tint){
    demás oficinas van dos personas sin nombre todavía.
    ===================================================================== */
 const PIEL = { omar:"#c69a72", fabri:"#b8865c", elia:"#d3a67f", rodz:"#c28f68", gen:"#a8825f", gen2:"#8d6a48",
-               mec:"#a8825f", mec2:"#8d6a48" };
+               mec:"#a8825f", mec2:"#8d6a48", mecq:"#a8825f" };
 const PELO = { omar:"#9aa0a4", fabri:"#241c19", elia:"#3b2016", rodz:"#1e1a18", gen:"#332b28", gen2:"#4a3a2c",
-               mec:"#2b2320", mec2:"#3a2f28" };
+               mec:"#2b2320", mec2:"#3a2f28", mecq:"#2b2320" };
 
 function persona(tipo){
   const key = "pj_" + tipo;
@@ -705,15 +775,20 @@ function persona(tipo){
     ops.push([5,8,2,2,"#eae7e0"]);                                   // cuello de camisa
     ops.push([4,15,2,4,"#2f3439"], [6,15,2,4,"#2f3439"]);            // pantalón
     ops.push([3,19,3,1,"#17191a"], [6,19,3,1,"#17191a"]);            // zapatos
-  }else if(tipo === "mec" || tipo === "mec2"){
+  }else if(tipo === "mec" || tipo === "mec2" || tipo === "mecq"){
     /* El mecanico. Se distingue de lejos y a proposito: overol azul, casco
        amarillo y chaleco reflectivo. En un patio lleno de montacargas, una
        figura mas en gris no se ve; el casco es lo que hace que a un metro de
        zoom se entienda que ESE equipo tiene a alguien encima.
        El casco se dibuja ENCIMA del pelo, tapandolo: si no, salia un gorro
        flotando sobre la cabeza. */
-    const OVEROL = tipo === "mec2" ? "#2b4f7a" : "#32598c";
-    const CASCO  = "#f5c542", REFLEJO = "#d8e84a";
+    /* `mecq` = quieto: asignado pero la orden no esta corriendo. Se apaga el
+       color, NO se vuelve transparente: transparente ya significa "falta un
+       dato" y mezclarlo diria que no sabemos quien es, cuando si sabemos. */
+    const quieto = (tipo === "mecq");
+    const OVEROL = quieto ? "#3b4146" : (tipo === "mec2" ? "#2b4f7a" : "#32598c");
+    const CASCO  = quieto ? "#7d8288" : "#f5c542";
+    const REFLEJO = quieto ? "#5c6167" : "#d8e84a";
     ops.push([3,0,6,2,CASCO], [2,1,8,1,CASCO], [3,1,1,2,CASCO], [8,1,1,2,CASCO]);
     ops.push([3,2,6,1,shade(CASCO,0.78)]);                           // ala del casco
     ops.push([3,8,6,7,OVEROL], [2,8,1,5,OVEROL], [9,8,1,5,OVEROL]);  // overol y mangas
@@ -784,15 +859,23 @@ function barraUrgencia(px, py, ev){
    ===================================================================== */
 const ZONAS = [
   /* --- distrito de equipos (montacargas) --- */
-  /* El taller se agrando y las otras dos se corrieron. Motivo: antes el mundo
-     mostraba UNA empresa y en el taller habia una decena de equipos; ahora
-     muestra las dos y son 48. En una zona de 12 de ancho eso son tres columnas
-     y dieciseis filas, o sea una fila india diagonal que se sale de la pantalla
-     y no deja ver nada. Con 22 de ancho entran seis columnas y queda un taller
-     que se parece a un taller. */
-  { id:"taller",  nombre:"TALLER",           dist:"equipos", x:0,  y:0,  w:22, d:26, piso:"#2a2d2f", linea:"#34383b" },
-  { id:"patio",   nombre:"PATIO",            dist:"equipos", x:26, y:0,  w:18, d:12, piso:"#25282a", linea:"#31353800" },
-  { id:"campo",   nombre:"CAMPO / CLIENTES", dist:"equipos", x:48, y:0,  w:22, d:13, piso:"#1f2426", linea:"#2a2f3100" },
+  /* EL ORDEN IMPORTA Y ES EL DEL NEGOCIO: el equipo entra al patio, pasa por
+     el taller y sale al cliente. El taller va AL MEDIO porque es por donde
+     pasa todo; tenerlo en una punta obligaba a cruzar el mapa entero para ir
+     del patio al taller, que es el viaje que mas se hace.
+
+     Los tamanos salen de cuantos equipos hay de verdad, no de la estetica:
+     48 en taller (seis columnas), 32 en patio, y 124 repartidos en 28 sitios
+     de cliente -- por eso campo es la mas grande de las tres. */
+  /* EL CENTRO ES NUESTRO, EL ANILLO ES DE LOS CLIENTES.
+     Disponibles arriba, taller abajo, los dos en el medio; los sitios de
+     cliente en circulo alrededor. Un equipo en renta esta AFUERA y cuando se
+     rompe entra al centro: el mapa es el viaje que hace el fierro.
+     `campo` no dibuja piso -- cada sitio pone el suyo sobre el anillo-- pero
+     conserva una caja que lo cubre para que la camara sepa a donde ir. */
+  { id:"patio",   nombre:"DISPONIBLES",      dist:"equipos", x:-9,  y:-23, w:18, d:18, piso:"#25282a", linea:"#31353800" },
+  { id:"taller",  nombre:"TALLER",           dist:"equipos", x:-11, y:2,   w:22, d:24, piso:"#2a2d2f", linea:"#34383b" },
+  { id:"campo",   nombre:"CAMPO / CLIENTES", dist:"equipos", x:-56, y:-56, w:112, d:112, piso:null, linea:null },
   /* --- el edificio (todo lo demás) --- */
   { id:"bullpen", nombre:"BULLPEN",          dist:"edificio", x:20, y:37, w:12, d:10, piso:"#2f3335", linea:"#3c4144" }
 ];
@@ -891,8 +974,13 @@ function rejilla(n, cols, x0, y0, dx, dy){
 }
 
 /* --------- un montacargas dibujable + tappable --------- */
+/* Donde quedo dibujado cada equipo, por `empresa:id`. Es el otro extremo del
+   arco: sin esto habria que recorrer la escena entera buscandolo. */
+let posEnMapa = {};
+
 function ponerEquipo(gx, gy, eq, ev, opt){
   opt = opt || {};
+  if(eq && eq._empresa) posEnMapa[eq._empresa + ":" + (eq.id || "")] = { gx:gx, gy:gy };
   /* Si nadie paso el trabajo a mano, se busca solo. Asi ninguna zona se
      olvida de mostrar al mecanico por no acordarse de pasarlo. */
   if(opt.trabajo === undefined && eq && eq._empresa){
@@ -916,7 +1004,12 @@ function ponerEquipo(gx, gy, eq, ev, opt){
       ctx.drawImage(img, sx, sy);
     }
     if(opt.barra && ev) barraUrgencia(p.x, sy - 3, ev);
-  }, { x:sx-3, y:sy-30, w:FK_W+6, h:FK_H+34 }, function(){ fichaEquipo(eq, ev, opt.trabajo); });
+  }, { x:sx-3, y:sy-30, w:FK_W+6, h:FK_H+34 }, function(){
+    /* El arco primero: cuando la ficha sube desde abajo tapa medio mapa, y
+       si el arco arranca despues ya no se ve nacer. */
+    mostrarArco(eq);
+    fichaEquipo(eq, ev, opt.trabajo);
+  });
   if(opt.codigo !== false){
     /* con barra el rotulo va ARRIBA de la barra, para que nunca la tape */
     label(p.x, sy - (opt.barra ? 45 : 6), (ev && ev.codigo) || eq.codigo || eq.id || "?",
@@ -937,24 +1030,41 @@ function ponerEquipo(gx, gy, eq, ev, opt){
    sale en el rotulo ("+2") y en la ficha al tocar. */
 function ponerMecanicos(gx, gy, trabajo){
   const nombres = [];
+  let algunoCorriendo = false;
   trabajo.forEach(function(t){
+    if(t.corriendo && t.tecnicos.length) algunoCorriendo = true;
     t.tecnicos.forEach(function(n){ if(nombres.indexOf(n) < 0) nombres.push(n); });
   });
   if(!nombres.length){
-    /* Hay orden abierta pero nadie firmo. Es un dato que falta, no un
-       equipo tranquilo: se marca y se ve. */
-    const p0 = w2s(gx, gy);
-    label(p0.x, p0.y + HH + 9, "SIN MEC\u00c1NICO ASIGNADO",
-      { col:"#f5a524", size:7.5, w:"700", box:true });
+    /* ORDEN ABIERTA Y NADIE LA FIRMO. Va un mecanico FANTASMA, con la misma
+       pinta que un montacargas sin datos: 34% de opacidad y marco punteado.
+       El mundo ya tiene una sola forma de decir "de esto falta un dato", y
+       usarla tambien aca hace que se entienda sin leer nada -- hay trabajo
+       abierto en ese equipo y no se sabe quien lo tiene.
+       Antes esto era un renglon de texto que se perdia entre los rotulos. */
+    const mx = gx + 0.95, my = gy + 0.5;
+    const p = w2s(mx, my);
+    const sx = Math.round(p.x - 6), sy = Math.round(p.y + HH - 20);
+    push(mx, my, function(){
+      sombra(mx, my, 7);
+      ctx.save(); ctx.globalAlpha = 0.34;
+      ctx.drawImage(persona("mec"), sx, sy);
+      ctx.restore();
+      ctx.save(); ctx.globalAlpha = 0.55; ctx.strokeStyle = COL_URG.nodata;
+      ctx.setLineDash([2,2]); ctx.lineWidth = 1;
+      ctx.strokeRect(sx-1.5, sy-1.5, 12+3, 20+3); ctx.restore();
+    }, { x:sx-4, y:sy-4, w:20, h:28 }, function(){ fichaMecanico("sin asignar", trabajo); });
+    label(p.x, sy - 7, "SIN ASIGNAR", { col:"#565b5f", size:7, w:"700", box:true });
     return;
   }
+  const pinta = algunoCorriendo ? ["mec", "mec2"] : ["mecq", "mecq"];
   nombres.slice(0, 2).forEach(function(n, i){
     const mx = gx + 0.95 + i*0.75, my = gy + 0.5 + i*0.35;
     const p = w2s(mx, my);
     const sx = Math.round(p.x - 6), sy = Math.round(p.y + HH - 20);
     push(mx, my, function(){
       sombra(mx, my, 7);
-      ctx.drawImage(persona(i ? "mec2" : "mec"), sx, sy);
+      ctx.drawImage(persona(pinta[i] || pinta[0]), sx, sy);
     }, { x:sx-4, y:sy-4, w:20, h:28 }, function(){ fichaMecanico(n, trabajo); });
   });
   /* Un solo rotulo para los dos: dos nombres uno encima del otro sobre un
@@ -962,7 +1072,13 @@ function ponerMecanicos(gx, gy, trabajo){
   const p = w2s(gx + 1.1, gy + 0.6);
   const extra = nombres.length > 1 ? "  +" + (nombres.length - 1) : "";
   label(p.x, Math.round(p.y + HH - 20) - 7, nombres[0].toUpperCase() + extra,
-    { col:"#f5c542", size:7.5, w:"700", box:true });
+    { col: algunoCorriendo ? "#f5c542" : "#8b9096", size:7.5, w:"700", box:true });
+  if(!algunoCorriendo){
+    /* Si esta detenido, el motivo va escrito: "en pausa" y "esperando
+       repuestos" se arreglan de maneras muy distintas. */
+    label(p.x, Math.round(p.y + HH - 20) + 4, String(trabajo[0].estado).toLowerCase(),
+      { col:"#6f757a", size:7, box:true });
+  }
 }
 
 /* --------- ZONA 1: TALLER --------- */
@@ -1018,9 +1134,9 @@ function mecanicosSinEquipo(z, y0){
     label(p.x, sy - 7, n.split(" ")[0].toUpperCase(), { col:"#f5c542", size:7, box:true });
   });
   const c = w2s(z.x + z.w/2, y0 - 0.9);
-  label(c.x, c.y, "TRABAJANDO EN ALGO QUE NO ESTA EN LA FLOTA \u00b7 " + sueltas.length,
+  label(c.x, c.y, "MEC\u00c1NICOS SIN EQUIPO EN EL MAPA \u00b7 " + sueltas.length + " \u00f3rdenes",
     { col:"#f5a524", size:9, w:"700", fam:"disp", box:true });
-  label(c.x, c.y + 11, "equipo del cliente, o el registro ya no existe",
+  label(c.x, c.y + 11, "la m\u00e1quina es del cliente, o su registro ya no existe",
     { col:"#8b9096", size:8, box:true });
 }
 
@@ -1060,16 +1176,32 @@ function zonaPatio(mant){
 }
 
 /* --------- ZONA 3: CAMPO / CLIENTES --------- */
+/* Donde quedo dibujado cada sitio de cliente. Lo llena zonaCampo y lo usa la
+   linea en arco para saber a donde apuntar. */
+let sitiosCliente = {};
+
+/* Los nombres que NO son un cliente: son el taller, o somos nosotros.
+   ---------------------------------------------------------------------
+   Cuando una maquina entra al taller, la app le PISA el campo `cliente` con
+   el nombre del taller. De los 48 que hay adentro hoy, 31 quedaron asi y a
+   esos no hay a donde apuntarles: el dato de quien es se perdio al entrar,
+   no es que no lo encontremos. Los otros 17 conservan su cliente --diez de
+   San Juan Textil, dos de Elcatex-- y esos si se pueden amarrar. */
+const NO_ES_CLIENTE = /^(TALLER|PLANTEL|MONTASA|MONHACO|MT RENTAL|EN CLIENTE)\b/i;
+function clienteDe(eq){
+  const n = String(primerCampo(eq, CAMPOS_CLIENTE) || "").trim();
+  if(!n || NO_ES_CLIENTE.test(n)) return null;
+  return n.toUpperCase();
+}
+
 function zonaCampo(mant){
   const z = ZONA.campo;
-  push(z.x, z.y, function(){
-    floor(z.x, z.y, z.w, z.d, z.piso, null);
-  });
-  rotuloZona(z);
+  /* sin piso: el anillo no es una sala, es el afuera */
 
   if(state.flotaErr && !state.flotaParcial){ zonaApagada(z, state.flotaErr); return; }
 
   const grupos = mant.campo;      // [{nombre, sondeado, items:[]}]
+  sitiosCliente = {};
   const c = centroZona(z);
   if(!grupos.length){
     label(c.x, c.y, "NADA EN RENTA", { col:"#565b5f", size:12, w:"800", fam:"disp" });
@@ -1079,18 +1211,45 @@ function zonaCampo(mant){
   const rd = state.radar;
   let ing = null;
   if(rd && typeof rd === "object" && rd.flota) ing = fixUsd(rd.flota.ingresos_renta_mes, rd);
-  const az = anclaZona(z);
+  /* El anillo no tiene borde donde colgar el rotulo, asi que va arriba del
+     todo, sobre el primer sitio. */
+  /* El rotulo del anillo va ARRIBA del anillo, no en el centro: el centro es
+     de nuestras dos zonas y ahi ya hay tres rotulos peleandose. */
+  const rr = Math.max(26 + 14 + 16, (grupos.length * 11) / (2 * Math.PI));
+  const az = { x: w2s(0, 0).x, y: w2s(-rr, -rr).y - 34 };
+  label(az.x, az.y, "CAMPO / CLIENTES",
+        { col:"#4f8fe0", size:12, w:"800", fam:"disp", box:true });
   label(az.x, az.y + 14,
         ing != null ? ("renta del mes · " + usd(ing)) : "renta del mes · sin dato de RADAR",
         { col: ing != null ? "#4f8fe0" : "#565b5f", size:9 });
 
-  /* un sitio de cliente por grupo: nave chica + sus equipos adentro */
-  let gy = z.y + 1.2, gx = z.x + 1.2, colH = 0;
-  grupos.forEach(function(g){
-    const filas = Math.ceil(g.items.length / 2);
+  /* LOS SITIOS DE CLIENTE, EN UN ANILLO.
+     ---------------------------------------------------------------------
+     El radio no es a gusto: sale de cuanto sitio hay que meter. Cada sitio
+     ocupa ~ANCHO de arco, asi que el perimetro tiene que dar para todos y el
+     radio es perimetro/2pi. Con 28 clientes dan unos 44 de radio. Si un dia
+     son 60, el anillo crece solo en vez de encimarse.
+
+     Los grandes arriba: el orden es por cantidad de equipos y se empieza en
+     el norte, asi el cliente con mas fierro queda donde primero se mira.
+     La rejilla del mundo es isometrica, o sea una transformacion lineal: un
+     circulo en coordenadas de piso se dibuja como un circulo (aplastado 2:1),
+     que es justo como se ve un patio redondo visto de esquina. */
+  const ANCHO_SITIO = 11;
+  /* Dos pisos para el radio y gana el mayor:
+       · el PERIMETRO, para que los sitios no se encimen entre si;
+       · el CENTRO, para que el anillo no se le venga encima a lo nuestro.
+     El centro mide de -23 (arriba de Disponibles) a 26 (abajo del Taller), o
+     sea unas 50 de alto; la mitad mas el fondo de un sitio mas un respiro. */
+  const RADIO_CENTRO = 26 + 14 + 16;
+  const R = Math.max(RADIO_CENTRO, (grupos.length * ANCHO_SITIO) / (2 * Math.PI));
+  grupos.forEach(function(g, gi){
+    const filas = Math.ceil(g.items.length / 3);
     const alto  = Math.max(3.2, 1.8 + filas * 2.2);
-    if(gy + alto > z.y + z.d - 0.5 && gx + 10 < z.x + z.w){ gx += 10.5; gy = z.y + 1.2; }
-    const ox = gx, oy = gy, ancho = 9;
+    const ang = -Math.PI / 2 + (gi / grupos.length) * Math.PI * 2;
+    const gx = Math.cos(ang) * R - 4.3, gy = Math.sin(ang) * R - alto / 2;
+    const ox = gx, oy = gy, ancho = 8.6;
+    sitiosCliente[String(g.nombre).toUpperCase()] = { gx: ox + ancho/2, gy: oy + alto/2 };
     const shedW = Math.min(ancho, 6);
     push(ox, oy - 2.2, function(){
       /* patio del cliente */
@@ -1108,11 +1267,9 @@ function zonaCampo(mant){
                      : (g.items.length + " equipos · sin campo de cliente en la base"),
           { col: g.sondeado ? "#8b9096" : "#565b5f", size:8.5, box:true });
     g.items.forEach(function(it, i){
-      const px = ox + 2 + (i % 2) * 4.2, py = oy + 0.8 + Math.floor(i/2) * 2.2;
+      const px = ox + 1.4 + (i % 3) * 2.7, py = oy + 0.8 + Math.floor(i/3) * 2.2;
       ponerEquipo(px, py, it.eq, it.ev, { body:"#4f8fe0" });
     });
-    gy += alto + 1.6;
-    colH++;
   });
 }
 
@@ -1560,8 +1717,13 @@ function computeEnCurso(){
       if(cerrada) return;
       const tec = String(o.tecnico || "").split(",")
         .map(function(t){ return t.trim(); }).filter(Boolean);
+      /* "En proceso" es lo unico que significa que alguien esta trabajando
+         AHORA. Todo lo demas --pendiente, en pausa, esperando repuestos-- es
+         un equipo detenido con un responsable puesto, que no es lo mismo y
+         no se puede dibujar igual. */
+      const corriendo = /en proceso/i.test(est);
       const ficha = { correlativo:o.correlativo || "?", estado:o.estado || "sin estado",
-                      sistema:o.sistema || "", tecnicos:tec, nodo:nodo,
+                      sistema:o.sistema || "", tecnicos:tec, nodo:nodo, corriendo:corriendo,
                       falla:o.falla || o.diagnostico || "" };
       let llave = null;
       if(o.equipoId) llave = o._empresa + ":" + o.equipoId;
@@ -1601,6 +1763,9 @@ function computeFlotaMundo(){
 
   const taller = [], patio = [], otros = [], renta = [];
   Object.values(equipos).forEach(function(eq){
+    /* TALLER-SPS y TALLER-CHOLOMA no son maquinas: son perchas donde el
+       taller cuelga ordenes que no van contra un equipo. Se van del mapa. */
+    if(esMarcadorDeTaller(eq)) return;
     const ev = evalCached(eq, ultimo[eq.id] || null);
     const b  = bucketEstado(eq.estado);
     const it = { eq:eq, ev:ev, bucket:b };
@@ -1693,6 +1858,7 @@ function computeBodega(){
 let enCurso = { porEquipo:{}, sueltas:[] };
 function buildScene(){
   scene = { items:[], labels:[] };
+  posEnMapa = {}; arco = null;
   enCurso = computeEnCurso();
   const flota   = computeFlotaMundo();
   const papeles = computePapeles();
@@ -1740,6 +1906,7 @@ function buildScene(){
 
   scene.items.sort(function(a,b){ return a.d - b.d; });
   renderZoneNav(flota, papeles, bodega);
+  renderLeyenda(flota);
   dirty = true;
 }
 let lastFlota = null, lastPapeles = null;
@@ -1760,6 +1927,7 @@ function draw(){
     it.draw();
   }
   dibujarPulsos();
+  dibujarArco();
   drawLabels();
 }
 function drawLabels(){
@@ -1798,6 +1966,16 @@ function loop(){
   /* animacion del papel que cambio de estacion */
   if(animState.t > 0){ animState.t -= 1.4; if(animState.t <= 0){ animState.t = 0; animState.id = null; } dirty = true; }
   if(pulsos.length) dirty = true;      // mientras algo cruza, el mundo late
+  /* El arco se desvanece solo. Dura unos ocho segundos: lo suficiente para
+     mirar a donde apunta y soltar el dedo, y no tanto como para quedar
+     colgado en pantalla cuando ya se paso a otra cosa. */
+  if(arco){
+    arco.t -= 0.002; dirty = true;
+    if(arco.t <= 0){
+      arco = null;
+      scene.labels = scene.labels.filter(function(l){ return !l._arco; });
+    }
+  }
   if(dirty){ draw(); dirty = false; }
   raf = requestAnimationFrame(loop);
 }
@@ -1910,6 +2088,165 @@ function renderZoneNav(flota, papeles, bodega){
 }
 
 /* =====================================================================
+   EL ARCO: DE QUIEN ES ESTE EQUIPO QUE ESTA EN EL TALLER
+   ---------------------------------------------------------------------
+   Se toca un montacargas del centro y sale una linea amarilla que SALTA por
+   encima de todo hasta el sitio de su cliente. Es un arco y no una recta a
+   proposito: una recta cruzando el mapa se confunde con un borde de piso o
+   con una linea de estacionamiento; un arco que se levanta se lee como un
+   vinculo entre dos lugares y no como algo que esta ahi tirado.
+
+   Dura unos segundos y se va sola. Si el equipo no es de ningun cliente
+   --porque es nuestro, o porque la app le borro el dueno al entrar-- no sale
+   nada: una linea a ningun lado seria peor que ninguna linea.
+   ===================================================================== */
+let arco = null;       // { gx0,gy0, gx1,gy1, nombre, t }
+function mostrarArco(eq){
+  /* fuera el rotulo del arco anterior, o se acumulan uno sobre otro */
+  scene.labels = scene.labels.filter(function(l){ return !l._arco; });
+  const nom = clienteDe(eq);
+  const destino = nom ? sitiosCliente[nom] : null;
+  const origen = posEnMapa[eq._empresa + ":" + (eq.id || "")];
+  if(!nom || !destino || !origen){ arco = null; return false; }
+  arco = { gx0:origen.gx, gy0:origen.gy, gx1:destino.gx, gy1:destino.gy, nombre:nom, t:1 };
+  /* El rotulo va a la lista UNA vez, no en cada cuadro: dibujarArco corre 60
+     veces por segundo y meterlo ahi hacia crecer scene.labels sin freno. */
+  const ma = w2s(origen.gx, origen.gy), mb = w2s(destino.gx, destino.gy);
+  scene.labels.push({ x:(ma.x+mb.x)/2, y:(ma.y+mb.y)/2 - 110, t:"ES DE " + nom,
+    col:"#f5c542", size:10, w:"700", al:"center", fam:"disp", box:true, _arco:true });
+  dirty = true;
+  return true;
+}
+function dibujarArco(){
+  if(!arco) return;
+  const a = w2s(arco.gx0, arco.gy0), b = w2s(arco.gx1, arco.gy1);
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const dist = Math.sqrt(dx*dx + dy*dy);
+  /* La altura del salto crece con la distancia pero con tope: si no, un
+     cliente en el borde del anillo mandaba el arco fuera de la pantalla. */
+  const alto = Math.min(220, 60 + dist * 0.32);
+  const cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2 - alto;
+  /* TODO LO QUE SE MIDE EN PIXELES VA DIVIDIDO POR LA ESCALA. Esto se dibuja
+     bajo la transformacion de la camara, asi que un `lineWidth` de 2 con la
+     camara en 0.3 sale de medio pixel: la linea existia y no se veia. */
+  const k = 1 / Math.max(0.05, cam.scale);
+  ctx.save();
+  ctx.globalAlpha = Math.min(1, arco.t) * 0.95;
+  ctx.strokeStyle = "#f5c542";
+  ctx.lineWidth = 2.4 * k;
+  ctx.setLineDash([8 * k, 6 * k]);
+  ctx.lineDashOffset = -((performance.now() / 45) % 14) * k;   // se arrastra al destino
+  ctx.beginPath();
+  ctx.moveTo(a.x, a.y + HH);
+  ctx.quadraticCurveTo(cx, cy, b.x, b.y + HH);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  /* las dos puntas, para que se vea de donde sale y a donde llega */
+  ctx.fillStyle = "#f5c542";
+  ctx.beginPath(); ctx.arc(a.x, a.y + HH, 3.4 * k, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.arc(b.x, b.y + HH, 4.6 * k, 0, 7); ctx.fill();
+  ctx.restore();
+}
+
+/* =====================================================================
+   LA LEYENDA
+   ---------------------------------------------------------------------
+   Existe porque el mundo usa la forma de las cosas para decir cosas -- un
+   montacargas translucido NO es decoracion, es "de este no se sabe nada" --
+   y eso no se adivina. Los numeros se calculan cada vez: una leyenda que
+   dice "algunos" no sirve; la que dice "185 de 215" manda a arreglarlo.
+   ===================================================================== */
+function renderLeyenda(flota){
+  const cuerpo = document.getElementById("leyenda-cuerpo");
+  if(!cuerpo) return;
+  const H = [];
+  if(vista === "taller"){
+    const todos = [].concat(flota.taller||[], flota.patio||[], flota.otros||[],
+                            (flota.campo||[]).reduce(function(a,g){ return a.concat(g.items); }, []));
+    const fant = todos.filter(function(x){ return x.ev.color === "nodata"; }).length;
+    const sinCod = todos.filter(function(x){ return x.ev.sinCodigo; }).length;
+    const conMec = Object.keys(enCurso.porEquipo || {}).length;
+    H.push('<h4>Cómo está armado</h4>');
+    H.push('<div class="li"><b>El centro es nuestro.</b> Arriba lo <b>disponible</b> ' +
+           '—parqueado, sin nadie que lo use— y abajo el <b>taller</b>, lo que está en ' +
+           'mal estado.</div>');
+    H.push('<div class="li"><b>El anillo son los clientes.</b> Cada sitio es uno, y lo que ' +
+           'está adentro es lo que tiene rentado. Un equipo que se rompe entra al centro; ' +
+           'el mapa es el viaje que hace el fierro.</div>');
+    H.push('<h4>De quién es el que está en el taller</h4>');
+    H.push('<div class="li"><span class="sw" style="background:#f5c542"></span>' +
+           '<span><b>Tocá un montacargas del centro</b> y si es de un cliente sale una ' +
+           'línea amarilla en arco hasta su sitio. Si no sale nada, es nuestro.</span></div>');
+    H.push('<div class="nota">Ojo: de los 48 que hay en taller, <b>31 perdieron a su ' +
+           'dueño</b>. Cuando la máquina entra, la app le pisa el campo de cliente con el ' +
+           'nombre del taller, así que a esos no hay a dónde apuntarles. Se arregla en la ' +
+           'app, no acá.</div>');
+
+    H.push('<h4>Cómo se ve cada equipo</h4>');
+    H.push('<div class="li"><span class="sw" style="background:#3ecf7e"></span>' +
+           '<span>Al día con el mantenimiento.</span></div>');
+    H.push('<div class="li"><span class="sw" style="background:#f5a524"></span>' +
+           '<span>Se acerca el intervalo.</span></div>');
+    H.push('<div class="li"><span class="sw" style="background:#e5534b"></span>' +
+           '<span>Pasado. La barra se sale del marco a propósito.</span></div>');
+    H.push('<div class="li"><span class="sw fant"></span><span><b>Transparente y punteado ' +
+           '— no se sabe.</b> No es que esté bien: la base no tiene ni fecha de último ' +
+           'mantenimiento ni horómetro con qué comparar.</span></div>');
+    H.push('<div class="nota">Así están <b>' + fant + ' de ' + todos.length + '</b>. ' +
+           'Son tantos porque <b>ningún equipo</b> tiene cargada la fecha de último ' +
+           'mantenimiento: los pocos que no son fantasma es porque pasaron por una orden ' +
+           'de la app y de ahí se saca la fecha. Un cliente entero en transparente ' +
+           '—San Juan Textil, por ejemplo— significa que a esos equipos nunca se les ' +
+           'abrió una orden acá.</div>');
+
+    H.push('<h4>Los mecánicos</h4>');
+    H.push('<div class="li"><span class="sw" style="background:#f5c542"></span>' +
+           '<span>Casco amarillo: alguien con las manos en ese equipo <b>ahora</b>. ' +
+           'Tocalo y dice qué está haciendo.</span></div>');
+    const sinAsig = Object.keys(enCurso.porEquipo || {}).filter(function(k){
+      return !enCurso.porEquipo[k].some(function(t){ return t.tecnicos.length; }); }).length;
+    H.push('<div class="li"><span class="sw fant"></span><span><b>Mec\u00e1nico transparente</b> ' +
+           '\u2014 hay una orden abierta en ese equipo y <b>nadie figura como responsable</b>. ' +
+           'Mismo c\u00f3digo que el montacargas: transparente = falta un dato.</span></div>');
+    H.push('<div class="nota">' + conMec + ' equipos con mec\u00e1nico encima' +
+           (sinAsig ? ', ' + sinAsig + ' con orden abierta y sin responsable' : '') + '. ' +
+           'Los que trabajan en algo que el mapa no puede dibujar \u2014m\u00e1quina del cliente, o ' +
+           'registro borrado\u2014 van a una bah\u00eda aparte al fondo del taller.</div>');
+
+    if(sinCod){
+      H.push('<h4>Nombres</h4>');
+      H.push('<div class="li"><span class="sw" style="background:#f5a524"></span>' +
+             '<span>En ámbar: <b>no tiene código de flota</b>. En la base ese campo trae ' +
+             'el número de serie o la marca, no un MT-## ni un E-##.</span></div>');
+      H.push('<div class="nota">' + sinCod + ' equipos así. No se les inventó un código: ' +
+             'ese dato no existe, hay que cargarlo en la app.</div>');
+    }
+  }else{
+    H.push('<h4>El edificio</h4>');
+    H.push('<div class="li"><b>Bullpen</b> — el centro. Ahí vive Jarvis, y cada oficina ' +
+           'tiene su puerta mirando hacia él.</div>');
+    H.push('<div class="li">Las ocho oficinas alrededor, una por área.</div>');
+    H.push('<h4>Lo que cuelga en las paredes</h4>');
+    H.push('<div class="li"><span class="sw" style="background:#4f8fe0"></span>' +
+           '<span>Con dato: el KPI está calculado y se lee.</span></div>');
+    H.push('<div class="li"><span class="sw fant"></span><span><b>Sin energía</b> — monitor ' +
+           'apagado, marco vacío: RADAR todavía no calcula ese número. El hueco se ve ' +
+           'feo a propósito.</span></div>');
+    H.push('<h4>Los papeles que cruzan</h4>');
+    H.push('<div class="li">Un gasto de caja chica sale de la oficina que lo pidió, entra al ' +
+           'bullpen y sigue a la que decide. Se mueve porque su estado cambió en la base, ' +
+           'no porque una animación lo diga.</div>');
+  }
+  cuerpo.innerHTML = H.join("");
+}
+const leyEl = document.getElementById("leyenda");
+if(window.innerWidth < 760) leyEl.classList.add("cerrada");
+document.getElementById("leyenda-tit").onclick = function(){
+  const cerrada = leyEl.classList.toggle("cerrada");
+  this.setAttribute("aria-expanded", cerrada ? "false" : "true");
+};
+
+/* =====================================================================
    9. FICHAS (bottom sheet)
    ===================================================================== */
 const sheet = document.getElementById("sheet");
@@ -1967,7 +2304,11 @@ function fichaEquipo(eq, ev){
    historial: el que toca esta parado frente a una maquina y esa es la
    pregunta. El historial por tecnico ya lo da `taller-tiempos`. */
 function fichaMecanico(nombre, trabajo){
-  const mias = (trabajo || []).filter(function(t){ return t.tecnicos.indexOf(nombre) >= 0; });
+  /* "sin asignar" no es un mecanico: es el fantasma. Sus ordenes son
+     justamente las que NO tienen a nadie. */
+  const fantasma = (nombre === "sin asignar");
+  const mias = (trabajo || []).filter(function(t){
+    return fantasma ? !t.tecnicos.length : t.tecnicos.indexOf(nombre) >= 0; });
   const pares = mias.map(function(t){
     return [t.correlativo + " · " + (t.nodo === "correctivos" ? "Correctivo" : "Preventivo"),
             [t.estado, t.sistema].filter(Boolean).join(" · ") || "—"];
@@ -1979,8 +2320,14 @@ function fichaMecanico(nombre, trabajo){
   if(acomp.length) pares.push(["Con", acomp.join(", ")]);
   const falla = (mias[0] && mias[0].falla) ? mias[0].falla : "";
   const nota = falla ? '<div class="note">' + esc(String(falla).slice(0, 220)) + '</div>' : "";
-  abrirFicha('<div class="kicker">Mecánico</div><h2 class="display">' +
-    esc(nombre) + '</h2>' + rows(pares) + nota);
+  const aviso = fantasma
+    ? '<div class="note warn">Hay trabajo abierto en este equipo y <b>nadie figura ' +
+      'como responsable</b>. No es que no lo estén atendiendo: es que la orden no ' +
+      'tiene técnico cargado. Se arregla en la app de taller.</div>'
+    : '';
+  abrirFicha('<div class="kicker">' + (fantasma ? "Orden sin responsable" : "Mecánico") +
+    '</div><h2 class="display">' + esc(fantasma ? "Sin asignar" : nombre) + '</h2>' +
+    rows(pares) + aviso + nota);
 }
 
 function fichaPapel(r, st){
