@@ -2328,10 +2328,10 @@ function renderLeyenda(flota){
     H.push('<div class="li"><span class="sw" style="background:#f5c542"></span>' +
            '<span><b>Tocá un montacargas del centro</b> y si es de un cliente sale una ' +
            'línea amarilla en arco hasta su sitio. Si no sale nada, es nuestro.</span></div>');
-    H.push('<div class="nota">Ojo: de los 48 que hay en taller, <b>31 perdieron a su ' +
-           'dueño</b>. Cuando la máquina entra, la app le pisa el campo de cliente con el ' +
-           'nombre del taller, así que a esos no hay a dónde apuntarles. Se arregla en la ' +
-           'app, no acá.</div>');
+    H.push('<div class="nota">A la mayoría no le sale línea, y no es que se haya ' +
+           'perdido el dato: en la lista semilla de la app de taller esos equipos ya venían ' +
+           'con <b>TALLER MONTASA</b> en el campo de cliente. Son nuestros, nunca estuvieron ' +
+           'rentados.</div>');
 
     H.push('<h4>El color del chasis dice DÓNDE está</h4>');
     H.push('<div class="li"><span class="sw" style="background:#e5534b"></span>' +
@@ -2490,9 +2490,10 @@ function fichaEquipo(eq, ev, trabajo){
            'un E-##. Hay que cargarlo en la app.</div>');
   }
   if(b === "mant" && !duenio){
-    H.push('<div class="aviso gris">No sale l\u00ednea a ning\u00fan cliente: para la base este equipo ' +
-           'es nuestro. Ojo que cuando una m\u00e1quina entra al taller, la app le <b>pisa</b> el ' +
-           'campo de cliente con el nombre del taller \u2014 puede ser que fuera de alguien.</div>');
+    H.push('<div class="aviso gris">No sale línea a ningún cliente: para la base este equipo ' +
+           'es nuestro. Nació así: en la lista semilla de la app de taller ya venía con ' +
+           '<b>TALLER MONTASA</b> en el campo de cliente. Nunca tuvo dueño registrado — no ' +
+           'es que se haya perdido.</div>');
   }
 
   document.getElementById("eqp-kick").textContent = zonaTxt;
