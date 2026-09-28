@@ -294,7 +294,14 @@ function bucketEstado(estadoRaw){
   const e = (estadoRaw||"").toString().trim().toUpperCase();
   if(e === "DISPONIBLE") return "disp";
   if(e === "EN RENTA")   return "renta";
-  if(e === "MAL ESTADO") return "mant";
+  /* LOS ESTADOS SON CINCO, NO TRES. Leyendo la app de Miguel: la lista de
+     verdad es DISPONIBLE, MAL ESTADO, EN RENTA, EN MANTENIMIENTO y
+     DEMO/PRESTAMO. `EN MANTENIMIENTO` lo pone la app SOLA al abrir una orden
+     --no lo escribe nadie a mano-- y son 8 equipos. Como aca solo se conocian
+     tres, esos 8 caian en "otros / interno" y se dibujaban en un rincon del
+     patio: ocho maquinas que estan en el taller AHORA MISMO, fuera del
+     taller. Es el caso mas importante del mapa y era el que faltaba. */
+  if(e === "MAL ESTADO" || e === "EN MANTENIMIENTO") return "mant";
   return "uso";
 }
 
