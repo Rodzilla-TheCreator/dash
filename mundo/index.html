@@ -1163,7 +1163,11 @@ const ZONAS = [
      rompe entra al centro: el mapa es el viaje que hace el fierro.
      `campo` no dibuja piso -- cada sitio pone el suyo sobre el anillo-- pero
      conserva una caja que lo cubre para que la camara sepa a donde ir. */
-  { id:"patio",   nombre:"DISPONIBLES",      dist:"equipos", x:-9,  y:-23, w:18, d:18, piso:"#25282a", linea:"#31353800" },
+  /* d=24 y arranca en -27: son 35 equipos en cinco columnas, o sea siete
+     filas de 2.4, y debajo va el bloque de "otros / interno". Con 18 de fondo
+     ese bloque caia FUERA del piso. Se corre hacia arriba para no pegarse al
+     taller, que empieza en y=2. */
+  { id:"patio",   nombre:"DISPONIBLES",      dist:"equipos", x:-9,  y:-27, w:18, d:24, piso:"#25282a", linea:"#31353800" },
   /* d=32 y no 24: son 56 equipos en seis columnas, o sea diez filas de 2.8,
      que son 28 de fondo mas el respiro de arriba y el de abajo. Con 24 los
      de las ultimas filas se salian del piso y quedaban flotando en negro. */
