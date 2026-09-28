@@ -1065,6 +1065,10 @@ function ponerEquipo(gx, gy, eq, ev, opt){
   if(opt.trabajo === undefined && eq && eq._empresa){
     opt.trabajo = (enCurso.porEquipo || {})[eq._empresa + ":" + (eq.id || "")] || null;
   }
+  /* Orden abierta pero el equipo no esta en taller: la app no le cambio el
+     estado. Ver el comentario de arriba, en el dibujo del aro. */
+  opt.contradice = !!(opt.trabajo && opt.trabajo.length && eq &&
+                      bucketEstado(eq.estado) !== "mant");
   const body = opt.body || "#f5a524";
   const fantasma = (ev && ev.color === "nodata");
   const p = w2s(gx, gy);
@@ -1082,6 +1086,18 @@ function ponerEquipo(gx, gy, eq, ev, opt){
       ctx.save(); ctx.globalAlpha = 0.34; ctx.drawImage(img, sx, sy); ctx.restore();
     }else{
       ctx.drawImage(img, sx, sy);
+    }
+    /* AVISO DE CONTRADICCION: hay orden abierta y el equipo NO figura en
+       taller. No es un adorno -- es la marca de que la app dejo el estado
+       sin cambiar, y de que el tablero de flota lo esta contando como
+       disponible mientras un mecanico lo tiene abierto. */
+    if(opt.contradice){
+      ctx.save();
+      ctx.strokeStyle = "#f5a524"; ctx.lineWidth = 1.4; ctx.globalAlpha = 0.9;
+      ctx.beginPath();
+      ctx.ellipse(p.x, p.y + HH, 15, 7.5, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
     }
     if(opt.barra && ev) barraUrgencia(p.x, sy - 3, ev);
   }, { x:sx-3, y:sy-30, w:FK_W+6, h:FK_H+34 }, function(){
@@ -2372,6 +2388,18 @@ function renderLeyenda(flota){
            'Tocalo y dice qué está haciendo.</span></div>');
     const sinAsig = Object.keys(enCurso.porEquipo || {}).filter(function(k){
       return !enCurso.porEquipo[k].some(function(t){ return t.tecnicos.length; }); }).length;
+    const contradicen = todos.filter(function(x){
+      const t = (enCurso.porEquipo || {})[x.eq._empresa + ":" + (x.eq.id || "")];
+      return t && t.length && bucketEstado(x.eq.estado) !== "mant"; }).length;
+    if(contradicen){
+      H.push('<div class="li"><span class="sw" style="background:transparent;' +
+             'border:1.5px solid #f5a524;border-radius:50%"></span><span><b>Aro \u00e1mbar</b> ' +
+             '\u2014 tiene orden abierta pero <b>no figura en el taller</b>. La app no le cambi\u00f3 ' +
+             'el estado.</span></div>');
+      H.push('<div class="nota">Son <b>' + contradicen + '</b>. Pasa por dos caminos: la orden ' +
+             'se cre\u00f3 marcando "finalizar", o alguien cambi\u00f3 el estado a mano mientras estaba ' +
+             'abierta. El tablero de flota los cuenta como libres para rentar.</div>');
+    }
     H.push('<div class="li"><span class="sw fant"></span><span><b>Mec\u00e1nico transparente</b> ' +
            '\u2014 hay una orden abierta en ese equipo y <b>nadie figura como responsable</b>. ' +
            'Mismo c\u00f3digo que el montacargas: transparente = falta un dato.</span></div>');
@@ -2476,6 +2504,13 @@ function fichaEquipo(eq, ev, trabajo){
     });
   }
 
+  if(ts.length && b !== "mant"){
+    H.push('<div class="aviso"><b>Tiene trabajo abierto y no figura en el taller.</b> ' +
+           'La app solo pone el equipo en mantenimiento si la orden se crea <i>sin</i> marcar ' +
+           '"finalizar", y solo lo devuelve si al cerrar segu\u00eda en mantenimiento. Por uno de ' +
+           'esos dos caminos qued\u00f3 como <b>' + esc(eq.estado || "?") + '</b>. ' +
+           'Mientras tanto el tablero de flota lo cuenta como si estuviera libre.</div>');
+  }
   if(ev.color === "nodata"){
     H.push('<div class="aviso">Se dibuja <b>transparente</b> porque la base no tiene ni fecha ' +
            'de \u00faltimo mantenimiento ni hor\u00f3metro con qu\u00e9 comparar. No es que est\u00e9 bien: ' +
