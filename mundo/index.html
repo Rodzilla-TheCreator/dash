@@ -152,7 +152,8 @@
   #leyenda h4:first-child{margin-top:0;}
   #leyenda .li{display:flex;gap:7px;align-items:flex-start;margin:4px 0;}
   #leyenda .sw{flex:0 0 auto;width:11px;height:11px;margin-top:2px;border:1px solid #2a2d2f;}
-  #leyenda .sw.fant{background:#848b90;opacity:.46;}
+  /* las muestras de mancha son elipses, como en el mapa */
+  #leyenda .sw.mancha{border-radius:50%;height:7px;margin-top:4px;border:0;opacity:.85;}
   #leyenda b{color:var(--ink);font-weight:600;}
   #leyenda .nota{color:#6f757a;font-size:10px;margin-top:3px;}
   @media(max-width:760px){ #leyenda{width:186px;top:70px;right:6px;} }
@@ -761,22 +762,21 @@ function isoBox(gx, gy, w, d, h, col, opt){
   return { A:A, B:B, C:C, D:D, h:h };
 }
 /* sombra ovalada bajo un objeto */
+/* LA MANCHA DEL PISO ES EL INDICADOR.
+   ---------------------------------------------------------------------
+   Antes el color de la ZONA iba en el chasis, y eso obligaba a pintar un
+   montacargas de azul o una pick-up de rojo: colores que no dicen nada de la
+   maquina y que peleaban con la silueta. Ahora la maquina lleva SU color y lo
+   que cambia es la mancha de abajo -- el unico lugar donde un color puede
+   cambiar sin ensuciar la figura.
+
+   Sin `col` es una sombra negra normal (la gente, los papeles). */
 function sombra(gx, gy, rx, col){
   const p = w2s(gx, gy);
   ctx.save();
-  ctx.globalAlpha = 0.22; ctx.fillStyle = "#000000";
+  ctx.globalAlpha = col ? 0.55 : 0.22;
+  ctx.fillStyle = col || "#000000";
   ctx.beginPath(); ctx.ellipse(p.x, p.y+HH, rx, rx/2, 0, 0, Math.PI*2); ctx.fill();
-  /* EL ARO DEL PISO ES EL INDICADOR.
-     Antes el color de la ZONA iba en el chasis, y eso obligaba a pintar un
-     montacargas de azul o una pick-up de rojo -- colores que no dicen nada de
-     la maquina y que peleaban con la silueta. Ahora la maquina lleva SU color
-     y donde esta lo dice el aro de abajo, que es el unico lugar donde un
-     color puede cambiar sin ensuciar la figura. */
-  if(col){
-    ctx.globalAlpha = 0.95; ctx.strokeStyle = col; ctx.lineWidth = 1.6;
-    ctx.beginPath(); ctx.ellipse(p.x, p.y+HH, rx+1.5, (rx+1.5)/2, 0, 0, Math.PI*2);
-    ctx.stroke();
-  }
   ctx.restore();
 }
 
@@ -1306,24 +1306,18 @@ function ponerEquipo(gx, gy, eq, ev, opt){
   const p = w2s(gx, gy);
   const sx = Math.round(p.x - FK_W/2), sy = Math.round(p.y + HH - FK_H);
   push(gx, gy, function(){
-    /* el aro lleva el color que antes iba en el chasis: donde esta el equipo */
-    sombra(gx, gy, 11, fantasma ? null : (opt.body || null));
+    /* la mancha: el color de la zona, o GRIS si no se sabe como esta */
+    sombra(gx, gy, 11, fantasma ? "#5b6165" : (opt.body || null));
     /* CADA UNO CON SU SILUETA. Con `barra` --o sea en el taller-- las que
        pueden levantar algo lo levantan segun la urgencia; sin datos no se
        inventa altura y se quedan abajo, en gris, como el resto del fantasma. */
     const forma = formaDe(eq);
-    /* EL COLOR DE LA MAQUINA, no el de la zona. Los de verdad: los
-       montacargas de Montasa son amarillos, las plataformas Genie azules, los
-       vehiculos blancos. Un fantasma sigue en gris, que es su propio dato. */
+    /* EL COLOR DE LA MAQUINA, no el de la zona: los montacargas amarillos,
+       las plataformas Genie azules, los vehiculos blancos. Donde esta y si se
+       sabe como esta lo dice la mancha del piso. */
     const PROPIO = { montacargas:"#e8a317", tijera:"#4f8fe0", brazo:"#4f8fe0",
                      pickup:"#c9ced2", camion:"#c9ced2", grua:"#e8a317" };
-    /* El gris del fantasma sube de #4a4f52 a #848b90: a 34% de opacidad
-       sobre un piso oscuro, el gris viejo desaparecia -- y con las siluetas
-       nuevas eso se noto feo, porque de una tijera solo quedaba la plataforma
-       flotando. Un fantasma tiene que verse COMPLETO y translucido, no a
-       medias: la idea es que se note que falta el dato, no que falte media
-       maquina. */
-    const cuerpo = fantasma ? "#848b90" : (PROPIO[forma] || body);
+    const cuerpo = PROPIO[forma] || body;
     const semaforo = (opt.barra && ev && !fantasma) ? COL_URG[ev.color] : null;
     const nivel = (opt.barra && ev && !fantasma) ? Math.min(1, ev.urgencia || 0) : 0;
     const img =
@@ -1334,21 +1328,12 @@ function ponerEquipo(gx, gy, eq, ev, opt){
       : forma === "brazo"   ? brazo(cuerpo, semaforo, nivel)
       : semaforo            ? forkliftUrg(body, semaforo, nivel)
       :                       forklift(cuerpo);
-    if(fantasma){
-      /* HUECO DE DATOS: silueta translucida. Tiene que verse tan feo como un
-         equipo vencido -- no es un gris discreto.
-         Tenia ademas un marco punteado y se quito: con 185 fantasmas en
-         pantalla eran 185 rectangulos de rayitas encima del mapa, y el ruido
-         tapaba justo lo que el fantasma quiere decir. Ser transparente YA es
-         el dato; el punteado no agregaba nada y competia con todo. */
-      /* 0.46 y no 0.34: con la sombra debajo, a 34% las partes oscuras de la
-         maquina --el chasis de una tijera, por ejemplo-- se perdian del todo y
-         quedaba media silueta flotando. A 46% se lee entera y se sigue notando
-         de una que es un hueco de dato. */
-      ctx.save(); ctx.globalAlpha = 0.46; ctx.drawImage(img, sx, sy); ctx.restore();
-    }else{
-      ctx.drawImage(img, sx, sy);
-    }
+    /* TODAS LAS MAQUINAS SE DIBUJAN ENTERAS Y EN SU COLOR.
+       El fantasma translucido era una buena idea que en la practica estorbaba:
+       con 189 de 215 sin datos, el mapa entero quedaba medio invisible y las
+       siluetas no se distinguian. El hueco de dato ahora lo dice la mancha
+       gris del piso, que se ve de lejos igual de bien y no se come la figura. */
+    ctx.drawImage(img, sx, sy);
     /* AVISO DE CONTRADICCION: hay orden abierta y el equipo NO figura en
        taller. No es un adorno -- es la marca de que la app dejo el estado
        sin cambiar, y de que el tablero de flota lo esta contando como
@@ -1383,7 +1368,7 @@ function ponerEquipo(gx, gy, eq, ev, opt){
        Y con `box` para que se lea: texto claro sobre un patio gris con
        sombras no se lee, por mas que el color sea el correcto. */
     label(p.x, p.y + HH + 9, (ev && ev.codigo) || eq.codigo || eq.id || "?",
-      { size:8.5, col: fantasma ? "#7a8186" : "#c9ced2", box:true, min:LOD.codigo });
+      { size:8.5, col:"#c9ced2", box:true, min:LOD.codigo });
   }
   if(opt.trabajo && opt.trabajo.length) ponerMecanicos(gx, gy, opt.trabajo);
 }
@@ -2868,6 +2853,8 @@ function renderLeyenda(flota){
     H.push('<div class="li">' + (sw || "") + '<span>' + txt + '</span></div>');
   }
   function cuad(col){ return '<span class="sw" style="background:' + col + '"></span>'; }
+  function mancha(col){
+    return '<span class="sw mancha" style="background:' + col + '"></span>'; }
   const fantasma = '<span class="sw fant"></span>';
   const aro = function(col){
     return '<span class="sw" style="background:transparent;border:1.5px solid ' + col +
@@ -2893,16 +2880,18 @@ function renderLeyenda(flota){
          'la pick-up tiene cama, el cami\u00f3n furg\u00f3n, la gr\u00faa pluma. Se sabe qu\u00e9 es sin ' +
          'leer el c\u00f3digo.</div>');
 
-  H.push('<h4>El color del chasis dice D\u00d3NDE est\u00e1</h4>');
-  li(cuad("#e5534b"), 'Rojo: en el <b>taller</b>.');
-  li(cuad("#3ecf7e"), 'Verde: <b>disponible</b>, parqueado.');
-  li(cuad("#4f8fe0"), 'Azul: <b>en renta</b>, en el sitio de un cliente.');
-  li(cuad("#a9741f"), '\u00c1mbar: <b>otros / interno</b> \u2014 pick-ups, cami\u00f3n, la gr\u00faa.');
-  li(fantasma, '<b>Transparente: no se sabe nada de \u00e9l.</b> La base no tiene ni fecha de ' +
-               '\u00faltimo mantenimiento ni hor\u00f3metro con qu\u00e9 comparar. Tapa el color de la zona.');
-  H.push('<div class="nota">As\u00ed est\u00e1n <b>' + fant + ' de ' + todos.length + '</b>. Son tantos ' +
+  H.push('<h4>La mancha del piso dice D\u00d3NDE est\u00e1</h4>');
+  li("", 'La m\u00e1quina va en <b>su</b> color \u2014 los montacargas amarillos, las plataformas ' +
+         'azules, los veh\u00edculos blancos \u2014 y lo que cambia es la mancha de abajo.');
+  li(mancha("#e5534b"), 'Roja: en el <b>taller</b>.');
+  li(mancha("#3ecf7e"), 'Verde: <b>disponible</b>, parqueado.');
+  li(mancha("#4f8fe0"), 'Azul: <b>en renta</b>, en el sitio de un cliente.');
+  li(mancha("#a9741f"), '\u00c1mbar: <b>otros / interno</b> \u2014 pick-ups, cami\u00f3n, la gr\u00faa.');
+  li(mancha("#5b6165"), '<b>Gris: no se sabe c\u00f3mo est\u00e1.</b> La base no tiene ni fecha de ' +
+                        '\u00faltimo mantenimiento ni hor\u00f3metro con qu\u00e9 comparar.');
+  H.push('<div class="nota">En gris hay <b>' + fant + ' de ' + todos.length + '</b>. Son tantos ' +
          'porque <b>ning\u00fan equipo</b> tiene cargada la fecha de \u00faltimo mantenimiento: los pocos ' +
-         'que no son fantasma es porque cerraron una orden en la app y de ah\u00ed sale la fecha. ' +
+         'que no lo est\u00e1n es porque cerraron una orden en la app y de ah\u00ed sale la fecha. ' +
          'Una orden ABIERTA no cuenta \u2014 el trabajo todav\u00eda no se hizo.</div>');
 
   H.push('<h4>C\u00f3mo lo levanta dice C\u00d3MO est\u00e1</h4>');
@@ -2914,13 +2903,13 @@ function renderLeyenda(flota){
   li(cuad("#3ecf7e"), 'Abajo y verde: al d\u00eda.');
   li(cuad("#f5a524"), 'A media altura y \u00e1mbar: se acerca.');
   li(cuad("#e5534b"), 'Arriba del todo y rojo: pasado.');
-  li(fantasma, 'En el piso y en gris: no hay con qu\u00e9 calcularlo.');
+  li(mancha("#5b6165"), 'Abajo del todo y con la mancha gris: no hay con qu\u00e9 calcularlo.');
 
   H.push('<h4>Los mec\u00e1nicos</h4>');
   li(cuad("#f5c542"), 'Casco amarillo: <b>trabajando ahora</b> en ese equipo.');
   li(cuad("#7d8288"), 'Casco gris: asignado pero <b>detenido</b> \u2014 en pausa, o esperando ' +
                       'repuestos. El motivo va escrito debajo.');
-  li(fantasma, 'Transparente: hay orden abierta y <b>nadie figura como responsable</b>.');
+  li(cuad("#565b5f"), 'Casco apagado: hay orden abierta y <b>nadie figura como responsable</b>.');
   H.push('<div class="nota">' + conMec + ' equipos con alguien encima' +
          (sinAsig ? ', ' + sinAsig + ' sin responsable' : '') +
          (sueltas ? '. Otras ' + sueltas + ' \u00f3rdenes son de m\u00e1quinas que el mapa no puede ' +
