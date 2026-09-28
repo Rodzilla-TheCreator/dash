@@ -812,6 +812,51 @@ function forklift(body){
     [17,17,5,4,C_TIRE], [18,18,3,2,shade(C_TIRE,2.1)]
   ]);
 }
+/* EL MISMO MONTACARGAS, PERO CONTANDO ALGO.
+   ---------------------------------------------------------------------
+   Antes la urgencia iba en una barrita aparte flotando encima del equipo.
+   Funcionaba, pero era un elemento mas en un mapa que ya tiene demasiados, y
+   no decia nada por si mismo: habia que aprenderse que significaba.
+
+   Ahora lo dice la maquina: EL MASTIL ES LA REGLA Y LAS HORQUILLAS SON LA
+   MEDIDA. Un montacargas al dia tiene las horquillas en el piso. Mientras se
+   acerca el mantenimiento las va subiendo, y pasado del intervalo las tiene
+   arriba del todo y en rojo. Se lee sin leyenda porque es lo que hace un
+   montacargas de verdad.
+
+   `nivel` va de 0 a 1 y se redondea a diez pasos: sin eso habria un sprite
+   distinto por cada milesima y el cache creceria sin fin.  */
+function forkliftUrg(body, col, nivel){
+  const paso = Math.max(0, Math.min(10, Math.round((nivel || 0) * 10)));
+  const key = "fku_" + body + "_" + col + "_" + paso;
+  if(SPR[key]) return SPR[key];
+  const bd = shade(body, 0.74), bl = shade(body, 1.14);
+  /* el carro viaja por el mastil: 14 abajo, 1 arriba. Las horquillas van
+     colgadas seis pixeles mas abajo, como en el sprite original. */
+  const yc = Math.round(14 - (paso / 10) * 13);
+  const yf = yc + 6;
+  const horq = col || C_FORK;
+  return makeSprite(key, FK_W, FK_H, [
+    // mastil: los dos rieles, que ahora son la regla
+    [5,1,5,16,C_MASTD], [5,1,1,16,C_MAST], [9,1,1,16,C_MAST], [5,0,5,1,C_OUT],
+    // el carro portahorquillas, a la altura que toca
+    [4,yc,7,2,horq],
+    // horquillas, del mismo color
+    [0,yf,10,2,horq], [0,yf-1,2,4,horq], [0,yf+2,10,1,shade(horq,0.6)],
+    // techo de proteccion
+    [12,0,11,2,C_OUT], [12,2,2,9,C_OUT], [21,2,2,9,C_OUT],
+    // asiento y respaldo
+    [14,4,7,7,C_SEAT], [14,4,7,2,C_GLASS],
+    // chasis
+    [10,11,13,7,bd], [10,11,13,2,bl], [10,17,13,1,C_OUT],
+    [20,10,3,8,shade(body,0.62)],
+    [10,11,1,7,C_OUT], [22,10,1,8,C_OUT],
+    // llantas
+    [10,17,5,4,C_TIRE], [11,18,3,2,shade(C_TIRE,2.1)],
+    [17,17,5,4,C_TIRE], [18,18,3,2,shade(C_TIRE,2.1)]
+  ]);
+}
+
 /* Hoja de papel 9 x 12, parada. tint = color del membrete. */
 function papel(tint){
   const key = "pp_" + tint;
@@ -911,28 +956,12 @@ function persona(tipo){
   return makeSprite(key, 12, 20, ops);
 }
 
-/* Barra de urgencia sobre un equipo (spec 3.1). */
-const COL_URG = { ok:"#3ecf7e", warn:"#f5a524", crit:"#e5534b", nodata:"#565b5f" };
-function barraUrgencia(px, py, ev){
-  const H = 22, W = 4;
-  const x = Math.round(px) - W/2, y = Math.round(py) - H;
-  ctx.fillStyle = "#101213";      ctx.fillRect(x-1, y-1, W+2, H+2);
-  ctx.fillStyle = "#2a2d2f";      ctx.fillRect(x, y, W, H);
-  if(ev.urgencia == null){
-    ctx.fillStyle = COL_URG.nodata;
-    ctx.fillRect(x, y+H-2, W, 2);
-    return;
-  }
-  const r = Math.min(ev.urgencia, 1);
-  const hh = Math.max(2, Math.round(H * r));
-  ctx.fillStyle = COL_URG[ev.color];
-  ctx.fillRect(x, y + H - hh, W, hh);
-  if(ev.urgencia >= 1){
-    /* pasado de vuelta: la barra SE SALE del marco, hacia arriba */
-    const extra = Math.min(10, Math.round(H * (ev.urgencia - 1)) + 3);
-    ctx.fillRect(x-1, y-1-extra, W+2, extra);
-  }
-}
+/* Aca vivia `barraUrgencia`, que dibujaba una barrita vertical encima del
+   equipo. La reemplazo el propio montacargas: el mastil es la regla y las
+   horquillas la medida (ver `forkliftUrg`). Se quito en vez de dejarla
+   apagada porque eran dos formas de decir lo mismo, y la que quedo no
+   necesita que nadie la explique. Esta en el historial si hiciera falta. */
+
 
 /* =====================================================================
    5. EL MUNDO: zonas y armado de la escena
@@ -1112,7 +1141,12 @@ function ponerEquipo(gx, gy, eq, ev, opt){
   const sx = Math.round(p.x - FK_W/2), sy = Math.round(p.y + HH - FK_H);
   push(gx, gy, function(){
     sombra(gx, gy, 11);
-    const img = forklift(fantasma ? "#4a4f52" : body);
+    /* Con `barra` el montacargas se dibuja a si mismo como medidor. Sin
+       datos no se inventa altura: las horquillas quedan en el piso y en gris,
+       igual que el resto del equipo fantasma. */
+    const img = (opt.barra && ev && !fantasma)
+      ? forkliftUrg(body, COL_URG[ev.color], Math.min(1, ev.urgencia || 0))
+      : forklift(fantasma ? "#4a4f52" : body);
     if(fantasma){
       /* HUECO DE DATOS: silueta translucida. Tiene que verse tan feo como un
          equipo vencido -- no es un gris discreto.
@@ -1136,8 +1170,14 @@ function ponerEquipo(gx, gy, eq, ev, opt){
       ctx.stroke();
       ctx.restore();
     }
-    if(opt.barra && ev) barraUrgencia(p.x, sy - 3, ev);
-  }, { x:sx-3, y:sy-30, w:FK_W+6, h:FK_H+34 }, function(){
+
+    /* LA CAJA DE TOQUE ES EL MONTACARGAS Y NADA MAS.
+       Llegaba hasta 30 px POR ENCIMA del sprite, que era espacio reservado
+       para el rotulo cuando el rotulo iba arriba. Al bajarlo, esos 30 px
+       quedaron colgando sobre el equipo de la fila de atras -- y como gana el
+       de adelante, el Towmotor se robaba los clicks del MTV-04 que tenia
+       detras. Ahora la caja abraza al sprite. */
+  }, { x:sx-2, y:sy-2, w:FK_W+4, h:FK_H+5 }, function(){
     /* El arco primero: cuando la ficha sube desde abajo tapa medio mapa, y
        si el arco arranca despues ya no se ve nacer. */
     mostrarArco(eq);
@@ -1191,7 +1231,7 @@ function ponerMecanicos(gx, gy, trabajo){
       ctx.save(); ctx.globalAlpha = 0.34;
       ctx.drawImage(persona("mec"), sx, sy);
       ctx.restore();
-    }, { x:sx-4, y:sy-4, w:20, h:28 }, function(){ fichaMecanico("sin asignar", trabajo); });
+    }, { x:sx-2, y:sy-2, w:16, h:24 }, function(){ fichaMecanico("sin asignar", trabajo); });
     label(p.x, sy - 7, "SIN ASIGNAR",
       { col:"#565b5f", size:7, w:"700", box:true, min:LOD.persona });
     return;
@@ -1204,7 +1244,7 @@ function ponerMecanicos(gx, gy, trabajo){
     push(mx, my, function(){
       sombra(mx, my, 7);
       ctx.drawImage(persona(pinta[i] || pinta[0]), sx, sy);
-    }, { x:sx-4, y:sy-4, w:20, h:28 }, function(){ fichaMecanico(n, trabajo); });
+    }, { x:sx-2, y:sy-2, w:16, h:24 }, function(){ fichaMecanico(n, trabajo); });
   });
   /* Un solo rotulo para los dos: dos nombres uno encima del otro sobre un
      montacargas no se leen. El primero, y cuantos mas hay. */
@@ -1270,7 +1310,7 @@ function mecanicosSinEquipo(z, y0){
     push(gx, gy, function(){
       sombra(gx, gy, 7);
       ctx.drawImage(persona(i % 2 ? "mec2" : "mec"), sx, sy);
-    }, { x:sx-4, y:sy-4, w:20, h:28 }, function(){ fichaMecanico(n, sueltas); });
+    }, { x:sx-2, y:sy-2, w:16, h:24 }, function(){ fichaMecanico(n, sueltas); });
     label(p.x, sy - 7, n.split(" ")[0].toUpperCase(),
       { col:"#f5c542", size:7, box:true, min:LOD.persona });
   });
