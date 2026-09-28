@@ -857,6 +857,151 @@ function forkliftUrg(body, col, nivel){
   ]);
 }
 
+
+/* =====================================================================
+   LAS OTRAS MAQUINAS
+   ---------------------------------------------------------------------
+   Mismo lienzo de 24 x 22 y misma orientacion que el montacargas, para que
+   todas se sienten igual sobre el piso isometrico.
+
+   `col` es el color del semaforo y `nivel` (0 a 1) la urgencia. Las que
+   tienen algo que levantar la cuentan levantandolo -- la tijera sube su
+   plataforma, el brazo se empina -- porque es el mismo idioma que las
+   horquillas del montacargas y no hay que aprender nada nuevo. Las que no,
+   la llevan en la cabina.
+   ===================================================================== */
+const C_VIDRIO = "#4f8fe0", C_CROMO = "#9aa0a4";
+
+/* Pick-up: cabina atras, cama adelante. Es la silueta mas reconocible del
+   patio y por eso vale tenerla aparte: MTV-01 y MTV-04 andan todo el dia. */
+function pickup(body, col){
+  const key = "pu_" + body + "_" + col;
+  if(SPR[key]) return SPR[key];
+  const bd = shade(body, 0.74), bl = shade(body, 1.14), cab = col || body;
+  return makeSprite(key, FK_W, FK_H, [
+    [1,10,12,7,bd], [1,10,12,1,bl], [1,16,12,1,C_OUT],   // cama
+    [1,10,1,7,C_OUT], [12,9,1,9,C_OUT],
+    [12,6,9,11,cab], [12,6,9,1,shade(cab,1.2)],          // cabina
+    [13,7,7,4,C_VIDRIO], [13,7,7,1,shade(C_VIDRIO,1.3)], // parabrisas
+    [20,8,2,2,C_CROMO],                                  // espejo
+    [12,16,10,1,C_OUT],
+    [2,17,5,4,C_TIRE], [3,18,3,2,shade(C_TIRE,2.1)],
+    [15,17,5,4,C_TIRE], [16,18,3,2,shade(C_TIRE,2.1)]
+  ]);
+}
+
+/* Camion: furgon alto adelante, cabina chica atras. */
+function camion(body, col){
+  const key = "cm_" + body + "_" + col;
+  if(SPR[key]) return SPR[key];
+  const bd = shade(body, 0.7), bl = shade(body, 1.1), cab = col || body;
+  return makeSprite(key, FK_W, FK_H, [
+    [0,3,14,14,bd], [0,3,14,1,bl], [0,3,1,14,shade(bd,1.25)],  // furgon
+    [0,16,14,1,C_OUT], [13,3,1,14,C_OUT],
+    [1,5,11,8,shade(bd,0.86)],                                  // porton trasero
+    [14,7,8,10,cab], [14,7,8,1,shade(cab,1.2)],                 // cabina
+    [15,8,6,4,C_VIDRIO],
+    [14,16,8,1,C_OUT], [21,9,2,2,C_CROMO],
+    [2,17,5,4,C_TIRE], [3,18,3,2,shade(C_TIRE,2.1)],
+    [9,17,5,4,C_TIRE], [10,18,3,2,shade(C_TIRE,2.1)],
+    [16,17,5,4,C_TIRE], [17,18,3,2,shade(C_TIRE,2.1)]
+  ]);
+}
+
+/* Grua: camion con pluma. La pluma va en diagonal y en escalones, que es como
+   se dibuja una diagonal en pixel sin antialiasing. */
+function grua(body, col){
+  const key = "gr_" + body + "_" + col;
+  if(SPR[key]) return SPR[key];
+  const bd = shade(body, 0.74), cab = col || body;
+  const ops = [
+    [2,12,18,5,bd], [2,12,18,1,shade(bd,1.2)], [2,16,18,1,C_OUT],
+    [14,7,8,10,cab], [14,7,8,1,shade(cab,1.2)],
+    [15,8,6,4,C_VIDRIO], [14,16,8,1,C_OUT],
+    [8,10,6,3,shade(body,0.62)],                    // torreta
+    [3,17,5,4,C_TIRE], [4,18,3,2,shade(C_TIRE,2.1)],
+    [14,17,5,4,C_TIRE], [15,18,3,2,shade(C_TIRE,2.1)]
+  ];
+  /* la pluma: de la torreta hacia arriba-izquierda */
+  for(let k = 0; k < 9; k++) ops.push([9 - k, 10 - k, 2, 1, C_MAST]);
+  ops.push([0,1,2,1,C_CROMO], [1,2,1,3,C_CROMO]);   // punta y gancho
+  return makeSprite(key, FK_W, FK_H, ops);
+}
+
+/* Tijera. La plataforma SUBE con la urgencia: es el mismo gesto que las
+   horquillas del montacargas, contado con lo que esta maquina si tiene. */
+function tijera(body, col, nivel){
+  const paso = Math.max(0, Math.min(10, Math.round((nivel || 0) * 10)));
+  const key = "tj_" + body + "_" + col + "_" + paso;
+  if(SPR[key]) return SPR[key];
+  const bd = shade(body, 0.74), plat = col || C_FORK;
+  const yp = Math.round(13 - (paso / 10) * 11);     // alto de la plataforma
+  const ops = [
+    [2,15,19,4,bd], [2,15,19,1,shade(bd,1.2)], [2,18,19,1,C_OUT],   // chasis
+    [3,19,4,3,C_TIRE], [16,19,4,3,C_TIRE],                          // ruedas
+    [2,yp,19,2,plat], [2,yp,19,1,shade(plat,1.25)],                 // plataforma
+    [2,yp-3,1,3,C_MAST], [20,yp-3,1,3,C_MAST],                      // barandas
+    [2,yp-3,19,1,C_MAST]
+  ];
+  /* las tijeras: dos diagonales cruzadas entre el chasis y la plataforma */
+  const alto = 15 - yp;
+  for(let k = 0; k < alto; k++){
+    const y = yp + 2 + k;
+    const t = alto ? k / alto : 0;
+    ops.push([Math.round(6 + t * 9), y, 2, 1, C_MASTD]);
+    ops.push([Math.round(15 - t * 9), y, 2, 1, C_MAST]);
+  }
+  return makeSprite(key, FK_W, FK_H, ops);
+}
+
+/* Brazo articulado. Se EMPINA con la urgencia, por lo mismo que la tijera. */
+function brazo(body, col, nivel){
+  const paso = Math.max(0, Math.min(10, Math.round((nivel || 0) * 10)));
+  const key = "bz_" + body + "_" + col + "_" + paso;
+  if(SPR[key]) return SPR[key];
+  const bd = shade(body, 0.74), cesta = col || C_FORK;
+  const ops = [
+    [3,14,17,5,bd], [3,14,17,1,shade(bd,1.2)], [3,18,17,1,C_OUT],
+    [4,19,4,3,C_TIRE], [15,19,4,3,C_TIRE],
+    [13,11,6,4,shade(body,0.62)]                       // torreta
+  ];
+  /* el brazo sale de la torreta hacia arriba-izquierda; mas urgencia, mas
+     empinado */
+  const largo = 11;
+  const subir = 0.45 + (paso / 10) * 0.85;             // pendiente
+  let bx = 13, by = 12;
+  for(let k = 0; k < largo; k++){
+    bx = Math.round(13 - k);
+    by = Math.round(12 - k * subir);
+    if(by < 0) break;
+    ops.push([bx, by, 2, 2, C_MAST]);
+  }
+  ops.push([Math.max(0, bx - 2), Math.max(0, by - 2), 4, 3, cesta]);   // canasta
+  ops.push([Math.max(0, bx - 2), Math.max(0, by - 2), 4, 1, shade(cesta, 1.3)]);
+  return makeSprite(key, FK_W, FK_H, ops);
+}
+
+/* QUE ES CADA EQUIPO, segun lo que dice la base.
+   Se mira primero la descripcion --que es donde la gente escribio "Pick Up",
+   "Camion", "Grua"-- y despues el tipo y el codigo. El orden importa: el
+   GR-01 tiene tipo "Vehiculo" igual que una pick-up, y lo que lo distingue
+   es la palabra "Grua" en la descripcion. */
+function formaDe(eq){
+  const d = (String(eq.desc || "") + " " + String(eq.marca || "") + " " +
+             String(eq.modelo || "")).toUpperCase();
+  const t = String(eq.tipo || "").toUpperCase();
+  const c = String(eq.codigo || "").toUpperCase();
+  if(/GRUA|GR\u00daA/.test(d) || /^GR-/.test(c)) return "grua";
+  if(/CAMI\u00d3N|CAMION|PANEL/.test(d) || /^CM-/.test(c)) return "camion";
+  if(/PICK ?UP/.test(d) || /^(MTV|C)-/.test(c) || t === "VEH\u00cdCULO" || t === "VEHICULO")
+    return "pickup";
+  if(t === "ELEVADORA" || t.indexOf("PLATAFORMA") === 0 || /^E-/.test(c)){
+    /* Genie nombra las tijeras GS y los brazos articulados Z. */
+    return /\bZ-?\d/.test(d) ? "brazo" : "tijera";
+  }
+  return "montacargas";
+}
+
 /* Hoja de papel 9 x 12, parada. tint = color del membrete. */
 function papel(tint){
   const key = "pp_" + tint;
@@ -1145,12 +1290,21 @@ function ponerEquipo(gx, gy, eq, ev, opt){
   const sx = Math.round(p.x - FK_W/2), sy = Math.round(p.y + HH - FK_H);
   push(gx, gy, function(){
     sombra(gx, gy, 11);
-    /* Con `barra` el montacargas se dibuja a si mismo como medidor. Sin
-       datos no se inventa altura: las horquillas quedan en el piso y en gris,
-       igual que el resto del equipo fantasma. */
-    const img = (opt.barra && ev && !fantasma)
-      ? forkliftUrg(body, COL_URG[ev.color], Math.min(1, ev.urgencia || 0))
-      : forklift(fantasma ? "#4a4f52" : body);
+    /* CADA UNO CON SU SILUETA. Con `barra` --o sea en el taller-- las que
+       pueden levantar algo lo levantan segun la urgencia; sin datos no se
+       inventa altura y se quedan abajo, en gris, como el resto del fantasma. */
+    const forma = formaDe(eq);
+    const cuerpo = fantasma ? "#4a4f52" : body;
+    const semaforo = (opt.barra && ev && !fantasma) ? COL_URG[ev.color] : null;
+    const nivel = (opt.barra && ev && !fantasma) ? Math.min(1, ev.urgencia || 0) : 0;
+    const img =
+        forma === "pickup"  ? pickup(cuerpo, semaforo)
+      : forma === "camion"  ? camion(cuerpo, semaforo)
+      : forma === "grua"    ? grua(cuerpo, semaforo)
+      : forma === "tijera"  ? tijera(cuerpo, semaforo, nivel)
+      : forma === "brazo"   ? brazo(cuerpo, semaforo, nivel)
+      : semaforo            ? forkliftUrg(body, semaforo, nivel)
+      :                       forklift(cuerpo);
     if(fantasma){
       /* HUECO DE DATOS: silueta translucida. Tiene que verse tan feo como un
          equipo vencido -- no es un gris discreto.
@@ -2691,6 +2845,21 @@ function renderLeyenda(flota){
   li("", '<b>El anillo son los clientes.</b> Cada sitio es uno y adentro est\u00e1 lo que tiene ' +
          'rentado. Un equipo que se rompe entra al centro: el mapa es el viaje que hace el fierro.');
 
+  /* cuantos hay de cada forma, para que la leyenda no hable de cosas que hoy
+     no estan en el mapa */
+  const formas = {};
+  todos.forEach(function(x){ const f = formaDe(x.eq); formas[f] = (formas[f] || 0) + 1; });
+  const nombreForma = { montacargas:"Montacargas", tijera:"Plataforma de tijera",
+                        brazo:"Brazo articulado", pickup:"Pick-up",
+                        camion:"Cami\u00f3n", grua:"Gr\u00faa" };
+  H.push('<h4>Cada uno con su forma</h4>');
+  li("", Object.keys(nombreForma).filter(function(k){ return formas[k]; })
+          .map(function(k){ return '<b>' + nombreForma[k] + '</b> ' + formas[k]; })
+          .join(' \u00b7 '));
+  H.push('<div class="nota">No todo es un montacargas, as\u00ed que no todo se dibuja igual: ' +
+         'la pick-up tiene cama, el cami\u00f3n furg\u00f3n, la gr\u00faa pluma. Se sabe qu\u00e9 es sin ' +
+         'leer el c\u00f3digo.</div>');
+
   H.push('<h4>El color del chasis dice D\u00d3NDE est\u00e1</h4>');
   li(cuad("#e5534b"), 'Rojo: en el <b>taller</b>.');
   li(cuad("#3ecf7e"), 'Verde: <b>disponible</b>, parqueado.');
@@ -2703,10 +2872,12 @@ function renderLeyenda(flota){
          'que no son fantasma es porque cerraron una orden en la app y de ah\u00ed sale la fecha. ' +
          'Una orden ABIERTA no cuenta \u2014 el trabajo todav\u00eda no se hizo.</div>');
 
-  H.push('<h4>El m\u00e1stil dice C\u00d3MO est\u00e1</h4>');
-  li("", 'Solo en el <b>taller</b>. El m\u00e1stil es la regla y <b>las horquillas la medida</b>: ' +
-         'al d\u00eda van en el piso, y se van subiendo mientras se acerca el intervalo (' +
-         INTERVALO_DIAS + ' d\u00edas \u00f3 ' + INTERVALO_HORAS + ' horas, lo que llegue primero).');
+  H.push('<h4>C\u00f3mo lo levanta dice C\u00d3MO est\u00e1</h4>');
+  li("", 'Solo en el <b>taller</b>. Cada m\u00e1quina lo cuenta con lo que tiene: el ' +
+         'montacargas <b>sube las horquillas</b>, la tijera <b>sube la plataforma</b> y el ' +
+         'brazo <b>se empina</b>. Al d\u00eda van abajo y suben mientras se acerca el intervalo (' +
+         INTERVALO_DIAS + ' d\u00edas \u00f3 ' + INTERVALO_HORAS + ' horas, lo que llegue primero). ' +
+         'Las que no tienen nada que levantar \u2014pick-up, cami\u00f3n, gr\u00faa\u2014 lo llevan en la cabina.');
   li(cuad("#3ecf7e"), 'Abajo y verde: al d\u00eda.');
   li(cuad("#f5a524"), 'A media altura y \u00e1mbar: se acerca.');
   li(cuad("#e5534b"), 'Arriba del todo y rojo: pasado.');
