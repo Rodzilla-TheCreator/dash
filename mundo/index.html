@@ -2193,7 +2193,31 @@ function drawLabels(){
 }
 
 let raf = null;
+/* EL BUCLE NO SE PUEDE MORIR.
+   ---------------------------------------------------------------------
+   Antes no tenia red: si algo adentro tiraba una excepcion --una funcion que
+   no existe, un dato con otra forma-- el `requestAnimationFrame` del final
+   nunca se ejecutaba y el mundo quedaba congelado PARA SIEMPRE. Y el sintoma
+   no se parecia en nada a la causa: la pantalla se ve normal porque el canvas
+   conserva el ultimo cuadro, el puntito verde sigue latiendo porque eso es
+   una animacion de CSS, y lo unico que pasa es que nada responde -- ni el
+   zoom, ni arrastrar, ni los botones de zona.
+
+   Paso de verdad: al borrar `fichaMecanico` por accidente, tocar un mecanico
+   tiraba la excepcion y el mundo se trababa entero.
+
+   Ahora cada cuadro va protegido. Si uno falla se anota UNA vez --no sesenta
+   por segundo-- y el siguiente se intenta igual. Un cuadro perdido no se ve;
+   un mundo trabado, si. */
+let fallosDeCuadro = 0;
 function loop(){
+  try{ cuadro(); }
+  catch(e){
+    if(fallosDeCuadro++ === 0) console.error("[Mundo] el cuadro fallo:", e);
+  }
+  raf = requestAnimationFrame(loop);
+}
+function cuadro(){
   /* animacion de camara */
   if(cam.tx != null){
     cam.x += (cam.tx - cam.x) * 0.18;
@@ -2221,7 +2245,6 @@ function loop(){
     }
   }
   if(dirty){ draw(); dirty = false; }
-  raf = requestAnimationFrame(loop);
 }
 const animState = { id:null, t:0 };
 function animOf(id){ return (animState.id && animState.id === id) ? animState.t : 0; }
@@ -2261,7 +2284,12 @@ function tap(sx, sy){
     const it = scene.items[i];
     if(!it.hit || !it.tap) continue;
     const h = it.hit;
-    if(w.x >= h.x && w.x <= h.x + h.w && w.y >= h.y && w.y <= h.y + h.h){ it.tap(); return; }
+    if(w.x >= h.x && w.x <= h.x + h.w && w.y >= h.y && w.y <= h.y + h.h){
+      /* protegido por lo mismo que el bucle: una ficha que revienta no puede
+         dejar el mapa sin responder al toque. */
+      try{ it.tap(); }catch(e){ console.error("[Mundo] al tocar:", e); }
+      return;
+    }
   }
   cerrarFicha();
 }
@@ -2837,6 +2865,36 @@ function fichaEquipo(eq, ev, trabajo){
 }
 function cerrarPanelEquipo(){
   document.getElementById("eqp").classList.remove("abierto");
+}
+
+/* Al tocar al mecanico se cuenta que esta haciendo EN ESE EQUIPO, no su
+   historial: el que toca esta parado frente a una maquina y esa es la
+   pregunta. El historial por tecnico ya lo da `taller-tiempos`. */
+function fichaMecanico(nombre, trabajo){
+  /* "sin asignar" no es un mecanico: es el fantasma. Sus ordenes son
+     justamente las que NO tienen a nadie. */
+  const fantasma = (nombre === "sin asignar");
+  const mias = (trabajo || []).filter(function(t){
+    return fantasma ? !t.tecnicos.length : t.tecnicos.indexOf(nombre) >= 0; });
+  const pares = mias.map(function(t){
+    return [t.correlativo + " · " + (t.nodo === "correctivos" ? "Correctivo" : "Preventivo"),
+            [t.estado, t.sistema].filter(Boolean).join(" · ") || "—"];
+  });
+  const acomp = [];
+  mias.forEach(function(t){
+    t.tecnicos.forEach(function(n){ if(n !== nombre && acomp.indexOf(n) < 0) acomp.push(n); });
+  });
+  if(acomp.length) pares.push(["Con", acomp.join(", ")]);
+  const falla = (mias[0] && mias[0].falla) ? mias[0].falla : "";
+  const nota = falla ? '<div class="note">' + esc(String(falla).slice(0, 220)) + '</div>' : "";
+  const aviso = fantasma
+    ? '<div class="note warn">Hay trabajo abierto en este equipo y <b>nadie figura ' +
+      'como responsable</b>. No es que no lo estén atendiendo: es que la orden no ' +
+      'tiene técnico cargado. Se arregla en la app de taller.</div>'
+    : '';
+  abrirFicha('<div class="kicker">' + (fantasma ? "Orden sin responsable" : "Mecánico") +
+    '</div><h2 class="display">' + esc(fantasma ? "Sin asignar" : nombre) + '</h2>' +
+    rows(pares) + aviso + nota);
 }
 
 function fichaPapel(r, st){
