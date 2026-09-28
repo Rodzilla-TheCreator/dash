@@ -152,7 +152,7 @@
   #leyenda h4:first-child{margin-top:0;}
   #leyenda .li{display:flex;gap:7px;align-items:flex-start;margin:4px 0;}
   #leyenda .sw{flex:0 0 auto;width:11px;height:11px;margin-top:2px;border:1px solid #2a2d2f;}
-  #leyenda .sw.fant{background:#4a4f52;opacity:.34;border:1px dashed #565b5f;}
+  #leyenda .sw.fant{background:#848b90;opacity:.46;}
   #leyenda b{color:var(--ink);font-weight:600;}
   #leyenda .nota{color:#6f757a;font-size:10px;margin-top:3px;}
   @media(max-width:760px){ #leyenda{width:186px;top:70px;right:6px;} }
@@ -761,11 +761,22 @@ function isoBox(gx, gy, w, d, h, col, opt){
   return { A:A, B:B, C:C, D:D, h:h };
 }
 /* sombra ovalada bajo un objeto */
-function sombra(gx, gy, rx){
+function sombra(gx, gy, rx, col){
   const p = w2s(gx, gy);
   ctx.save();
-  ctx.globalAlpha = 0.30; ctx.fillStyle = "#000000";
+  ctx.globalAlpha = 0.22; ctx.fillStyle = "#000000";
   ctx.beginPath(); ctx.ellipse(p.x, p.y+HH, rx, rx/2, 0, 0, Math.PI*2); ctx.fill();
+  /* EL ARO DEL PISO ES EL INDICADOR.
+     Antes el color de la ZONA iba en el chasis, y eso obligaba a pintar un
+     montacargas de azul o una pick-up de rojo -- colores que no dicen nada de
+     la maquina y que peleaban con la silueta. Ahora la maquina lleva SU color
+     y donde esta lo dice el aro de abajo, que es el unico lugar donde un
+     color puede cambiar sin ensuciar la figura. */
+  if(col){
+    ctx.globalAlpha = 0.95; ctx.strokeStyle = col; ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.ellipse(p.x, p.y+HH, rx+1.5, (rx+1.5)/2, 0, 0, Math.PI*2);
+    ctx.stroke();
+  }
   ctx.restore();
 }
 
@@ -935,7 +946,10 @@ function tijera(body, col, nivel){
   const key = "tj_" + body + "_" + col + "_" + paso;
   if(SPR[key]) return SPR[key];
   const bd = shade(body, 0.74), plat = col || C_FORK;
-  const yp = Math.round(13 - (paso / 10) * 11);     // alto de la plataforma
+  /* Arranca en 9 y no en 13: con la plataforma pegada al chasis no se veia
+     la tijera y parecia una caja. Un piso de tres o cuatro filas de cruces ya
+     la hace reconocible, y desde ahi sube con la urgencia. */
+  const yp = Math.round(9 - (paso / 10) * 7);      // alto de la plataforma
   const ops = [
     [2,15,19,4,bd], [2,15,19,1,shade(bd,1.2)], [2,18,19,1,C_OUT],   // chasis
     [3,19,4,3,C_TIRE], [16,19,4,3,C_TIRE],                          // ruedas
@@ -1150,7 +1164,10 @@ const ZONAS = [
      `campo` no dibuja piso -- cada sitio pone el suyo sobre el anillo-- pero
      conserva una caja que lo cubre para que la camara sepa a donde ir. */
   { id:"patio",   nombre:"DISPONIBLES",      dist:"equipos", x:-9,  y:-23, w:18, d:18, piso:"#25282a", linea:"#31353800" },
-  { id:"taller",  nombre:"TALLER",           dist:"equipos", x:-11, y:2,   w:22, d:24, piso:"#2a2d2f", linea:"#34383b" },
+  /* d=32 y no 24: son 56 equipos en seis columnas, o sea diez filas de 2.8,
+     que son 28 de fondo mas el respiro de arriba y el de abajo. Con 24 los
+     de las ultimas filas se salian del piso y quedaban flotando en negro. */
+  { id:"taller",  nombre:"TALLER",           dist:"equipos", x:-11, y:2,   w:22, d:32, piso:"#2a2d2f", linea:"#34383b" },
   { id:"campo",   nombre:"CAMPO / CLIENTES", dist:"equipos", x:-56, y:-56, w:112, d:112, piso:null, linea:null },
   /* --- el edificio (todo lo demás) --- */
   { id:"bullpen", nombre:"BULLPEN",          dist:"edificio", x:20, y:37, w:12, d:10, piso:"#2f3335", linea:"#3c4144" }
@@ -1289,12 +1306,24 @@ function ponerEquipo(gx, gy, eq, ev, opt){
   const p = w2s(gx, gy);
   const sx = Math.round(p.x - FK_W/2), sy = Math.round(p.y + HH - FK_H);
   push(gx, gy, function(){
-    sombra(gx, gy, 11);
+    /* el aro lleva el color que antes iba en el chasis: donde esta el equipo */
+    sombra(gx, gy, 11, fantasma ? null : (opt.body || null));
     /* CADA UNO CON SU SILUETA. Con `barra` --o sea en el taller-- las que
        pueden levantar algo lo levantan segun la urgencia; sin datos no se
        inventa altura y se quedan abajo, en gris, como el resto del fantasma. */
     const forma = formaDe(eq);
-    const cuerpo = fantasma ? "#4a4f52" : body;
+    /* EL COLOR DE LA MAQUINA, no el de la zona. Los de verdad: los
+       montacargas de Montasa son amarillos, las plataformas Genie azules, los
+       vehiculos blancos. Un fantasma sigue en gris, que es su propio dato. */
+    const PROPIO = { montacargas:"#e8a317", tijera:"#4f8fe0", brazo:"#4f8fe0",
+                     pickup:"#c9ced2", camion:"#c9ced2", grua:"#e8a317" };
+    /* El gris del fantasma sube de #4a4f52 a #848b90: a 34% de opacidad
+       sobre un piso oscuro, el gris viejo desaparecia -- y con las siluetas
+       nuevas eso se noto feo, porque de una tijera solo quedaba la plataforma
+       flotando. Un fantasma tiene que verse COMPLETO y translucido, no a
+       medias: la idea es que se note que falta el dato, no que falte media
+       maquina. */
+    const cuerpo = fantasma ? "#848b90" : (PROPIO[forma] || body);
     const semaforo = (opt.barra && ev && !fantasma) ? COL_URG[ev.color] : null;
     const nivel = (opt.barra && ev && !fantasma) ? Math.min(1, ev.urgencia || 0) : 0;
     const img =
@@ -1312,7 +1341,11 @@ function ponerEquipo(gx, gy, eq, ev, opt){
          pantalla eran 185 rectangulos de rayitas encima del mapa, y el ruido
          tapaba justo lo que el fantasma quiere decir. Ser transparente YA es
          el dato; el punteado no agregaba nada y competia con todo. */
-      ctx.save(); ctx.globalAlpha = 0.34; ctx.drawImage(img, sx, sy); ctx.restore();
+      /* 0.46 y no 0.34: con la sombra debajo, a 34% las partes oscuras de la
+         maquina --el chasis de una tijera, por ejemplo-- se perdian del todo y
+         quedaba media silueta flotando. A 46% se lee entera y se sigue notando
+         de una que es un hueco de dato. */
+      ctx.save(); ctx.globalAlpha = 0.46; ctx.drawImage(img, sx, sy); ctx.restore();
     }else{
       ctx.drawImage(img, sx, sy);
     }
