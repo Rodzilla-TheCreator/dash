@@ -2010,7 +2010,15 @@ function buildScene(){
   if(vista === "taller" && flota.otros && flota.otros.length
      && !(state.flotaErr && !state.flotaParcial)){
     const z = ZONA.patio;
-    const y0 = z.y + z.d - 2.2;
+    /* DEBAJO DE LA ULTIMA FILA DEL PATIO, no del borde nominal de la zona.
+       Este bloque se colocaba con `z.y + z.d - 2.2`, que era el fondo de la
+       zona cuando el patio media 12 de alto. Al agrandarlo a 18 la rejilla
+       de disponibles paso a terminar MAS ABAJO que ese borde, y los dos se
+       montaron: el MT-54 (DEMO/PRESTAMO) quedaba encima del ET-16, a dos
+       decimas de distancia. Ahora se calcula igual que la rejilla, que es la
+       unica forma de que no se vuelvan a pisar cuando cambie el tamano. */
+    const filasPatio = Math.ceil((flota.patio || []).length / 5);
+    const y0 = z.y + 1.2 + filasPatio * 2.4 + 1.2;
     flota.otros.forEach(function(it, i){
       ponerEquipo(z.x + 1.5 + (i%5)*3.2, y0 + Math.floor(i/5)*1.9, it.eq, it.ev, { body:"#a9741f" });
     });
