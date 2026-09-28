@@ -208,9 +208,13 @@
     <div class="title display">MUNDO MONTASA<small id="zone-name">Cargando</small></div>
     <div class="status"><span class="dot" id="conn-dot"></span><span id="conn-txt">CONECTANDO</span></div>
   </div>
-  <div class="pills" role="tablist" aria-label="Qué parte del mundo ver">
-    <button class="pill active" data-vista="oficina" role="tab" aria-selected="true">Oficina</button>
-    <button class="pill" data-vista="taller" role="tab" aria-selected="false">Taller</button>
+  <!-- LA OFICINA ESTA APAGADA, NO BORRADA. Todo su codigo sigue aca abajo
+       -- zonaEdificio, los deptos, los pulsos de caja chica -- y se puede
+       volver a prender cambiando VISTAS_VISIBLES. Se apago porque el mundo
+       hoy sirve para UNA cosa: ver la flota. Media docena de oficinas con
+       KPIs sin conectar solo repartian la atencion. -->
+  <div class="pills" aria-label="Qué se está viendo">
+    <button class="pill active" data-vista="taller" disabled>Taller</button>
   </div>
 </div>
 
@@ -517,7 +521,10 @@ function estacionDe(estado){
    `oficina` (el edificio: la gente, los papeles) o `taller` (el distrito de
    equipos: taller, patio y los que estan en cliente). Son dos negocios
    distintos y ahora tambien son dos vistas distintas. */
-let vista = "oficina";
+/* VISTAS_VISIBLES es el interruptor: agregarle "oficina" la devuelve al
+   mundo, con su pastilla y su barra de zonas, sin tocar nada mas. */
+const VISTAS_VISIBLES = ["taller"];
+let vista = VISTAS_VISIBLES[0];
 const state = {
   equipos:{}, preventivos:{}, correctivos:{},
   caja:null, viajes:null, almacen:null,     // null = sin cargar, "error" = fallo
@@ -996,10 +1003,24 @@ let dirty = true;
 function push(gx, gy, draw, hit, tap){
   scene.items.push({ d:gx+gy, gx:gx, gy:gy, draw:draw, hit:hit||null, tap:tap||null });
 }
+/* DESDE QUE ESCALA VALE LA PENA CADA COSA.
+   De lejos el mapa contesta "donde hay mucho fierro y de que color esta"; de
+   cerca contesta "cual es y que le pasa". Escribir las dos cosas a la vez es
+   lo que lo volvia ilegible. Los numeros no son a gusto: son la escala a la
+   que ese texto se lee sin encimarse con el de al lado. */
+const LOD = {
+  zona:    0,      // TALLER, DISPONIBLES, CAMPO: siempre. Son el mapa.
+  sitio:   0.42,   // el nombre del cliente
+  resumen: 0.62,   // "35 disponibles", "mecanicos sin equipo"
+  cuenta:  0.85,   // "27 equipos" de cada sitio
+  codigo:  1.45,   // el codigo de cada equipo
+  persona: 1.45    // el nombre del mecanico
+};
 function label(wx, wy, text, o){
   o = o || {};
   scene.labels.push({ x:wx, y:wy, t:text, col:o.col||"#8b9096", size:o.size||9,
-                      w:o.w||"400", al:o.al||"center", fam:o.fam||"mono", box:o.box||false });
+                      w:o.w||"400", al:o.al||"center", fam:o.fam||"mono", box:o.box||false,
+                      min:o.min || 0 });
 }
 /* Punto de anclaje del rotulo: justo encima del vertice mas alto de la zona.
    (en iso el centro de la zona NO esta encima del centro de la huella) */
@@ -1060,7 +1081,7 @@ function ponerEquipo(gx, gy, eq, ev, opt){
   if(opt.codigo !== false){
     /* con barra el rotulo va ARRIBA de la barra, para que nunca la tape */
     label(p.x, sy - (opt.barra ? 45 : 6), (ev && ev.codigo) || eq.codigo || eq.id || "?",
-      { size:8.5, col: fantasma ? "#565b5f" : "#8b9096" });
+      { size:8.5, col: fantasma ? "#565b5f" : "#8b9096", min:LOD.codigo });
   }
   if(opt.trabajo && opt.trabajo.length) ponerMecanicos(gx, gy, opt.trabajo);
 }
@@ -1101,7 +1122,8 @@ function ponerMecanicos(gx, gy, trabajo){
       ctx.setLineDash([2,2]); ctx.lineWidth = 1;
       ctx.strokeRect(sx-1.5, sy-1.5, 12+3, 20+3); ctx.restore();
     }, { x:sx-4, y:sy-4, w:20, h:28 }, function(){ fichaMecanico("sin asignar", trabajo); });
-    label(p.x, sy - 7, "SIN ASIGNAR", { col:"#565b5f", size:7, w:"700", box:true });
+    label(p.x, sy - 7, "SIN ASIGNAR",
+      { col:"#565b5f", size:7, w:"700", box:true, min:LOD.persona });
     return;
   }
   const pinta = algunoCorriendo ? ["mec", "mec2"] : ["mecq", "mecq"];
@@ -1119,12 +1141,13 @@ function ponerMecanicos(gx, gy, trabajo){
   const p = w2s(gx + 1.1, gy + 0.6);
   const extra = nombres.length > 1 ? "  +" + (nombres.length - 1) : "";
   label(p.x, Math.round(p.y + HH - 20) - 7, nombres[0].toUpperCase() + extra,
-    { col: algunoCorriendo ? "#f5c542" : "#8b9096", size:7.5, w:"700", box:true });
+    { col: algunoCorriendo ? "#f5c542" : "#8b9096", size:7.5, w:"700", box:true,
+      min:LOD.persona });
   if(!algunoCorriendo){
     /* Si esta detenido, el motivo va escrito: "en pausa" y "esperando
        repuestos" se arreglan de maneras muy distintas. */
     label(p.x, Math.round(p.y + HH - 20) + 4, String(trabajo[0].estado).toLowerCase(),
-      { col:"#6f757a", size:7, box:true });
+      { col:"#6f757a", size:7, box:true, min:LOD.codigo });
   }
 }
 
@@ -1178,13 +1201,14 @@ function mecanicosSinEquipo(z, y0){
       sombra(gx, gy, 7);
       ctx.drawImage(persona(i % 2 ? "mec2" : "mec"), sx, sy);
     }, { x:sx-4, y:sy-4, w:20, h:28 }, function(){ fichaMecanico(n, sueltas); });
-    label(p.x, sy - 7, n.split(" ")[0].toUpperCase(), { col:"#f5c542", size:7, box:true });
+    label(p.x, sy - 7, n.split(" ")[0].toUpperCase(),
+      { col:"#f5c542", size:7, box:true, min:LOD.persona });
   });
   const c = w2s(z.x + z.w/2, y0 - 0.9);
   label(c.x, c.y, "MEC\u00c1NICOS SIN EQUIPO EN EL MAPA \u00b7 " + sueltas.length + " \u00f3rdenes",
-    { col:"#f5a524", size:9, w:"700", fam:"disp", box:true });
+    { col:"#f5a524", size:9, w:"700", fam:"disp", box:true, min:LOD.resumen });
   label(c.x, c.y + 11, "la m\u00e1quina es del cliente, o su registro ya no existe",
-    { col:"#8b9096", size:8, box:true });
+    { col:"#8b9096", size:8, box:true, min:LOD.resumen });
 }
 
 /* --------- ZONA 2: PATIO --------- */
@@ -1219,7 +1243,7 @@ function zonaPatio(mant){
   });
   label(c.x, c.y + (z.w + z.d) * HH / 2 + 16, lista.length + " disponibles · " +
         (mant.total ? Math.round(lista.length/mant.total*100) : 0) + "% de la flota parqueada",
-        { col:"#8b9096", size:9.5, box:true });
+        { col:"#8b9096", size:9.5, box:true, min:LOD.resumen });
 }
 
 /* --------- ZONA 3: CAMPO / CLIENTES --------- */
@@ -1268,7 +1292,7 @@ function zonaCampo(mant){
         { col:"#4f8fe0", size:12, w:"800", fam:"disp", box:true });
   label(az.x, az.y + 14,
         ing != null ? ("renta del mes · " + usd(ing)) : "renta del mes · sin dato de RADAR",
-        { col: ing != null ? "#4f8fe0" : "#565b5f", size:9 });
+        { col: ing != null ? "#4f8fe0" : "#565b5f", size:9, min:LOD.resumen });
 
   /* LOS SITIOS DE CLIENTE, EN UN ANILLO.
      ---------------------------------------------------------------------
@@ -1308,11 +1332,17 @@ function zonaCampo(mant){
     });
     /* rotulo del sitio, justo encima del vertice mas alto de la nave */
     const rc = { x: w2s(ox + shedW/2, oy - 1.1).x, y: w2s(ox, oy - 2.2).y - 36 };
-    label(rc.x, rc.y, g.nombre, { col:"#4f8fe0", size:11, w:"700", fam:"disp", box:true });
-    label(rc.x, rc.y + 12,
-          g.sondeado ? (g.items.length + (g.items.length === 1 ? " equipo" : " equipos"))
-                     : (g.items.length + " equipos · sin campo de cliente en la base"),
-          { col: g.sondeado ? "#8b9096" : "#565b5f", size:8.5, box:true });
+    label(rc.x, rc.y, g.nombre,
+          { col:"#4f8fe0", size:11, w:"700", fam:"disp", box:true, min:LOD.sitio });
+    /* La cuenta SOLO si hay tres o mas. Con uno o dos se VEN los montacargas y
+       el numero no agrega nada: era "1 equipo" escrito treinta veces alrededor
+       del anillo, puro ruido con forma de dato. */
+    if(g.items.length >= 3 || !g.sondeado){
+      label(rc.x, rc.y + 12,
+            g.sondeado ? (g.items.length + " equipos")
+                       : (g.items.length + " equipos · sin campo de cliente en la base"),
+            { col: g.sondeado ? "#8b9096" : "#565b5f", size:8.5, box:true, min:LOD.cuenta });
+    }
     g.items.forEach(function(it, i){
       const px = ox + 1.4 + (i % 3) * 2.7, py = oy + 0.8 + Math.floor(i/3) * 2.2;
       ponerEquipo(px, py, it.eq, it.ev, { body:"#4f8fe0" });
@@ -1949,7 +1979,7 @@ function buildScene(){
     });
     label(w2s(z.x + z.w/2, y0).x, w2s(z.x + z.w/2, y0).y - 46,
           "OTROS / INTERNO · " + flota.otros.length,
-          { col:"#a9741f", size:10, w:"700", fam:"disp", box:true });
+          { col:"#a9741f", size:10, w:"700", fam:"disp", box:true, min:LOD.resumen });
   }
 
   scene.items.sort(function(a,b){ return a.d - b.d; });
@@ -1984,8 +2014,11 @@ function drawLabels(){
   for(const l of scene.labels){
     const s = screenOf(l.x, l.y);
     if(s.x < -160 || s.x > CW+160 || s.y < 44 || s.y > CH-52) continue;
+    /* Este es el filtro que vuelve legible el mapa de lejos. Antes habia uno
+       por tamano de letra --`size < 9 && cam.scale < 2`-- que no filtraba
+       nada: los codigos de equipo son 8.5 y redondean a 9, justo el borde. */
+    if(cam.scale < l.min) continue;
     const size = Math.round(l.size * (cam.scale >= 3 ? 1.15 : 1));
-    if(size < 9 && cam.scale < 2) continue;
     ctx.font = l.w + " " + size + "px " +
       (l.fam === "disp" ? "'Barlow Condensed',sans-serif" : "'IBM Plex Mono',monospace");
     ctx.textAlign = l.al;
@@ -2274,22 +2307,38 @@ function renderLeyenda(flota){
            'nombre del taller, así que a esos no hay a dónde apuntarles. Se arregla en la ' +
            'app, no acá.</div>');
 
-    H.push('<h4>Cómo se ve cada equipo</h4>');
-    H.push('<div class="li"><span class="sw" style="background:#3ecf7e"></span>' +
-           '<span>Al día con el mantenimiento.</span></div>');
-    H.push('<div class="li"><span class="sw" style="background:#f5a524"></span>' +
-           '<span>Se acerca el intervalo.</span></div>');
+    H.push('<h4>El color del chasis dice DÓNDE está</h4>');
     H.push('<div class="li"><span class="sw" style="background:#e5534b"></span>' +
-           '<span>Pasado. La barra se sale del marco a propósito.</span></div>');
+           '<span>Rojo: en el <b>taller</b>.</span></div>');
+    H.push('<div class="li"><span class="sw" style="background:#3ecf7e"></span>' +
+           '<span>Verde: <b>disponible</b>, parqueado.</span></div>');
+    H.push('<div class="li"><span class="sw" style="background:#4f8fe0"></span>' +
+           '<span>Azul: <b>en renta</b>, en el sitio de un cliente.</span></div>');
+    H.push('<div class="li"><span class="sw" style="background:#a9741f"></span>' +
+           '<span>Ámbar: <b>otros / interno</b> — pick-ups, camión, la grúa.</span></div>');
     H.push('<div class="li"><span class="sw fant"></span><span><b>Transparente y punteado ' +
-           '— no se sabe.</b> No es que esté bien: la base no tiene ni fecha de último ' +
-           'mantenimiento ni horómetro con qué comparar.</span></div>');
+           '— no se sabe nada de él.</b> La base no tiene ni fecha de último ' +
+           'mantenimiento ni horómetro con qué comparar. Tapa el color de la zona.</span></div>');
     H.push('<div class="nota">Así están <b>' + fant + ' de ' + todos.length + '</b>. ' +
            'Son tantos porque <b>ningún equipo</b> tiene cargada la fecha de último ' +
            'mantenimiento: los pocos que no son fantasma es porque pasaron por una orden ' +
            'de la app y de ahí se saca la fecha. Un cliente entero en transparente ' +
            '—San Juan Textil, por ejemplo— significa que a esos equipos nunca se les ' +
            'abrió una orden acá.</div>');
+
+    H.push('<h4>La barra vertical dice CÓMO está</h4>');
+    H.push('<div class="li">Solo la llevan los del <b>taller</b>. Mide qué tan pasado está ' +
+           'del intervalo de mantenimiento (' + INTERVALO_DIAS + ' días ó ' + INTERVALO_HORAS +
+           ' horas, lo que llegue primero).</div>');
+    H.push('<div class="li"><span class="sw" style="background:#3ecf7e"></span>' +
+           '<span>Al día.</span></div>');
+    H.push('<div class="li"><span class="sw" style="background:#f5a524"></span>' +
+           '<span>Se acerca.</span></div>');
+    H.push('<div class="li"><span class="sw" style="background:#e5534b"></span>' +
+           '<span>Pasado. La barra <b>se sale del marco</b> a propósito.</span></div>');
+    H.push('<div class="li"><span class="sw" style="background:#565b5f"></span>' +
+           '<span><b>Gris: no hay con qué calcularlo.</b> Es la misma falta de dato que el ' +
+           'chasis transparente, dicha en la barra.</span></div>');
 
     H.push('<h4>Los mecánicos</h4>');
     H.push('<div class="li"><span class="sw" style="background:#f5c542"></span>' +
@@ -2593,6 +2642,9 @@ async function refrescar(){
    Firebase y a RADAR, y habia que esperar dos segundos para ver algo que ya
    estaba en memoria. */
 const ZONA_DE_VISTA = { oficina:"bullpen", taller:"taller" };
+/* Con una sola vista visible la pastilla no elige nada, pero el resto del
+   codigo sigue preguntando por `vista`: asi prender la oficina de nuevo es
+   agregarla a VISTAS_VISIBLES y ya. */
 function cambiarVista(cual){
   vista = cual;
   [...document.querySelectorAll(".pill")].forEach(function(b){
@@ -2617,8 +2669,9 @@ function cambiarVista(cual){
 /* boot */
 resize();
 cam.scale = baseScale();
-renderZoneNav({ taller:[], patio:[], renta:0, disp:[] }, { err:false, por:{ rev:[] } }, { err:false, sedes:[] });
-irAZona("bullpen");
+renderZoneNav({ taller:[], patio:[], renta:0, disp:[], campo:[], otros:[] },
+              { err:false, por:{ rev:[] } }, { err:false, sedes:[] });
+irAZona(ZONA_DE_VISTA[vista] || "taller");
 loop();
 refrescar();
 setInterval(refrescar, 60000);
