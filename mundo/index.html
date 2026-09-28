@@ -1010,7 +1010,11 @@ function push(gx, gy, draw, hit, tap){
    que ese texto se lee sin encimarse con el de al lado. */
 const LOD = {
   zona:    0,      // TALLER, DISPONIBLES, CAMPO: siempre. Son el mapa.
-  sitio:   0.42,   // el nombre del cliente
+  /* El nombre del cliente va SIEMPRE, aunque sea lo que mas se repite en
+     pantalla: es lo unico que hace que el anillo se lea como una lista de
+     clientes y no como veintiocho manchas iguales. Lo que saturaba no eran
+     los nombres, era el "1 equipo" debajo de cada uno. */
+  sitio:   0,      // el nombre del cliente
   resumen: 0.62,   // "35 disponibles", "mecanicos sin equipo"
   cuenta:  0.85,   // "27 equipos" de cada sitio
   codigo:  1.45,   // el codigo de cada equipo
