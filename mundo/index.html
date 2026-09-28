@@ -76,8 +76,9 @@
   #busc-txt{flex:1;min-width:0;background:transparent;border:0;color:var(--ink);
     font-family:'IBM Plex Mono',monospace;font-size:12px;outline:none;}
   #busc-txt::placeholder{color:#565b5f;}
-  #busc-x{background:transparent;border:0;color:var(--ink-dim);font-size:13px;
+  #busc-x,#busc-ver{background:transparent;border:0;color:var(--ink-dim);font-size:13px;
     cursor:pointer;padding:2px 3px;}
+  #busc-x:hover,#busc-ver:hover{color:var(--amber);}
   #busc-res{overflow-y:auto;padding:4px 0 6px;}
   #busc .grupo{padding:7px 9px 2px;font-family:'Barlow Condensed',sans-serif;
     font-size:10px;letter-spacing:1.2px;text-transform:uppercase;color:#8b9096;
@@ -248,7 +249,8 @@
   <div id="busc-caja">
     <input id="busc-txt" type="search" autocomplete="off" spellcheck="false"
            placeholder="Buscar equipo: MT-113, baoli, elcatex…" aria-label="Buscar equipo">
-    <button id="busc-x" aria-label="Limpiar">&#10005;</button>
+    <button id="busc-ver" aria-label="Ver por tipo" title="Ver por tipo">&#9776;</button>
+    <button id="busc-x" aria-label="Cerrar">&#10005;</button>
   </div>
   <div id="busc-res"></div>
 </div>
@@ -1142,9 +1144,15 @@ function ponerEquipo(gx, gy, eq, ev, opt){
     fichaEquipo(eq, ev, opt.trabajo);
   });
   if(opt.codigo !== false){
-    /* con barra el rotulo va ARRIBA de la barra, para que nunca la tape */
-    label(p.x, sy - (opt.barra ? 45 : 6), (ev && ev.codigo) || eq.codigo || eq.id || "?",
-      { size:8.5, col: fantasma ? "#565b5f" : "#8b9096", min:LOD.codigo });
+    /* ABAJO DEL EQUIPO Y CON FONDO.
+       Iba arriba, y con la barra de urgencia iba 45 px mas arriba todavia --
+       o sea que aterrizaba encima del montacargas de la fila de atras. Al
+       buscar el MT-113 lo que se leia sobre el era "ST-14", que es el rotulo
+       de otro. Abajo hay piso vacio y el rotulo cae sobre su propio equipo.
+       Y con `box` para que se lea: texto claro sobre un patio gris con
+       sombras no se lee, por mas que el color sea el correcto. */
+    label(p.x, p.y + HH + 9, (ev && ev.codigo) || eq.codigo || eq.id || "?",
+      { size:8.5, col: fantasma ? "#7a8186" : "#c9ced2", box:true, min:LOD.codigo });
   }
   if(opt.trabajo && opt.trabajo.length) ponerMecanicos(gx, gy, opt.trabajo);
 }
@@ -1369,17 +1377,29 @@ function zonaCampo(mant){
      circulo en coordenadas de piso se dibuja como un circulo (aplastado 2:1),
      que es justo como se ve un patio redondo visto de esquina. */
   const ANCHO_SITIO = 11;
-  /* Dos pisos para el radio y gana el mayor:
-       · el PERIMETRO, para que los sitios no se encimen entre si;
-       · el CENTRO, para que el anillo no se le venga encima a lo nuestro.
-     El centro mide de -23 (arriba de Disponibles) a 26 (abajo del Taller), o
-     sea unas 50 de alto; la mitad mas el fondo de un sitio mas un respiro. */
+  /* CADA SITIO OCUPA EL ARCO QUE MIDE, no un pedazo igual que los demas.
+     Repartiendo el circulo en partes iguales, San Juan Textil --que con 27
+     equipos mide diez veces mas alto que uno de un equipo-- se le montaba
+     encima a sus dos vecinos, y El Salvador a Elcatex. Ahora se suma cuanto
+     mide cada uno, y a cada cual le toca la proporcion que le corresponde:
+     los grandes empujan a los chicos en vez de taparlos.
+
+     El radio tiene dos pisos y gana el mayor:
+       · el PERIMETRO, que ahora es la suma de los tamanos y no la cuenta;
+       · el CENTRO, para que el anillo no se le venga encima a lo nuestro. */
   const RADIO_CENTRO = 26 + 14 + 16;
-  const R = Math.max(RADIO_CENTRO, (grupos.length * ANCHO_SITIO) / (2 * Math.PI));
+  const altoDe = function(g){
+    return Math.max(3.2, 1.8 + Math.ceil(g.items.length / 3) * 2.2);
+  };
+  const tam = grupos.map(function(g){ return Math.max(ANCHO_SITIO, altoDe(g) + 3.5); });
+  const suma = tam.reduce(function(a, b){ return a + b; }, 0);
+  const R = Math.max(RADIO_CENTRO, suma / (2 * Math.PI));
+  let angAcum = -Math.PI / 2;
   grupos.forEach(function(g, gi){
-    const filas = Math.ceil(g.items.length / 3);
-    const alto  = Math.max(3.2, 1.8 + filas * 2.2);
-    const ang = -Math.PI / 2 + (gi / grupos.length) * Math.PI * 2;
+    const alto = altoDe(g);
+    const paso = (tam[gi] / suma) * Math.PI * 2;
+    const ang = angAcum + paso / 2;
+    angAcum += paso;
     const gx = Math.cos(ang) * R - 4.3, gy = Math.sin(ang) * R - alto / 2;
     const ox = gx, oy = gy, ancho = 8.6;
     sitiosCliente[String(g.nombre).toUpperCase()] = { gx: ox + ancho/2, gy: oy + alto/2 };
@@ -1952,12 +1972,15 @@ function computeFlotaMundo(){
     if(!mapa.has(key)) mapa.set(key, []);
     mapa.get(key).push(it);
   });
-  /* Alfabetico y no por cantidad: ordenando por cantidad, un solo equipo que
-     entra o sale del taller cambiaba el puesto de su cliente y TODO el anillo
-     rotaba. Por nombre, cada cliente tiene su lugar fijo y ademas se encuentra
-     leyendo, que es como se busca en una rueda de 28. */
+  /* Por cantidad, de mayor a menor: asi los clientes grandes quedan juntos y
+     se ve de un vistazo donde esta el grueso de la flota. Se ordena por
+     cantidad Y DESPUES por nombre, que es lo que faltaba antes: sin el
+     segundo criterio, dos clientes con la misma cantidad se intercambiaban de
+     lugar en cada refresco y el anillo parecia moverse solo. */
   const campo = [...mapa.entries()]
-    .sort(function(a,b){ return String(a[0]).localeCompare(String(b[0]), "es"); })
+    .sort(function(a,b){
+      return (b[1].length - a[1].length) || String(a[0]).localeCompare(String(b[0]), "es");
+    })
     .map(function(e){ return { nombre:e[0], sondeado:sondeado, items:ordenar(e[1]) }; });
 
   return {
@@ -2400,6 +2423,12 @@ function sinTildesB(x){
   return String(x || "").toLowerCase().replace(/\u00f1/g, "\u0001")
     .normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\u0001/g, "\u00f1");
 }
+/* NADIE ESCRIBE EL GUION. "mt113", "mt 113" y "MT-113" son la misma busqueda
+   y las tres tienen que llegar al mismo equipo. Se comparan las dos puntas
+   sin nada que no sea letra o numero, asi que el guion, el espacio y el punto
+   dejan de importar. Se busca en las DOS formas: la pelada encuentra
+   "mt113", y la normal deja que "genie gs" siga andando como dos palabras. */
+function pelar(x){ return sinTildesB(x).replace(/[^a-z0-9]/g, ""); }
 function tipoDe(eq){
   const t = String(eq.tipo || "").trim();
   return t ? t.toUpperCase() : "SIN TIPO";
@@ -2415,7 +2444,9 @@ function equiposBuscables(){
       out.push({ eq: it.eq, ev: it.ev,
                  clave: it.eq._empresa + ":" + (it.eq.id || ""),
                  texto: sinTildesB([it.ev.codigo, it.eq.marca, it.eq.modelo, it.eq.serie,
-                                    it.eq.cliente, it.eq.ubicacion, it.eq.desc].join(" ")) });
+                                    it.eq.cliente, it.eq.ubicacion, it.eq.desc].join(" ")),
+                 pelado: pelar([it.ev.codigo, it.eq.marca, it.eq.modelo, it.eq.serie,
+                                it.eq.cliente, it.eq.ubicacion, it.eq.desc].join(" ")) });
     });
   return out;
 }
@@ -2428,6 +2459,7 @@ function volarA(item){
   cam.scale = Math.max(cam.scale, 1.8);     // lo suficiente para leer el codigo
   equipoResaltado = { clave: item.clave, t: 1 };
   fichaEquipo(item.eq, item.ev, (enCurso.porEquipo || {})[item.clave]);
+  cerrarBusqueda();          // ya encontro lo que buscaba; la lista estorba
   dirty = true;
 }
 
@@ -2454,9 +2486,16 @@ function pintarBusqueda(){
   const q = sinTildesB(document.getElementById("busc-txt").value.trim());
   const todos = equiposBuscables();
   const H = [];
+  /* EL ARBOL ARRANCA CERRADO Y SE CIERRA SOLO.
+     Antes quedaba desplegado ocupando media pantalla aunque uno ya hubiera
+     encontrado lo que buscaba. La lista solo existe mientras se busca: hay
+     texto escrito, o se toco el boton de ver los tipos. */
+  if(!q && !buscListo){ caja.innerHTML = ""; return; }
 
   if(q){
-    const hits = todos.filter(function(x){ return x.texto.indexOf(q) >= 0; })
+    const qp = pelar(q);
+    const hits = todos.filter(function(x){
+      return x.texto.indexOf(q) >= 0 || (qp && x.pelado.indexOf(qp) >= 0); })
                       .sort(function(a, b){
                         return String(a.ev.codigo).localeCompare(String(b.ev.codigo), "es",
                           { numeric: true }); });
@@ -2507,12 +2546,24 @@ function pintarBusqueda(){
   }
 }
 
-document.getElementById("busc-txt").addEventListener("input", pintarBusqueda);
-document.getElementById("busc-x").onclick = function(){
-  document.getElementById("busc-txt").value = "";
+let buscListo = false;      // esta desplegada la lista?
+function cerrarBusqueda(){
+  buscListo = false;
+  buscAbierto = {};
+  const t = document.getElementById("busc-txt");
+  t.value = ""; t.blur();
   pintarBusqueda();
-  document.getElementById("busc-txt").focus();
+}
+document.getElementById("busc-txt").addEventListener("input", pintarBusqueda);
+document.getElementById("busc-txt").addEventListener("focus", function(){
+  buscListo = true; pintarBusqueda();
+});
+document.getElementById("busc-ver").onclick = function(){
+  buscListo = !buscListo; pintarBusqueda();
 };
+document.getElementById("busc-x").onclick = cerrarBusqueda;
+/* Escape cierra, que es lo que la mano hace sola. */
+document.addEventListener("keydown", function(e){ if(e.key === "Escape") cerrarBusqueda(); });
 
 /* =====================================================================
    LA LEYENDA
