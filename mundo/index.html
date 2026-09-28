@@ -1066,12 +1066,13 @@ function ponerEquipo(gx, gy, eq, ev, opt){
     sombra(gx, gy, 11);
     const img = forklift(fantasma ? "#4a4f52" : body);
     if(fantasma){
-      /* HUECO DE DATOS: silueta translucida. Tiene que verse tan feo como
-         un equipo vencido (spec 3.1) — no es un gris discreto. */
+      /* HUECO DE DATOS: silueta translucida. Tiene que verse tan feo como un
+         equipo vencido -- no es un gris discreto.
+         Tenia ademas un marco punteado y se quito: con 185 fantasmas en
+         pantalla eran 185 rectangulos de rayitas encima del mapa, y el ruido
+         tapaba justo lo que el fantasma quiere decir. Ser transparente YA es
+         el dato; el punteado no agregaba nada y competia con todo. */
       ctx.save(); ctx.globalAlpha = 0.34; ctx.drawImage(img, sx, sy); ctx.restore();
-      ctx.save(); ctx.globalAlpha = 0.55; ctx.strokeStyle = COL_URG.nodata;
-      ctx.setLineDash([2,2]); ctx.lineWidth = 1;
-      ctx.strokeRect(sx-1.5, sy-1.5, FK_W+3, FK_H+3); ctx.restore();
     }else{
       ctx.drawImage(img, sx, sy);
     }
@@ -1119,12 +1120,11 @@ function ponerMecanicos(gx, gy, trabajo){
     const sx = Math.round(p.x - 6), sy = Math.round(p.y + HH - 20);
     push(mx, my, function(){
       sombra(mx, my, 7);
+      /* sin marco punteado, igual que el montacargas fantasma: una sola
+         manera de decir "falta un dato", y es la transparencia */
       ctx.save(); ctx.globalAlpha = 0.34;
       ctx.drawImage(persona("mec"), sx, sy);
       ctx.restore();
-      ctx.save(); ctx.globalAlpha = 0.55; ctx.strokeStyle = COL_URG.nodata;
-      ctx.setLineDash([2,2]); ctx.lineWidth = 1;
-      ctx.strokeRect(sx-1.5, sy-1.5, 12+3, 20+3); ctx.restore();
     }, { x:sx-4, y:sy-4, w:20, h:28 }, function(){ fichaMecanico("sin asignar", trabajo); });
     label(p.x, sy - 7, "SIN ASIGNAR",
       { col:"#565b5f", size:7, w:"700", box:true, min:LOD.persona });
@@ -2234,6 +2234,11 @@ function mostrarArco(eq){
   /* fuera el rotulo del arco anterior, o se acumulan uno sobre otro */
   scene.labels = scene.labels.filter(function(l){ return !l._arco; });
   const nom = clienteDe(eq);
+  /* Si el equipo ESTA en renta, ya esta dibujado adentro del sitio de su
+     cliente: el arco iria del sitio a si mismo y no dice nada. El arco existe
+     para los que estan en el centro --taller, disponibles-- y uno se pregunta
+     de donde salieron. */
+  if(bucketEstado(eq.estado) === "renta"){ arco = null; return false; }
   const destino = nom ? sitiosCliente[nom] : null;
   const origen = posEnMapa[eq._empresa + ":" + (eq.id || "")];
   if(!nom || !destino || !origen){ arco = null; return false; }
@@ -2477,7 +2482,7 @@ function fichaEquipo(eq, ev, trabajo){
   document.getElementById("eqp-nom").textContent = ev.codigo;
   const cuerpo = document.getElementById("eqp-cuerpo");
   cuerpo.innerHTML = H.join("");
-  if(duenio && sitiosCliente[duenio]){
+  if(duenio && sitiosCliente[duenio] && b !== "renta"){
     const btn = document.createElement("button");
     btn.id = "eqp-ver";
     btn.textContent = "Ver de qui\u00e9n es \u2192";
