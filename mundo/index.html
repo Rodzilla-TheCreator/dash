@@ -1834,7 +1834,17 @@ function computeFlotaMundo(){
     const registros = state[nodo];
     if(!registros) return;
     Object.values(registros).forEach(function(r){
-      if(r.completado === false) return;
+      /* SOLO CUENTA LO QUE YA CERRO.
+         Antes el unico filtro era `completado === false`, y ese campo casi
+         nunca viene: de las 102 ordenes que alimentaban este calculo, 32
+         seguian ABIERTAS. O sea que una maquina con trabajo a medio hacer se
+         contaba como recien mantenida y salia en verde -- justo al reves.
+         Peor: era circular. Abrirle una orden a un equipo lo ponia al dia.
+         Se usa el mismo criterio que en computeEnCurso: hay fecha de cierre,
+         o el estado dice Completado. */
+      const est = String(r.estado || "").trim().toLowerCase();
+      const cerrada = !!String(r.fechaCierre || "").trim() || est.indexOf("completad") === 0;
+      if(r.completado === false || !cerrada) return;
       const eqid = primerCampo(r, CAMPOS_MANT_EQUIPOID);
       const f    = aFecha(primerCampo(r, CAMPOS_FECHA));
       if(!eqid || !f) return;
