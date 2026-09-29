@@ -347,6 +347,41 @@ function bucketEstado(estadoRaw){
   return "uso";
 }
 
+/* EQUIPOS QUE NO SON NUESTROS.
+   ---------------------------------------------------------------------
+   La app los marca con `esEquipoCliente: true` y `tipo: "Equipos de
+   cliente"`. Son maquinas del cliente a las que les damos servicio: no se
+   rentan, no son inventario, y no pueden estar en DISPONIBLES -- disponible
+   es lo nuestro que esta sujeto a renta, y esto no lo esta.
+   Se miran las dos senales porque en esta base ninguna se mantiene sola. */
+function esDeCliente(eq){
+  return !!eq && (eq.esEquipoCliente === true ||
+                  /EQUIPOS? DE CLIENTE/i.test(String(eq.tipo || "")));
+}
+const COL_AJENO = "#b072d8";        // la mancha morada: no es nuestro
+
+/* DONDE VA EN EL MAPA. No es lo mismo que `estado`.
+   ---------------------------------------------------------------------
+   Para lo nuestro el estado alcanza. Para lo del cliente no sirve: los 19
+   equipos de cliente que hay en la base dicen DISPONIBLE. Los 19, sin una
+   sola excepcion, incluido uno que ahorita tiene una orden en proceso. Eso
+   no son 19 decisiones: es el valor con el que nace el formulario, y nadie
+   lo vuelve a tocar porque nadie le lleva el estado a una maquina que no se
+   renta.
+   Asi que para esos se ignora el estado y se mira la orden abierta:
+   `ubicacion: "plantel"` es que la trajeron a nuestro taller, y `campo` que
+   mandamos al mecanico hasta donde esta. El dato que lo respalda: de las 103
+   ordenes, `ubicacionLink` --el mapa de a donde ir-- solo viene lleno en las
+   de `campo`, en 19 de 19. A la de plantel no hay a donde viajar.
+   Sin orden abierta, esta en su planta y ahi se dibuja. */
+function zonaDe(eq){
+  if(!esDeCliente(eq)) return bucketEstado(eq.estado);
+  const t = (enCurso.porEquipo || {})[eq._empresa + ":" + (eq.id || "")] || null;
+  const enNuestroTaller = !!(t && t.some(function(x){
+    return String(x.donde || "").trim().toLowerCase() === "plantel"; }));
+  return enNuestroTaller ? "mant" : "ajeno";
+}
+
 const INTERVALO_DIAS   = 90;
 const INTERVALO_HORAS  = 250;
 const UMBRAL_AMARILLO  = 0.75;   // 0.75 = amarillo ; 1.0+ = rojo
@@ -1096,8 +1131,9 @@ function persona(tipo){
        El casco se dibuja ENCIMA del pelo, tapandolo: si no, salia un gorro
        flotando sobre la cabeza. */
     /* `mecq` = quieto: asignado pero la orden no esta corriendo. Se apaga el
-       color, NO se vuelve transparente: transparente ya significa "falta un
-       dato" y mezclarlo diria que no sabemos quien es, cuando si sabemos. */
+       casco y el overol, que es lo que hace visible al mecanico de lejos.
+       (Decia "no se vuelve transparente"; ya no hay nada transparente en el
+       mapa desde que la mancha del piso es el indicador.) */
     const quieto = (tipo === "mecq");
     const OVEROL = quieto ? "#3b4146" : (tipo === "mec2" ? "#2b4f7a" : "#32598c");
     const CASCO  = quieto ? "#7d8288" : "#f5c542";
@@ -1313,16 +1349,28 @@ function ponerEquipo(gx, gy, eq, ev, opt){
     opt.trabajo = (enCurso.porEquipo || {})[eq._empresa + ":" + (eq.id || "")] || null;
   }
   /* Orden abierta pero el equipo no esta en taller: la app no le cambio el
-     estado. Ver el comentario de arriba, en el dibujo del aro. */
+     estado. Ver el comentario de arriba, en el dibujo del aro.
+     Un equipo de cliente NO cuenta como contradiccion: que este en su planta
+     con una orden encima es lo normal --le mandamos el mecanico-- y no dice
+     nada de que la app se haya equivocado. */
+  const zEq = eq ? zonaDe(eq) : null;
   opt.contradice = !!(opt.trabajo && opt.trabajo.length && eq &&
-                      bucketEstado(eq.estado) !== "mant");
+                      zEq !== "mant" && zEq !== "ajeno");
   const body = opt.body || "#f5a524";
   const fantasma = (ev && ev.color === "nodata");
   const p = w2s(gx, gy);
   const sx = Math.round(p.x - FK_W/2), sy = Math.round(p.y + HH - FK_H);
   push(gx, gy, function(){
-    /* la mancha: el color de la zona, o GRIS si no se sabe como esta */
-    sombra(gx, gy, 11, fantasma ? "#5b6165" : (opt.body || null));
+    /* LA MANCHA, POR ORDEN DE IMPORTANCIA.
+       Morada si no es nuestro: eso manda sobre todo lo demas y vale en
+       cualquier zona, asi que una maquina morada en el taller se lee de una
+       como "esta aca pero no es de la casa". Va por encima del gris porque
+       el gris --"no se sabe como esta su mantenimiento"-- es trivialmente
+       cierto en una maquina a la que no le llevamos el intervalo.
+       Si es nuestra: gris si no hay con que calcular, y si no, el color de
+       donde esta. */
+    sombra(gx, gy, 11, esDeCliente(eq) ? COL_AJENO
+                     : (fantasma ? "#5b6165" : (opt.body || null)));
     /* CADA UNO CON SU SILUETA. Con `barra` --o sea en el taller-- las que
        pueden levantar algo lo levantan segun la urgencia; sin datos no se
        inventa altura y se quedan abajo, en gris, como el resto del fantasma. */
@@ -1657,7 +1705,8 @@ function zonaCampo(mant){
        del anillo, puro ruido con forma de dato. */
     if(g.items.length >= 3 || !g.sondeado){
       label(rc.x, rc.y + 12,
-            g.sondeado ? (g.items.length + " equipos")
+            g.sondeado ? (g.items.length + " equipos" +
+                          (g.ajenos ? (" · " + g.ajenos + " suyos") : ""))
                        : (g.items.length + " equipos · sin campo de cliente en la base"),
             { col: g.sondeado ? "#8b9096" : "#565b5f", size:8.5, box:true, min:LOD.cuenta });
     }
@@ -2200,18 +2249,19 @@ function computeFlotaMundo(){
     });
   });
 
-  const taller = [], patio = [], otros = [], renta = [];
+  const taller = [], patio = [], otros = [], renta = [], ajenos = [];
   Object.values(equipos).forEach(function(eq){
     /* TALLER-SPS y TALLER-CHOLOMA no son maquinas: son perchas donde el
        taller cuelga ordenes que no van contra un equipo. Se van del mapa. */
     if(esMarcadorDeTaller(eq)) return;
     if(eq._empresa !== vista) return;        // solo la empresa que se mira
     const ev = evalCached(eq, ultimo[eq.id] || null);
-    const b  = bucketEstado(eq.estado);
-    const it = { eq:eq, ev:ev, bucket:b };
+    const b  = zonaDe(eq);
+    const it = { eq:eq, ev:ev, bucket:b, ajeno: esDeCliente(eq) };
     if(b === "mant")       taller.push(it);
     else if(b === "disp")  patio.push(it);
     else if(b === "renta") renta.push(it);
+    else if(b === "ajeno") ajenos.push(it);
     else                   otros.push(it);
   });
   /* mismo orden que el dash: con datos por urgencia, los sin datos al final */
@@ -2234,7 +2284,10 @@ function computeFlotaMundo(){
   /* --- agrupacion por cliente (SONDEO, ver CAMPOS_CLIENTE arriba) --- */
   const mapa = new Map();
   let sondeado = false;
-  renta.forEach(function(it){
+  /* Los del cliente van al anillo junto con lo que le rentamos: el sitio de
+     un cliente es TODO lo que hay ahi, sea de quien sea. Lo que cambia es la
+     mancha, que los pinta de morado. */
+  renta.concat(ajenos).forEach(function(it){
     let nom = primerCampo(it.eq, CAMPOS_CLIENTE);
     if(nom != null){ sondeado = true; }
     else nom = primerCampo(it.eq, CAMPOS_UBICACION);
@@ -2251,12 +2304,17 @@ function computeFlotaMundo(){
     .sort(function(a,b){
       return (b[1].length - a[1].length) || String(a[0]).localeCompare(String(b[0]), "es");
     })
-    .map(function(e){ return { nombre:e[0], sondeado:sondeado, items:ordenar(e[1]) }; });
+    .map(function(e){
+      return { nombre:e[0], sondeado:sondeado, items:ordenar(e[1]),
+               ajenos: e[1].filter(function(x){ return x.ajeno; }).length };
+    });
 
   return {
     taller: ordenar(taller), patio: ordenar(patio), otros: ordenar(otros), campo: campo,
-    total: taller.length + patio.length + otros.length + renta.length,
-    renta: renta.length
+    total: taller.length + patio.length + otros.length + renta.length + ajenos.length,
+    renta: renta.length,
+    /* aparte de `renta` a proposito: no son ingreso, son servicio */
+    ajenos: ajenos.length
   };
 }
 
@@ -2622,7 +2680,8 @@ function renderZoneNav(flota, papeles, bodega){
   const cont = {
     taller:  { n: hayFlota ? flota.taller.length : "—", alerta: flota.taller.some(function(x){ return x.ev.color === "crit" || x.ev.color === "nodata"; }) },
     patio:   { n: hayFlota ? flota.patio.length : "—" },
-    campo:   { n: hayFlota ? flota.renta : "—" },
+    /* el anillo son los dos: lo que le rentamos Y lo suyo que atendemos */
+    campo:   { n: hayFlota ? (flota.renta + (flota.ajenos || 0)) : "—" },
     bullpen: { n: pulsos.length },
     omar:    { n: selected.size },
     fabri:   { n: (state.radar && typeof state.radar === "object") ? "ok" : "—" },
@@ -2668,7 +2727,8 @@ function mostrarArco(eq){
      cliente: el arco iria del sitio a si mismo y no dice nada. El arco existe
      para los que estan en el centro --taller, disponibles-- y uno se pregunta
      de donde salieron. */
-  if(bucketEstado(eq.estado) === "renta"){ arco = null; return false; }
+  const zz = zonaDe(eq);
+  if(zz === "renta" || zz === "ajeno"){ arco = null; return false; }
   const destino = nom ? sitiosCliente[nom] : null;
   const origen = posEnMapa[eq._empresa + ":" + (eq.id || "")];
   if(!nom || !destino || !origen){ arco = null; return false; }
@@ -2906,8 +2966,8 @@ function pintarBusqueda(){
   }
 
   function renglon(x){
-    const donde = { mant:"taller", disp:"disponible", renta:"cliente", uso:"interno" }[
-      bucketEstado(x.eq.estado)] || "";
+    const donde = { mant:"taller", disp:"disponible", renta:"cliente",
+                    ajeno:"del cliente", uso:"interno" }[zonaDe(x.eq)] || "";
     const col = COL_URG[x.ev.color] || "#565b5f";
     return '<div class="it" data-clave="' + esc(x.clave) + '">' +
       '<span class="p" style="background:' + col + '"></span>' +
@@ -2950,13 +3010,14 @@ function renderLeyenda(flota){
   const todos = [].concat(flota.taller || [], flota.patio || [], flota.otros || [],
                           (flota.campo || []).reduce(function(a, g){ return a.concat(g.items); }, []));
   const fant   = todos.filter(function(x){ return x.ev.color === "nodata"; }).length;
+  const ajenos = todos.filter(function(x){ return esDeCliente(x.eq); }).length;
   const sinCod = todos.filter(function(x){ return x.ev.sinCodigo; }).length;
   const conMec = Object.keys(enCurso.porEquipo || {}).length;
   const sinAsig = Object.keys(enCurso.porEquipo || {}).filter(function(k){
     return !(enCurso.porEquipo[k] || []).some(function(t){ return t.tecnicos.length; }); }).length;
   const contradicen = todos.filter(function(x){
     const t = (enCurso.porEquipo || {})[x.eq._empresa + ":" + (x.eq.id || "")];
-    return t && t.length && bucketEstado(x.eq.estado) !== "mant"; }).length;
+    return t && t.length && zonaDe(x.eq) !== "mant" && zonaDe(x.eq) !== "ajeno"; }).length;
   const sueltas = (enCurso.sueltas || []).length;
 
   function li(sw, txt){
@@ -2980,6 +3041,11 @@ function renderLeyenda(flota){
 
   H.push('<h4>C\u00f3mo est\u00e1 armado</h4>');
   li("", '<b>El centro es nuestro.</b> Arriba lo <b>disponible</b> y abajo el <b>taller</b>.');
+  /* La regla es de Miguel y el mapa la respeta desde que lo dijo. */
+  li("", '<b>Disponible es lo nuestro sujeto a renta.</b> Un equipo del cliente no lo ' +
+         'est\u00e1, as\u00ed que no va ah\u00ed: va en su planta, en el anillo, con la ' +
+         'mancha morada.' +
+         (ajenos ? (' Son <b>' + ajenos + '</b> en esta empresa.') : ''));
   li("", '<b>El anillo son los clientes.</b> Cada sitio es uno y adentro est\u00e1 lo que tiene ' +
          'rentado. Un equipo que se rompe entra al centro: el mapa es el viaje que hace el fierro.');
 
@@ -3005,6 +3071,9 @@ function renderLeyenda(flota){
   li(mancha("#3ecf7e"), 'Verde: <b>disponible</b>, parqueado.');
   li(mancha("#4f8fe0"), 'Azul: <b>en renta</b>, en el sitio de un cliente.');
   li(mancha("#a9741f"), '\u00c1mbar: <b>otros / interno</b> \u2014 pick-ups, cami\u00f3n, la gr\u00faa.');
+  li(mancha(COL_AJENO), '<b>Morada: no es nuestro.</b> Es del cliente y solo le damos ' +
+                        'servicio. Gana sobre los dem\u00e1s colores: vale aunque est\u00e9 ' +
+                        'en nuestro taller.');
   li(mancha("#5b6165"), '<b>Gris: no se sabe c\u00f3mo est\u00e1.</b> La base no tiene ni fecha de ' +
                         '\u00faltimo mantenimiento ni hor\u00f3metro con qu\u00e9 comparar.');
   H.push('<div class="nota">En gris hay <b>' + fant + ' de ' + todos.length + '</b>. Son tantos ' +
@@ -3093,8 +3162,10 @@ function rows(pairs){
 
 const ETQ_URG = { ok:"al día", warn:"por vencer", crit:"vencido", nodata:"SIN DATOS" };
 function fichaEquipo(eq, ev, trabajo){
-  const b = bucketEstado(eq.estado);
-  const zonaTxt = { mant:"En el taller", disp:"Disponible", renta:"En cliente", uso:"Otros / interno" }[b];
+  const b = zonaDe(eq);
+  const zonaTxt = { mant:"En el taller", disp:"Disponible", renta:"En cliente",
+                    ajeno:"En su planta \u2014 es del cliente",
+                    uso:"Otros / interno" }[b];
   const ubic  = primerCampo(eq, CAMPOS_UBICACION);
   const horo  = aNumero(primerCampo(eq, CAMPOS_HOROMETRO_ACT));
   const duenio = clienteDe(eq);
@@ -3102,6 +3173,14 @@ function fichaEquipo(eq, ev, trabajo){
 
   function fila(k, v){ H.push('<div class="fila"><span>' + esc(k) + '</span><b>' + esc(v) + '</b></div>'); }
 
+  if(esDeCliente(eq)){
+    H.push('<div class="aviso gris">No es nuestro: es del cliente y solo le damos ' +
+           'servicio. Por eso no sale en <b>disponibles</b> \u2014 disponible es lo ' +
+           'nuestro que est\u00e1 sujeto a renta.<br>La app lo tiene en ' +
+           '<b>' + esc(eq.estado || "\u2014") + '</b>, pero ese dato no se mantiene: ' +
+           'los <b>19</b> equipos de cliente de la base dicen lo mismo, incluido el que ' +
+           'ahorita tiene orden en proceso. Aqu\u00ed se ubica por la orden, no por el estado.</div>');
+  }
   fila("Empresa", eq._nombreEmpresa || "\u2014");
   fila("Estado", eq.estado || "\u2014");
   fila("D\u00f3nde est\u00e1", zonaTxt);
@@ -3146,9 +3225,12 @@ function fichaEquipo(eq, ev, trabajo){
            'Mientras tanto el tablero de flota lo cuenta como si estuviera libre.</div>');
   }
   if(ev.color === "nodata"){
-    H.push('<div class="aviso">Se dibuja <b>transparente</b> porque la base no tiene ni fecha ' +
-           'de \u00faltimo mantenimiento ni hor\u00f3metro con qu\u00e9 comparar. No es que est\u00e9 bien: ' +
-           'es que no se sabe.</div>');
+    H.push('<div class="aviso">La mancha del piso va <b>gris</b> porque la base no tiene ni ' +
+           'fecha de \u00faltimo mantenimiento ni hor\u00f3metro con qu\u00e9 comparar. No es que ' +
+           'est\u00e9 bien: es que no se sabe.' +
+           (esDeCliente(eq) ? ' En un equipo del cliente eso es lo esperable \u2014 no le ' +
+                              'llevamos el intervalo \u2014 y por eso manda la mancha morada.' : '') +
+           '</div>');
   }else if(ev.color === "crit"){
     H.push('<div class="aviso">Pasado del intervalo (' + INTERVALO_DIAS + ' d\u00edas / ' +
            INTERVALO_HORAS + ' h). La barra se sale del marco a prop\u00f3sito.</div>');
@@ -3194,12 +3276,13 @@ function fichaCliente(nombre){
   const mios = [];
   Object.values(state.equipos || {}).forEach(function(eq){
     if(clienteDe(eq) !== nom) return;
-    mios.push({ eq: eq, ev: evalCached(eq, null), b: bucketEstado(eq.estado) });
+    mios.push({ eq: eq, ev: evalCached(eq, null), b: zonaDe(eq) });
   });
   mios.sort(function(a, b){
     return String(a.ev.codigo).localeCompare(String(b.ev.codigo), "es", { numeric: true });
   });
   const enSitio  = mios.filter(function(x){ return x.b === "renta"; });
+  const suyos    = mios.filter(function(x){ return x.b === "ajeno"; });
   const conNoso  = mios.filter(function(x){ return x.b === "mant" || x.b === "disp"; });
   const otros    = mios.filter(function(x){ return x.b === "uso"; });
 
@@ -3212,13 +3295,15 @@ function fichaCliente(nombre){
     lista.forEach(function(x){
       const col = COL_URG[x.ev.color] || "#565b5f";
       const donde = { mant:"en taller", disp:"disponible", renta:"en su planta",
-                      uso:"interno" }[x.b] || "";
+                      ajeno:"suyo", uso:"interno" }[x.b] || "";
       H.push('<div class="fila"><span><span style="display:inline-block;width:7px;' +
         'height:7px;border-radius:50%;background:' + col + ';margin-right:6px"></span>' +
         esc(x.ev.codigo) + '</span><b>' + esc(donde) + '</b></div>');
     });
   }
-  bloque("En su planta", enSitio);
+  bloque("En su planta", enSitio, "lo que le rentamos");
+  bloque("De \u00e9l, que le damos servicio", suyos,
+         "no son nuestros y no se rentan");
   bloque("Con nosotros", conNoso,
          "se las trajimos: estan en nuestro taller o en el patio");
   bloque("Otros", otros);
