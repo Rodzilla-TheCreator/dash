@@ -1245,7 +1245,7 @@ const ZONAS = [
      rejilla; cada vez que el patio cambiaba de tamano se montaban encima de
      los disponibles. Con zona propia el problema desaparece: son once, caben
      en tres filas de cuatro. */
-  { id:"interno", nombre:"INTERNOS / NO SE RENTAN", dist:"equipos", x:15, y:-18, w:13, d:9, piso:"#26282a", linea:"#31353800" },
+  { id:"interno", nombre:"INTERNOS", dist:"equipos", x:15, y:-18, w:13, d:9, piso:"#26282a", linea:"#31353800" },
   { id:"campo",   nombre:"CAMPO / CLIENTES", dist:"equipos", x:-56, y:-56, w:112, d:112, piso:null, linea:null },
   /* --- el edificio (todo lo demás) --- */
   { id:"bullpen", nombre:"BULLPEN",          dist:"edificio", x:20, y:37, w:12, d:10, piso:"#2f3335", linea:"#3c4144" }
@@ -1648,7 +1648,7 @@ function zonaInterno(mant){
   });
   const nOtros = (mant.otros || []).length;
   label(c.x, c.y + (z.w + z.d) * HH / 2 + 16,
-        lista.length + " no se rentan" + (nOtros ? (" \u00b7 " + nOtros + " en demo/pr\u00e9stamo") : ""),
+        lista.length + " internos" + (nOtros ? (" \u00b7 " + nOtros + " en demo/pr\u00e9stamo") : ""),
         { col:"#8b9096", size:9.5, box:true, min:LOD.resumen });
 }
 
