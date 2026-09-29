@@ -312,6 +312,7 @@
           <tbody id="tabla-plata"></tbody>
         </table>
       </div>
+      <div class="aviso rojo" id="aviso-parado"></div>
     </section>
   </div>
 
@@ -633,6 +634,38 @@ function pintarCorte(){
   document.getElementById("tabla-plata").innerHTML =
     CORTE.plata.map(p=>`<tr><td>${p.estado}</td><td class="num">${usd(p.usd)}</td></tr>`).join("")
     + `<tr class="total"><td>Potencial parado</td><td class="num">${usd(potencial)}</td></tr>`;
+
+  /* DE QUE CUELGA ESTE NUMERO.
+     -------------------------------------------------------------------
+     Un equipo cuenta como parado porque su campo `estado` dice reparacion o
+     mantenimiento. Ese campo lo escribe la app del taller, y el 2026-09-29
+     el propio repo de esa app publico su documentacion (TRAMPAS.md, trampa
+     T3): al cerrar una orden desde Gerencia, `equipoADisponible` solo
+     convierte MAL ESTADO en DISPONIBLE, asi que un equipo que entro EN
+     MANTENIMIENTO se queda ahi aunque el trabajo ya haya terminado. Y MAL
+     ESTADO se escribe a mano y tampoco se limpia solo.
+     Se cruzo contra la base de la app: de los 55 que RADAR pone parados,
+     DOS tienen una orden de trabajo abierta. Eso no dice que los otros 53
+     esten buenos --puede que esten rotos de verdad y sin nadie asignado--,
+     dice que el estado no alcanza para saberlo.
+     No se corrige el numero a proposito: inventar una cifra "limpia" seria
+     peor que decir de que cuelga la que hay. */
+  const cuelga = CORTE.plata
+    .filter(p => /reparaci|mantenimiento/i.test(p.estado))
+    .reduce((a, p) => a + p.usd, 0);
+  document.getElementById("aviso-parado").innerHTML =
+    `<b>${usd(cuelga)} de ese total cuelgan de un dato que no se limpia solo.</b>
+     Un equipo cuenta como parado porque su <code>estado</code> dice reparación o
+     mantenimiento, y ese campo lo escribe la app del taller. Cruzando las dos bases:
+     de los <b>55</b> equipos que RADAR pone en reparación o mantenimiento,
+     <b>2</b> tienen una orden de trabajo abierta en la app.<br>
+     El resto lleva meses con un estado que nadie limpió — 48 marcados «mal estado» sin
+     que se abriera ninguna orden, y 4 que quedaron pegados «en mantenimiento» después de
+     cerrar la suya. La app lo documenta en su propio repo (<code>TRAMPAS.md</code>, T3,
+     publicado el 2026-09-29).<br>
+     <b>No quiere decir que estén buenos:</b> pueden estar rotos de verdad y sin nadie
+     asignado, que es igual de caro. Quiere decir que con el estado solo no se puede
+     saber cuál es cuál, y que antes de perseguir esta plata hay que revisar la lista.`;
 
   document.getElementById("aviso-empresas").innerHTML =
     `Foto del ${CORTE.fecha}. Son ${t.total} equipos y no todos los que tiene la tabla porque
