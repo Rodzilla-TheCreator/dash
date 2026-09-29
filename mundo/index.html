@@ -358,7 +358,24 @@ function esDeCliente(eq){
   return !!eq && (eq.esEquipoCliente === true ||
                   /EQUIPOS? DE CLIENTE/i.test(String(eq.tipo || "")));
 }
-const COL_AJENO = "#b072d8";        // la mancha morada: no es nuestro
+const COL_AJENO  = "#b072d8";       // la mancha morada: no es nuestro
+const COL_INTERNO = "#a9741f";      // ambar: nuestro, pero no se renta
+
+/* EQUIPOS INTERNOS: nuestros, pero no son inventario.
+   ---------------------------------------------------------------------
+   Las pick-ups (MTV-, C-), los camiones (CM-, C-39), la grua (GR-) y la
+   PATRULLA no se rentan: son con lo que se mueve lo que SI se renta. Estar
+   en DISPONIBLES infla la unica cifra del mapa que se mira para decidir si
+   hay con que atender a un cliente.
+   En la base se reconocen por dos senales que coinciden en los once:
+   `tipo: "Vehiculo"` y `cliente: "MONTASA HANDLING CO."`. Se usa la forma
+   --que ya sale de tipo y del codigo-- porque asi entra tambien la PATRULLA,
+   que no lleva codigo de flota. */
+function esInterno(eq){
+  if(!eq || esDeCliente(eq)) return false;
+  const f = formaDe(eq);
+  return f === "pickup" || f === "camion" || f === "grua";
+}
 
 /* DONDE VA EN EL MAPA. No es lo mismo que `estado`.
    ---------------------------------------------------------------------
@@ -375,6 +392,10 @@ const COL_AJENO = "#b072d8";        // la mancha morada: no es nuestro
    de `campo`, en 19 de 19. A la de plantel no hay a donde viajar.
    Sin orden abierta, esta en su planta y ahi se dibuja. */
 function zonaDe(eq){
+  /* Interno que esta en el taller esta EN EL TALLER: no es rentable, pero
+     donde esta sigue mandando sobre por que no esta disponible. Misma regla
+     que con lo del cliente. */
+  if(esInterno(eq)) return bucketEstado(eq.estado) === "mant" ? "mant" : "interno";
   if(!esDeCliente(eq)) return bucketEstado(eq.estado);
   const t = (enCurso.porEquipo || {})[eq._empresa + ":" + (eq.id || "")] || null;
   const enNuestroTaller = !!(t && t.some(function(x){
@@ -1219,6 +1240,12 @@ const ZONAS = [
      que son 28 de fondo mas el respiro de arriba y el de abajo. Con 24 los
      de las ultimas filas se salian del piso y quedaban flotando en negro. */
   { id:"taller",  nombre:"TALLER",           dist:"equipos", x:-11, y:2,   w:22, d:32, piso:"#2a2d2f", linea:"#34383b" },
+  /* AL LADO DE DISPONIBLES, NO ADENTRO. Antes estos colgaban de un bloque
+     flotante debajo del patio que se calculaba a mano desde las filas de la
+     rejilla; cada vez que el patio cambiaba de tamano se montaban encima de
+     los disponibles. Con zona propia el problema desaparece: son once, caben
+     en tres filas de cuatro. */
+  { id:"interno", nombre:"INTERNOS / NO SE RENTAN", dist:"equipos", x:15, y:-18, w:13, d:9, piso:"#26282a", linea:"#31353800" },
   { id:"campo",   nombre:"CAMPO / CLIENTES", dist:"equipos", x:-56, y:-56, w:112, d:112, piso:null, linea:null },
   /* --- el edificio (todo lo demás) --- */
   { id:"bullpen", nombre:"BULLPEN",          dist:"edificio", x:20, y:37, w:12, d:10, piso:"#2f3335", linea:"#3c4144" }
@@ -1595,7 +1622,37 @@ function zonaPatio(mant){
         { col:"#8b9096", size:9.5, box:true, min:LOD.resumen });
 }
 
-/* --------- ZONA 3: CAMPO / CLIENTES --------- */
+/* --------- ZONA 3: INTERNOS --------- */
+/* Lo nuestro que no se renta: pick-ups, camiones, la grua, la patrulla.
+   Comparte el campo con "otros / interno" --DEMO/PRESTAMO y los estados que
+   no sabemos leer-- porque son la misma pregunta: es nuestro, no esta en
+   renta, y no esta disponible para rentar. Se distinguen por la silueta: un
+   montacargas ahi adentro es un demo, no un vehiculo. */
+function zonaInterno(mant){
+  const z = ZONA.interno;
+  push(z.x, z.y, function(){ floor(z.x, z.y, z.w, z.d, z.piso, null); });
+  rotuloZona(z);
+
+  if(state.flotaErr && !state.flotaParcial){ zonaApagada(z, state.flotaErr); return; }
+
+  const lista = (mant.interno || []).concat(mant.otros || []);
+  const c = centroZona(z);
+  if(!lista.length){
+    label(c.x, c.y, "SIN INTERNOS", { col:"#565b5f", size:11, w:"800", fam:"disp" });
+    return;
+  }
+  const pos = rejilla(lista.length, 4, z.x + 1.6, z.y + 1.4, 2.9, 2.4);
+  lista.forEach(function(it, i){
+    const p = pos[i]; if(!p) return;
+    ponerEquipo(p.gx, p.gy, it.eq, it.ev, { body:COL_INTERNO });
+  });
+  const nOtros = (mant.otros || []).length;
+  label(c.x, c.y + (z.w + z.d) * HH / 2 + 16,
+        lista.length + " no se rentan" + (nOtros ? (" \u00b7 " + nOtros + " en demo/pr\u00e9stamo") : ""),
+        { col:"#8b9096", size:9.5, box:true, min:LOD.resumen });
+}
+
+/* --------- ZONA 4: CAMPO / CLIENTES --------- */
 /* Donde quedo dibujado cada sitio de cliente. Lo llena zonaCampo y lo usa la
    linea en arco para saber a donde apuntar. */
 let sitiosCliente = {};
@@ -2249,7 +2306,7 @@ function computeFlotaMundo(){
     });
   });
 
-  const taller = [], patio = [], otros = [], renta = [], ajenos = [];
+  const taller = [], patio = [], otros = [], renta = [], ajenos = [], interno = [];
   Object.values(equipos).forEach(function(eq){
     /* TALLER-SPS y TALLER-CHOLOMA no son maquinas: son perchas donde el
        taller cuelga ordenes que no van contra un equipo. Se van del mapa. */
@@ -2258,11 +2315,12 @@ function computeFlotaMundo(){
     const ev = evalCached(eq, ultimo[eq.id] || null);
     const b  = zonaDe(eq);
     const it = { eq:eq, ev:ev, bucket:b, ajeno: esDeCliente(eq) };
-    if(b === "mant")       taller.push(it);
-    else if(b === "disp")  patio.push(it);
-    else if(b === "renta") renta.push(it);
-    else if(b === "ajeno") ajenos.push(it);
-    else                   otros.push(it);
+    if(b === "mant")        taller.push(it);
+    else if(b === "disp")   patio.push(it);
+    else if(b === "renta")  renta.push(it);
+    else if(b === "ajeno")  ajenos.push(it);
+    else if(b === "interno")interno.push(it);
+    else                    otros.push(it);
   });
   /* mismo orden que el dash: con datos por urgencia, los sin datos al final */
   /* POR CODIGO, NO POR URGENCIA.
@@ -2311,7 +2369,9 @@ function computeFlotaMundo(){
 
   return {
     taller: ordenar(taller), patio: ordenar(patio), otros: ordenar(otros), campo: campo,
-    total: taller.length + patio.length + otros.length + renta.length + ajenos.length,
+    interno: ordenar(interno),
+    total: taller.length + patio.length + otros.length + renta.length +
+           ajenos.length + interno.length,
     renta: renta.length,
     /* aparte de `renta` a proposito: no son ingreso, son servicio */
     ajenos: ajenos.length
@@ -2388,6 +2448,7 @@ function buildScene(){
      abajo para cuando se quiera devolver. */
   zonaTaller(flota);
   zonaPatio(flota);
+  zonaInterno(flota);
   zonaCampo(flota);
   /* La entrada generica "MI OFICINA" ya no se dibuja: ocupaba el ancla S, que
      ahora es la oficina de AI PLANNING, y las dos se pisaban en pantalla.
@@ -2398,30 +2459,6 @@ function buildScene(){
      que puedan cruzar, y seguian animandose sobre un mapa donde el edificio
      ni se dibuja. */
   pulsos = [];
-
-  /* "Otros / interno": no tienen zona propia en el spec, pero tampoco
-     pueden desaparecer. Van al fondo del patio, en ambar. */
-  /* Antes esto cortaba en diez con `.slice(0, 10)`. Se quito: el mundo existe
-     para que se vea TODO el fierro, y un equipo que no se dibuja es un equipo
-     del que nadie se acuerda. Si son muchos, que se vea que son muchos. */
-  if(flota.otros && flota.otros.length && !(state.flotaErr && !state.flotaParcial)){
-    const z = ZONA.patio;
-    /* DEBAJO DE LA ULTIMA FILA DEL PATIO, no del borde nominal de la zona.
-       Este bloque se colocaba con `z.y + z.d - 2.2`, que era el fondo de la
-       zona cuando el patio media 12 de alto. Al agrandarlo a 18 la rejilla
-       de disponibles paso a terminar MAS ABAJO que ese borde, y los dos se
-       montaron: el MT-54 (DEMO/PRESTAMO) quedaba encima del ET-16, a dos
-       decimas de distancia. Ahora se calcula igual que la rejilla, que es la
-       unica forma de que no se vuelvan a pisar cuando cambie el tamano. */
-    const filasPatio = Math.ceil((flota.patio || []).length / 5);
-    const y0 = z.y + 1.2 + filasPatio * 2.4 + 1.2;
-    flota.otros.forEach(function(it, i){
-      ponerEquipo(z.x + 1.5 + (i%5)*3.2, y0 + Math.floor(i/5)*1.9, it.eq, it.ev, { body:"#a9741f" });
-    });
-    label(w2s(z.x + z.w/2, y0).x, w2s(z.x + z.w/2, y0).y - 46,
-          "OTROS / INTERNO · " + flota.otros.length,
-          { col:"#a9741f", size:10, w:"700", fam:"disp", box:true, min:LOD.resumen });
-  }
 
   scene.items.sort(function(a,b){ return a.d - b.d; });
   /* EL PRIMER ENCUADRE, CUANDO YA HAY ALGO QUE ENCUADRAR.
@@ -2678,10 +2715,11 @@ function renderZoneNav(flota, papeles, bodega){
   const hayFlota = !(state.flotaErr && !state.flotaParcial);
   const negs = bodega.err ? "!" : bodega.sedes.reduce((a,s)=>a + s.productos.filter(p=>p.neto<0).length, 0);
   const cont = {
-    taller:  { n: hayFlota ? flota.taller.length : "—", alerta: flota.taller.some(function(x){ return x.ev.color === "crit" || x.ev.color === "nodata"; }) },
-    patio:   { n: hayFlota ? flota.patio.length : "—" },
+    taller:  { n: hayFlota ? (flota.taller||[]).length : "—", alerta: (flota.taller||[]).some(function(x){ return x.ev.color === "crit" || x.ev.color === "nodata"; }) },
+    patio:   { n: hayFlota ? (flota.patio||[]).length : "—" },
+    interno: { n: hayFlota ? ((flota.interno||[]).length + (flota.otros||[]).length) : "—" },
     /* el anillo son los dos: lo que le rentamos Y lo suyo que atendemos */
-    campo:   { n: hayFlota ? (flota.renta + (flota.ajenos || 0)) : "—" },
+    campo:   { n: hayFlota ? ((flota.renta||0) + (flota.ajenos || 0)) : "—" },
     bullpen: { n: pulsos.length },
     omar:    { n: selected.size },
     fabri:   { n: (state.radar && typeof state.radar === "object") ? "ok" : "—" },
@@ -2809,7 +2847,7 @@ function tipoDe(eq){
 function equiposBuscables(){
   const f = lastFlota; if(!f) return [];
   const out = [];
-  [].concat(f.taller || [], f.patio || [], f.otros || [],
+  [].concat(f.taller || [], f.patio || [], f.otros || [], f.interno || [],
             (f.campo || []).reduce(function(a, g){ return a.concat(g.items); }, []))
     .forEach(function(it){
       out.push({ eq: it.eq, ev: it.ev,
@@ -2967,7 +3005,7 @@ function pintarBusqueda(){
 
   function renglon(x){
     const donde = { mant:"taller", disp:"disponible", renta:"cliente",
-                    ajeno:"del cliente", uso:"interno" }[zonaDe(x.eq)] || "";
+                    ajeno:"del cliente", interno:"interno", uso:"interno" }[zonaDe(x.eq)] || "";
     const col = COL_URG[x.ev.color] || "#565b5f";
     return '<div class="it" data-clave="' + esc(x.clave) + '">' +
       '<span class="p" style="background:' + col + '"></span>' +
@@ -3008,9 +3046,11 @@ function renderLeyenda(flota){
   if(!cuerpo) return;
   const H = [];
   const todos = [].concat(flota.taller || [], flota.patio || [], flota.otros || [],
+                          flota.interno || [],
                           (flota.campo || []).reduce(function(a, g){ return a.concat(g.items); }, []));
   const fant   = todos.filter(function(x){ return x.ev.color === "nodata"; }).length;
   const ajenos = todos.filter(function(x){ return esDeCliente(x.eq); }).length;
+  const internos = todos.filter(function(x){ return esInterno(x.eq); }).length;
   const sinCod = todos.filter(function(x){ return x.ev.sinCodigo; }).length;
   const conMec = Object.keys(enCurso.porEquipo || {}).length;
   const sinAsig = Object.keys(enCurso.porEquipo || {}).filter(function(k){
@@ -3042,10 +3082,18 @@ function renderLeyenda(flota){
   H.push('<h4>C\u00f3mo est\u00e1 armado</h4>');
   li("", '<b>El centro es nuestro.</b> Arriba lo <b>disponible</b> y abajo el <b>taller</b>.');
   /* La regla es de Miguel y el mapa la respeta desde que lo dijo. */
-  li("", '<b>Disponible es lo nuestro sujeto a renta.</b> Un equipo del cliente no lo ' +
-         'est\u00e1, as\u00ed que no va ah\u00ed: va en su planta, en el anillo, con la ' +
-         'mancha morada.' +
-         (ajenos ? (' Son <b>' + ajenos + '</b> en esta empresa.') : ''));
+  li("", '<b>Disponible es lo nuestro sujeto a renta.</b> Lo que no lo est\u00e1 no va ' +
+         'ah\u00ed, aunque est\u00e9 parqueado y sirviendo.');
+  li("", '\u00b7 <b>Del cliente</b>: va en su planta, en el anillo, con la mancha morada.' +
+         (ajenos ? (' Son <b>' + ajenos + '</b>.') : ' Ninguno en esta empresa.'));
+  li("", '\u00b7 <b>Internos</b>: pick-ups, camiones, la gr\u00faa, la patrulla. Tienen campo ' +
+         'propio al lado de disponibles. Son con lo que se mueve el inventario, no el ' +
+         'inventario.' + (internos ? (' Son <b>' + internos + '</b>.') : ''));
+  /* Si no, los conteos parecen pelearse: la leyenda dice 19 y en el anillo
+     hay 18, porque uno esta en el taller. */
+  H.push('<div class="nota">Los de estos dos grupos que est\u00e9n <b>en el taller se ' +
+         'dibujan en el taller</b>: d\u00f3nde est\u00e1 manda sobre por qu\u00e9 no est\u00e1 ' +
+         'disponible. Por eso la cuenta de aqu\u00ed puede ser mayor que la del campo.</div>');
   li("", '<b>El anillo son los clientes.</b> Cada sitio es uno y adentro est\u00e1 lo que tiene ' +
          'rentado. Un equipo que se rompe entra al centro: el mapa es el viaje que hace el fierro.');
 
@@ -3070,7 +3118,8 @@ function renderLeyenda(flota){
   li(mancha("#e5534b"), 'Roja: en el <b>taller</b>.');
   li(mancha("#3ecf7e"), 'Verde: <b>disponible</b>, parqueado.');
   li(mancha("#4f8fe0"), 'Azul: <b>en renta</b>, en el sitio de un cliente.');
-  li(mancha("#a9741f"), '\u00c1mbar: <b>otros / interno</b> \u2014 pick-ups, cami\u00f3n, la gr\u00faa.');
+  li(mancha(COL_INTERNO), '\u00c1mbar: <b>interno</b>, nuestro pero no se renta \u2014 pick-ups, ' +
+                          'camiones, la gr\u00faa, y lo que anda en demo o pr\u00e9stamo.');
   li(mancha(COL_AJENO), '<b>Morada: no es nuestro.</b> Es del cliente y solo le damos ' +
                         'servicio. Gana sobre los dem\u00e1s colores: vale aunque est\u00e9 ' +
                         'en nuestro taller.');
@@ -3165,6 +3214,7 @@ function fichaEquipo(eq, ev, trabajo){
   const b = zonaDe(eq);
   const zonaTxt = { mant:"En el taller", disp:"Disponible", renta:"En cliente",
                     ajeno:"En su planta \u2014 es del cliente",
+                    interno:"Interno \u2014 no se renta",
                     uso:"Otros / interno" }[b];
   const ubic  = primerCampo(eq, CAMPOS_UBICACION);
   const horo  = aNumero(primerCampo(eq, CAMPOS_HOROMETRO_ACT));
@@ -3173,6 +3223,11 @@ function fichaEquipo(eq, ev, trabajo){
 
   function fila(k, v){ H.push('<div class="fila"><span>' + esc(k) + '</span><b>' + esc(v) + '</b></div>'); }
 
+  if(esInterno(eq)){
+    H.push('<div class="aviso gris">Es <b>interno</b>: no es inventario de renta, es con ' +
+           'lo que se mueve el inventario. Por eso no sale en <b>disponibles</b> \u2014 ' +
+           'disponible es lo nuestro que est\u00e1 sujeto a renta.</div>');
+  }
   if(esDeCliente(eq)){
     H.push('<div class="aviso gris">No es nuestro: es del cliente y solo le damos ' +
            'servicio. Por eso no sale en <b>disponibles</b> \u2014 disponible es lo ' +
@@ -3284,7 +3339,7 @@ function fichaCliente(nombre){
   const enSitio  = mios.filter(function(x){ return x.b === "renta"; });
   const suyos    = mios.filter(function(x){ return x.b === "ajeno"; });
   const conNoso  = mios.filter(function(x){ return x.b === "mant" || x.b === "disp"; });
-  const otros    = mios.filter(function(x){ return x.b === "uso"; });
+  const otros    = mios.filter(function(x){ return x.b === "uso" || x.b === "interno"; });
 
   const H = [];
   function bloque(titulo, lista, nota){
@@ -3295,7 +3350,7 @@ function fichaCliente(nombre){
     lista.forEach(function(x){
       const col = COL_URG[x.ev.color] || "#565b5f";
       const donde = { mant:"en taller", disp:"disponible", renta:"en su planta",
-                      ajeno:"suyo", uso:"interno" }[x.b] || "";
+                      ajeno:"suyo", interno:"interno", uso:"interno" }[x.b] || "";
       H.push('<div class="fila"><span><span style="display:inline-block;width:7px;' +
         'height:7px;border-radius:50%;background:' + col + ';margin-right:6px"></span>' +
         esc(x.ev.codigo) + '</span><b>' + esc(donde) + '</b></div>');
@@ -3569,7 +3624,8 @@ function cambiarVista(cual){
 /* boot */
 resize();
 cam.scale = baseScale();
-renderZoneNav({ taller:[], patio:[], renta:0, disp:[], campo:[], otros:[] },
+renderZoneNav({ taller:[], patio:[], renta:0, ajenos:0, disp:[], campo:[],
+                otros:[], interno:[] },
               { err:false, por:{ rev:[] } }, { err:false, sedes:[] });
 irAZona("taller");
 loop();
