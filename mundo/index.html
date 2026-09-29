@@ -237,12 +237,15 @@
     <div class="status"><span class="dot" id="conn-dot"></span><span id="conn-txt">CONECTANDO</span></div>
   </div>
   <!-- LA OFICINA ESTA APAGADA, NO BORRADA. Todo su codigo sigue aca abajo
-       -- zonaEdificio, los deptos, los pulsos de caja chica -- y se puede
-       volver a prender cambiando VISTAS_VISIBLES. Se apago porque el mundo
+       -- zonaEdificio, los deptos, los pulsos de caja chica -- y para volver
+       a prenderla hay que darle su propia pastilla. Se apago porque el mundo
        hoy sirve para UNA cosa: ver la flota. Media docena de oficinas con
-       KPIs sin conectar solo repartian la atencion. -->
-  <div class="pills" aria-label="Qué se está viendo">
-    <button class="pill active" data-vista="taller" disabled>Taller</button>
+       KPIs sin conectar solo repartian la atencion.
+       La pastilla que quedo elige EMPRESA: son dos flotas, dos talleres y
+       dos carteras de clientes, y verlas encimadas no dejaba leer ninguna. -->
+  <div class="pills" role="tablist" aria-label="Qué empresa se está viendo">
+    <button class="pill active" data-vista="montasa" role="tab" aria-selected="true">MT Rental</button>
+    <button class="pill" data-vista="monhaco" role="tab" aria-selected="false">Monhaco</button>
   </div>
 </div>
 
@@ -316,8 +319,9 @@ async function getJSON(path){
      lo que este en el taller, sea de quien sea. Partirla por empresa era
      una pregunta de contabilidad metida en un mapa del piso.
 
-   Ahora se leen las dos SIEMPRE y se dibujan juntas. Cada equipo se queda
-   con su `_empresa` para que la ficha pueda decir de quien es.
+   Ahora se leen las dos SIEMPRE --son dos lecturas baratas-- pero se dibuja
+   una a la vez, la que diga la pastilla. Cada equipo se queda con su
+   `_empresa`, que es lo que usan el filtro y la busqueda cruzada.
 
    El nodo se llama `montasa` por historia: la app de taller se hizo antes de
    que la renta se separara en MT Rental. La flota que vive en ese nodo es la
@@ -454,7 +458,9 @@ function evaluarEquipo(eq, ultimoDeHistorial){
 
 /* --- Bitacora SGI (nodo aparte, sin empresa) --- */
 const CC_FB    = DB_BASE + "/bitacora";
-/* Las sedes de las dos empresas, juntas: ya no se elige empresa. */
+/* Las sedes de las DOS empresas, a proposito: la bitacora es un nodo
+   aparte, no cuelga de ninguna empresa, y hoy solo la usa la oficina,
+   que esta apagada. La pastilla parte la flota, no esto. */
 const CC_SEDES = EMPRESAS.map(function(e){ return e.sede; });
 function fmtL(monto){
   const n = aNumero(monto);
@@ -562,14 +568,19 @@ function estacionDe(estado){
 }
 
 /* ===================== ESTADO GLOBAL ===================== */
-/* Lo que antes era "que empresa" ahora es "que parte del mundo":
-   `oficina` (el edificio: la gente, los papeles) o `taller` (el distrito de
-   equipos: taller, patio y los que estan en cliente). Son dos negocios
-   distintos y ahora tambien son dos vistas distintas. */
-/* VISTAS_VISIBLES es el interruptor: agregarle "oficina" la devuelve al
-   mundo, con su pastilla y su barra de zonas, sin tocar nada mas. */
-const VISTAS_VISIBLES = ["taller"];
-let vista = VISTAS_VISIBLES[0];
+/* LA VISTA ES LA EMPRESA: "montasa" (MT Rental) o "monhaco".
+   ---------------------------------------------------------------------
+   Cada una trae su mundo completo --taller, patio y anillo de clientes-- y
+   son mundos que no se tocan: un equipo de Monhaco no entra al taller de MT
+   Rental ni al reves. Verlas encimadas metia 56 maquinas de dos flotas en el
+   mismo piso y no se leia ninguna.
+   Los datos de las dos se cargan siempre, que son dos lecturas baratas, asi
+   que cambiar de pastilla no vuelve a pedir nada: solo se rearma la escena.
+
+   Separar tiene un riesgo y esta contemplado: buscar un equipo que es de la
+   otra empresa NO puede dar "no existe". La busqueda mira las dos; ver
+   `buscablesDeLaOtra()`. */
+let vista = "montasa";
 const state = {
   equipos:{}, preventivos:{}, correctivos:{},
   caja:null, viajes:null, almacen:null,     // null = sin cargar, "error" = fallo
@@ -2087,6 +2098,7 @@ function computeEnCurso(){
   const porId = {}, porCodigo = {};
   Object.keys(state.equipos || {}).forEach(function(k){
     const eq = state.equipos[k];
+    if(eq._empresa !== vista) return;        // cada empresa su taller
     const clave = eq._empresa + ":" + (eq.id || "");
     porId[clave] = eq;
     const cod = String(eq.codigo || "").trim().toUpperCase();
@@ -2096,6 +2108,7 @@ function computeEnCurso(){
     const reg = state[nodo] || {};
     Object.keys(reg).forEach(function(k){
       const o = reg[k];
+      if(o._empresa !== vista) return;
       /* CERRADA SI CUALQUIER SENAL LO DICE.
          La app guarda "ya termino" en CUATRO campos que no se mantienen
          juntos: `completado`, `estado`, `fechaCierre` y `fechaCompletado`. De
@@ -2155,6 +2168,12 @@ function computeFlotaMundo(){
     const registros = state[nodo];
     if(!registros) return;
     Object.values(registros).forEach(function(r){
+      /* SOLO LAS ORDENES DE ESTA EMPRESA. Ademas de lo obvio, esto tapa un
+         hoyo viejo: `ultimo` se indexa por `eq.id` pelado, y como el nodo
+         `equipos` es un arreglo en Firebase esos id se repiten entre las dos
+         empresas. Sin el filtro, una orden de Monhaco podia poner al dia a un
+         equipo de MT Rental que casualmente tuviera el mismo indice. */
+      if(r._empresa !== vista) return;
       /* SOLO CUENTA LO QUE YA CERRO.
          Antes el unico filtro era `completado === false`, y ese campo casi
          nunca viene: de las 102 ordenes que alimentaban este calculo, 32
@@ -2186,6 +2205,7 @@ function computeFlotaMundo(){
     /* TALLER-SPS y TALLER-CHOLOMA no son maquinas: son perchas donde el
        taller cuelga ordenes que no van contra un equipo. Se van del mapa. */
     if(esMarcadorDeTaller(eq)) return;
+    if(eq._empresa !== vista) return;        // solo la empresa que se mira
     const ev = evalCached(eq, ultimo[eq.id] || null);
     const b  = bucketEstado(eq.estado);
     const it = { eq:eq, ev:ev, bucket:b };
@@ -2293,6 +2313,7 @@ function computeBodega(){
 }
 
 let enCurso = { porEquipo:{}, sueltas:[] };
+let encuadrado = false;
 function buildScene(){
   scene = { items:[], labels:[] };
   posEnMapa = {}; arco = null;
@@ -2304,16 +2325,12 @@ function buildScene(){
 
   const datos = { flota:flota, papeles:papeles, bodega:bodega };
 
-  /* Una vista, un distrito. Son dos negocios distintos y ahora tambien son
-     dos mapas distintos: el fierro por un lado, la gente y los papeles por
-     el otro. */
-  if(vista === "taller"){
-    zonaTaller(flota);
-    zonaPatio(flota);
-    zonaCampo(flota);
-  }else{
-    zonaEdificio(datos);
-  }
+  /* Siempre el distrito de equipos: la oficina esta apagada y la pastilla
+     ahora elige empresa, no distrito. `zonaEdificio(datos)` sigue entera mas
+     abajo para cuando se quiera devolver. */
+  zonaTaller(flota);
+  zonaPatio(flota);
+  zonaCampo(flota);
   /* La entrada generica "MI OFICINA" ya no se dibuja: ocupaba el ancla S, que
      ahora es la oficina de AI PLANNING, y las dos se pisaban en pantalla.
      Tampoco tiene sentido en el modelo nuevo — la oficina de cada quien es la
@@ -2322,15 +2339,14 @@ function buildScene(){
   /* Los pulsos son papeles cruzando el edificio: en el taller no hay nada
      que puedan cruzar, y seguian animandose sobre un mapa donde el edificio
      ni se dibuja. */
-  pulsos = (vista === "taller") ? [] : computePulsos(datos);
+  pulsos = [];
 
   /* "Otros / interno": no tienen zona propia en el spec, pero tampoco
      pueden desaparecer. Van al fondo del patio, en ambar. */
   /* Antes esto cortaba en diez con `.slice(0, 10)`. Se quito: el mundo existe
      para que se vea TODO el fierro, y un equipo que no se dibuja es un equipo
      del que nadie se acuerda. Si son muchos, que se vea que son muchos. */
-  if(vista === "taller" && flota.otros && flota.otros.length
-     && !(state.flotaErr && !state.flotaParcial)){
+  if(flota.otros && flota.otros.length && !(state.flotaErr && !state.flotaParcial)){
     const z = ZONA.patio;
     /* DEBAJO DE LA ULTIMA FILA DEL PATIO, no del borde nominal de la zona.
        Este bloque se colocaba con `z.y + z.d - 2.2`, que era el fondo de la
@@ -2350,6 +2366,13 @@ function buildScene(){
   }
 
   scene.items.sort(function(a,b){ return a.d - b.d; });
+  /* EL PRIMER ENCUADRE, CUANDO YA HAY ALGO QUE ENCUADRAR.
+     Al arrancar la camara se ponia en `baseScale()` --3 en una pantalla
+     ancha-- y el mundo abria pegado a dos o tres montacargas, con el taller y
+     el anillo de clientes fuera de pantalla. Nadie sabia que habia mas.
+     No se podia encuadrar en el boot porque ahi la escena todavia esta vacia
+     y no hay caja que medir; se hace en el primer armado con datos. */
+  if(!encuadrado && scene.items.length){ encuadrado = true; encuadrar(); }
   renderZoneNav(flota, papeles, bodega);
   renderLeyenda(flota);
   pintarBusqueda();
@@ -2609,10 +2632,9 @@ function renderZoneNav(flota, papeles, bodega){
     finanzas:{ n: papeles.err ? "!" : (papeles.por.rev ? papeles.por.rev.length : 0), alerta: !papeles.err && papeles.por.rev.length > 0 },
     almacen: { n: negs, alerta: negs > 0 }
   };
-  /* La vista manda: `taller` muestra el distrito de equipos, `oficina` el
-     edificio. Antes salian las once juntas y la separacion se deshacia en
-     cuanto alguien tocaba un boton. */
-  const distrito = (vista === "taller") ? "equipos" : "edificio";
+  /* Solo las zonas del fierro. Las del edificio siguen declaradas en ZONAS
+     y volverian solas si la oficina se prende. */
+  const distrito = "equipos";
   const visibles = ZONAS.filter(function(z){ return z.dist === distrito; });
   nav.innerHTML = visibles.map(function(z){
     const c = cont[z.id] || { n:"" };
@@ -2740,6 +2762,36 @@ function equiposBuscables(){
   return out;
 }
 
+/* LO DE LA OTRA EMPRESA, PARA QUE SEPARAR NO SEA ESCONDER.
+   Si alguien busca MT-113 estando en Monhaco, la respuesta honesta no es
+   "nada calza": es "existe, pero es de MT Rental". Van sin `ev` --la urgencia
+   se calcula dentro de computeFlotaMundo, que solo mira la empresa activa--
+   asi que se rotulan y ya; al tocarlos se cambia de empresa y ahi si tienen
+   todo. */
+function buscablesDeLaOtra(){
+  const otra = (vista === "montasa") ? "monhaco" : "montasa";
+  const out = [];
+  Object.keys(state.equipos || {}).forEach(function(k){
+    const eq = state.equipos[k];
+    if(!eq || eq._empresa !== otra) return;
+    if(esMarcadorDeTaller(eq)) return;
+    const txt = [eq.codigo, eq.marca, eq.modelo, eq.serie,
+                 eq.cliente, eq.ubicacion, eq.desc].join(" ");
+    out.push({ eq:eq, otra:otra, clave: otra + ":" + (eq.id || ""),
+               texto: sinTildesB(txt), pelado: pelar(txt) });
+  });
+  return out;
+}
+
+/* Cambia de empresa y despues vuela: las posiciones del mapa las arma
+   `buildScene`, asi que hasta que no corre no hay a donde ir. */
+function volarAOtraEmpresa(item){
+  cambiarVista(item.otra);
+  const x = equiposBuscables().find(function(y){ return y.clave === item.clave; });
+  if(x) volarA(x);
+  else cerrarBusqueda();     // esta vendido o fuera del mapa; no hay a donde ir
+}
+
 function volarA(item){
   const p = posEnMapa[item.clave];
   if(!p) return;
@@ -2788,12 +2840,26 @@ function pintarBusqueda(){
                       .sort(function(a, b){
                         return String(a.ev.codigo).localeCompare(String(b.ev.codigo), "es",
                           { numeric: true }); });
-    if(!hits.length){
+    const qp2 = pelar(q);
+    const ajenos = buscablesDeLaOtra().filter(function(x){
+      return x.texto.indexOf(q) >= 0 || (qp2 && x.pelado.indexOf(qp2) >= 0); })
+                   .sort(function(a, b){
+                     return String(a.eq.codigo || "").localeCompare(String(b.eq.codigo || ""),
+                       "es", { numeric: true }); });
+    if(!hits.length && !ajenos.length){
       caja.innerHTML = '<div class="vacio">Nada calza con \u201c' + esc(q) + '\u201d.</div>';
       return;
     }
     hits.slice(0, 40).forEach(function(x){ H.push(renglon(x)); });
     if(hits.length > 40) H.push('<div class="vacio">\u2026y ' + (hits.length - 40) + ' mas.</div>');
+    if(ajenos.length){
+      H.push('<div class="grupo otra"><span>En ' +
+             esc(NOMBRE_EMPRESA[ajenos[0].otra] || ajenos[0].otra) +
+             '</span><span>' + ajenos.length + '</span></div>');
+      ajenos.slice(0, 20).forEach(function(x){ H.push(renglonAjeno(x)); });
+      if(ajenos.length > 20)
+        H.push('<div class="vacio">\u2026y ' + (ajenos.length - 20) + ' mas ah\u00ed.</div>');
+    }
   }else{
     /* el arbol por tipo */
     const porTipo = {};
@@ -2819,10 +2885,25 @@ function pintarBusqueda(){
   });
   [...caja.querySelectorAll(".it")].forEach(function(el){
     el.onclick = function(){
+      if(el.dataset.otra){
+        volarAOtraEmpresa({ otra: el.dataset.otra, clave: el.dataset.clave });
+        return;
+      }
       const x = todos.find(function(y){ return y.clave === el.dataset.clave; });
       if(x) volarA(x);
     };
   });
+
+  /* Sin punto de urgencia a proposito: no esta calculada para esta empresa y
+     un punto gris se leeria como "sin datos", que es otra cosa. */
+  function renglonAjeno(x){
+    return '<div class="it ajeno" data-otra="' + esc(x.otra) +
+      '" data-clave="' + esc(x.clave) + '">' +
+      '<span class="p" style="background:transparent;border:1px solid #565b5f"></span>' +
+      '<b>' + esc(x.eq.codigo || "\u2014") + '</b>' +
+      '<span class="d">' + esc([x.eq.marca, "ir \u2192"].filter(Boolean).join(" \u00b7 ")) +
+      '</span></div>';
+  }
 
   function renglon(x){
     const donde = { mant:"taller", disp:"disponible", renta:"cliente", uso:"interno" }[
@@ -2888,6 +2969,14 @@ function renderLeyenda(flota){
   const aro = function(col){
     return '<span class="sw" style="background:transparent;border:1.5px solid ' + col +
            ';border-radius:50%"></span>'; };
+
+  /* DE QUIEN SON ESTOS NUMEROS.
+     La leyenda cuenta de verdad --"22 de 87", no "algunos"-- y desde que la
+     pastilla parte la flota esos totales son de UNA empresa. Sin decirlo se
+     leen como la flota entera y el conteo sale mal por la mitad. */
+  H.push('<div class="nota" style="margin:0 0 8px">Todo lo de aqu\u00ed abajo cuenta ' +
+         '<b>' + esc(NOMBRE_EMPRESA[vista] || vista) + '</b> nada m\u00e1s \u2014 ' +
+         todos.length + ' equipos. La otra empresa es la otra pastilla.</div>');
 
   H.push('<h4>C\u00f3mo est\u00e1 armado</h4>');
   li("", '<b>El centro es nuestro.</b> Arriba lo <b>disponible</b> y abajo el <b>taller</b>.');
@@ -3369,11 +3458,8 @@ async function refrescar(){
    es a donde mira la camara. Antes cambiar de pastilla volvia a pedir todo a
    Firebase y a RADAR, y habia que esperar dos segundos para ver algo que ya
    estaba en memoria. */
-const ZONA_DE_VISTA = { oficina:"bullpen", taller:"taller" };
-/* Con una sola vista visible la pastilla no elige nada, pero el resto del
-   codigo sigue preguntando por `vista`: asi prender la oficina de nuevo es
-   agregarla a VISTAS_VISIBLES y ya. */
 function cambiarVista(cual){
+  if(cual !== "montasa" && cual !== "monhaco") return;
   vista = cual;
   [...document.querySelectorAll(".pill")].forEach(function(b){
     const on = b.dataset.vista === cual;
@@ -3381,13 +3467,14 @@ function cambiarVista(cual){
     b.setAttribute("aria-selected", on ? "true" : "false");
   });
   cerrarFicha();
-  /* Se redibuja la escena entera y no solo la barra: la vista tambien decide
-     que zona queda activa, y el rotulo de arriba lee de ahi. */
+  /* zonaActiva ANTES de armar la escena: `renderZoneNav` corre dentro de
+     `buildScene` y es quien prende el boton de zona. Al reves --como estaba--
+     quedaba marcada la zona vieja hasta el siguiente refresco. */
+  zonaActiva = "taller";
   buildScene();
-  /* Al cambiar de vista se encuadra el distrito entero en vez de caer sobre
-     una zona: lo primero que se quiere ver es el conjunto. */
-  zonaActiva = ZONA_DE_VISTA[cual] || "bullpen";
-  document.getElementById("zone-name").textContent = (ZONA[zonaActiva]||{}).nombre || "";
+  document.getElementById("zone-name").textContent = (ZONA.taller||{}).nombre || "";
+  /* Se encuadra de nuevo porque las dos flotas no son del mismo tamano: el
+     encuadre de una deja a la otra fuera de pantalla o perdida en el negro. */
   encuadrar();
 }
 [...document.querySelectorAll(".pill")].forEach(function(b){
@@ -3399,7 +3486,7 @@ resize();
 cam.scale = baseScale();
 renderZoneNav({ taller:[], patio:[], renta:0, disp:[], campo:[], otros:[] },
               { err:false, por:{ rev:[] } }, { err:false, sedes:[] });
-irAZona(ZONA_DE_VISTA[vista] || "taller");
+irAZona("taller");
 loop();
 refrescar();
 setInterval(refrescar, 60000);
