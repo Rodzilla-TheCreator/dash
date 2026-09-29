@@ -373,8 +373,31 @@ const COL_INTERNO = "#a9741f";      // ambar: nuestro, pero no se renta
    que no lleva codigo de flota. */
 function esInterno(eq){
   if(!eq || esDeCliente(eq)) return false;
+  /* `esVehiculo` esta en la base y marca exactamente estos once. Se mira
+     primero, pero la silueta queda de respaldo porque ese campo se pierde:
+     al reescribir la flota desde Supervision o MONHACO se suben solo 13
+     campos y `esVehiculo` no esta entre ellos (TRAMPAS.md T11). */
+  if(eq.esVehiculo === true) return true;
   const f = formaDe(eq);
   return f === "pickup" || f === "camion" || f === "grua";
+}
+
+/* COMO SE LLAMA SU ESTADO.
+   ---------------------------------------------------------------------
+   La app le cambia el nombre al estado cuando el equipo es de un cliente:
+   si `esEquipoCliente`, el selector deja solo dos opciones y a DISPONIBLE
+   lo rotula "Sin trabajo activo" (MTRENTAL_Gerencia.html:4238,
+   MONHACO_Gerencia.html:2286).
+   Tiene todo el sentido: un equipo del cliente nunca esta "disponible" para
+   nada nuestro. Lo que dice ese estado es que NO esta en nuestro taller y
+   NO esta pidiendo reparacion -- casi siempre, que el cliente lo esta
+   usando sin fallas. Es un estado de servicio, no de inventario.
+   Mostrar "DISPONIBLE" a secas hacia pensar que era un dato sin mantener.
+   Es un dato de verdad, y ademas el unico que tenemos de esas maquinas. */
+function estadoTxt(eq){
+  const e = String((eq && eq.estado) || "").trim().toUpperCase();
+  if(esDeCliente(eq) && e === "DISPONIBLE") return "Sin trabajo activo";
+  return (eq && eq.estado) || "\u2014";
 }
 
 /* DONDE VA EN EL MAPA. No es lo mismo que `estado`.
@@ -397,6 +420,11 @@ function zonaDe(eq){
      que con lo del cliente. */
   if(esInterno(eq)) return bucketEstado(eq.estado) === "mant" ? "mant" : "interno";
   if(!esDeCliente(eq)) return bucketEstado(eq.estado);
+  /* Las dos maneras de que un equipo de cliente este con nosotros:
+     que alguien le haya puesto EN MANTENIMIENTO --la otra opcion que la app
+     le deja a estas maquinas-- o que tenga una orden abierta de `plantel`,
+     que es la que dice que la trajeron. */
+  if(bucketEstado(eq.estado) === "mant") return "mant";
   const t = (enCurso.porEquipo || {})[eq._empresa + ":" + (eq.id || "")] || null;
   const enNuestroTaller = !!(t && t.some(function(x){
     return String(x.donde || "").trim().toLowerCase() === "plantel"; }));
@@ -3261,6 +3289,11 @@ function renderLeyenda(flota){
          'ah\u00ed, aunque est\u00e9 parqueado y sirviendo.');
   li("", '\u00b7 <b>Del cliente</b>: va en su planta, en el anillo, con la mancha morada.' +
          (ajenos ? (' Son <b>' + ajenos + '</b>.') : ' Ninguno en esta empresa.'));
+  if(ajenos) H.push('<div class="nota">De esas m\u00e1quinas el \u00fanico estado que ' +
+         'existe es <b>sin trabajo activo</b> o <b>en mantenimiento</b> \u2014 la app no ' +
+         'les deja m\u00e1s opciones. <b>Sin trabajo activo</b> no es un hueco de dato: ' +
+         'dice que no est\u00e1 en nuestro taller ni pidiendo reparaci\u00f3n, o sea que ' +
+         'lo m\u00e1s probable es que el cliente la est\u00e9 usando sin fallas.</div>');
   li("", '\u00b7 <b>Internos</b>: pick-ups, camiones, la gr\u00faa, la patrulla. Tienen campo ' +
          'propio al lado de disponibles. Son con lo que se mueve el inventario, no el ' +
          'inventario.' + (internos ? (' Son <b>' + internos + '</b>.') : ''));
@@ -3404,7 +3437,7 @@ const ETQ_URG = { ok:"al día", warn:"por vencer", crit:"vencido", nodata:"SIN D
 function fichaEquipo(eq, ev, trabajo){
   const b = zonaDe(eq);
   const zonaTxt = { mant:"En el taller", disp:"Disponible", renta:"En cliente",
-                    ajeno:"En su planta \u2014 es del cliente",
+                    ajeno:"En su planta \u2014 sin trabajo activo",
                     interno:"Interno \u2014 no se renta",
                     uso:"Otros / interno" }[b];
   const ubic  = primerCampo(eq, CAMPOS_UBICACION);
@@ -3438,15 +3471,28 @@ function fichaEquipo(eq, ev, trabajo){
            'disponible es lo nuestro que est\u00e1 sujeto a renta.</div>');
   }
   if(esDeCliente(eq)){
+    const enTaller = (b === "mant");
     H.push('<div class="aviso gris">No es nuestro: es del cliente y solo le damos ' +
            'servicio. Por eso no sale en <b>disponibles</b> \u2014 disponible es lo ' +
-           'nuestro que est\u00e1 sujeto a renta.<br>La app lo tiene en ' +
-           '<b>' + esc(eq.estado || "\u2014") + '</b>, pero ese dato no se mantiene: ' +
-           'los <b>19</b> equipos de cliente de la base dicen lo mismo, incluido el que ' +
-           'ahorita tiene orden en proceso. Aqu\u00ed se ubica por la orden, no por el estado.</div>');
+           'nuestro que est\u00e1 sujeto a renta.<br>' +
+           (enTaller
+             ? 'Ahorita est\u00e1 <b>con nosotros</b>: o alguien lo puso en mantenimiento, ' +
+               'o tiene una orden abierta de <i>plantel</i>, que es la que dice que lo trajeron.' +
+               (String(eq.estado||"").trim().toUpperCase() === "DISPONIBLE"
+                 ? '<br>Que su estado siga diciendo <b>sin trabajo activo</b> no es un error ' +
+                   'del mapa: al abrir una orden, la app <b>no le toca el estado a un equipo ' +
+                   'de cliente</b> \u2014 lo excluye a prop\u00f3sito (<code>FLUJO.md</code> ' +
+                   '\u00a72). Ese estado solo cambia si alguien lo pone a mano.'
+                 : '')
+             : 'Su estado es <b>sin trabajo activo</b> \u2014 as\u00ed le llama la app al ' +
+               'estado <code>DISPONIBLE</code> cuando la m\u00e1quina es de un cliente. ' +
+               'Quiere decir que <b>no est\u00e1 en nuestro taller y no est\u00e1 pidiendo ' +
+               'reparaci\u00f3n</b>: lo m\u00e1s probable es que el cliente lo est\u00e9 ' +
+               'usando sin fallas.') +
+           '</div>');
   }
   fila("Empresa", eq._nombreEmpresa || "\u2014");
-  fila("Estado", eq.estado || "\u2014");
+  fila("Estado", estadoTxt(eq));
   fila("D\u00f3nde est\u00e1", zonaTxt);
   fila("Ubicaci\u00f3n", ubic != null ? ubic : "\u2014");
   fila("Due\u00f1o", duenio || "Nuestro");
@@ -3559,7 +3605,8 @@ function fichaCliente(nombre){
     lista.forEach(function(x){
       const col = COL_URG[x.ev.color] || "#565b5f";
       const donde = { mant:"en taller", disp:"disponible", renta:"en su planta",
-                      ajeno:"suyo", interno:"interno", uso:"interno" }[x.b] || "";
+                      ajeno:"sin trabajo activo", interno:"interno",
+                      uso:"interno" }[x.b] || "";
       H.push('<div class="fila"><span><span style="display:inline-block;width:7px;' +
         'height:7px;border-radius:50%;background:' + col + ';margin-right:6px"></span>' +
         esc(x.ev.codigo) + '</span><b>' + esc(donde) + '</b></div>');
