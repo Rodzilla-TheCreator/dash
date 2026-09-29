@@ -1338,6 +1338,12 @@ function push(gx, gy, draw, hit, tap){
    cerca contesta "cual es y que le pasa". Escribir las dos cosas a la vez es
    lo que lo volvia ilegible. Los numeros no son a gusto: son la escala a la
    que ese texto se lee sin encimarse con el de al lado. */
+/* Quien gana cuando dos rotulos no caben juntos. Un sitio de cliente suma
+   su cantidad de equipos, asi que entre dos clientes gana el que tiene mas
+   fierro ahi. */
+const PRI = { zona:1000, bloque:900, resumen:800, sitio:400, mecanico:200,
+              codigo:100 };
+
 const LOD = {
   zona:    0,      // TALLER, DISPONIBLES, CAMPO: siempre. Son el mapa.
   /* El nombre del cliente va SIEMPRE, aunque sea lo que mas se repite en
@@ -1350,11 +1356,16 @@ const LOD = {
   codigo:  1.45,   // el codigo de cada equipo
   persona: 1.45    // el nombre del mecanico
 };
+/* `pri` es quien gana cuando dos rotulos se pisan, y `sigue` marca el
+   renglon que cuelga del de arriba (la cuenta debajo del nombre de un
+   cliente): no compite por lugar, se dibuja solo si su padre se dibujo.
+   `extra` son los pixeles que el padre reserva hacia abajo para ese
+   renglon, para que otro rotulo no se le meta en medio. */
 function label(wx, wy, text, o){
   o = o || {};
   scene.labels.push({ x:wx, y:wy, t:text, col:o.col||"#8b9096", size:o.size||9,
                       w:o.w||"400", al:o.al||"center", fam:o.fam||"mono", box:o.box||false,
-                      min:o.min || 0 });
+                      min:o.min || 0, pri:o.pri || 0, sigue:!!o.sigue, extra:o.extra || 0 });
 }
 /* Punto de anclaje del rotulo: justo encima del vertice mas alto de la zona.
    (en iso el centro de la zona NO esta encima del centro de la huella) */
@@ -1364,7 +1375,8 @@ function anclaZona(z){
 }
 function rotuloZona(z){
   const a = anclaZona(z);
-  label(a.x, a.y, z.nombre, { col:"#f5a524", size:13, w:"800", fam:"disp", box:true });
+  label(a.x, a.y, z.nombre, { col:"#f5a524", size:13, w:"800", fam:"disp", box:true,
+                             pri:PRI.zona });
   return a;
 }
 
@@ -1471,7 +1483,7 @@ function ponerEquipo(gx, gy, eq, ev, opt){
        Y con `box` para que se lea: texto claro sobre un patio gris con
        sombras no se lee, por mas que el color sea el correcto. */
     label(p.x, p.y + HH + 9, (ev && ev.codigo) || eq.codigo || eq.id || "?",
-      { size:8.5, col:"#c9ced2", box:true, min:LOD.codigo });
+      { size:8.5, col:"#c9ced2", box:true, min:LOD.codigo, pri:PRI.codigo });
   }
   if(opt.trabajo && opt.trabajo.length) ponerMecanicos(gx, gy, opt.trabajo);
 }
@@ -1512,7 +1524,7 @@ function ponerMecanicos(gx, gy, trabajo){
       ctx.restore();
     }, { x:sx-2, y:sy-2, w:16, h:24 }, function(){ fichaMecanico("sin asignar", trabajo); });
     label(p.x, sy - 7, "SIN ASIGNAR",
-      { col:"#565b5f", size:7, w:"700", box:true, min:LOD.persona });
+      { col:"#565b5f", size:7, w:"700", box:true, min:LOD.persona, pri:PRI.mecanico });
     return;
   }
   const pinta = algunoCorriendo ? ["mec", "mec2"] : ["mecq", "mecq"];
@@ -1531,12 +1543,12 @@ function ponerMecanicos(gx, gy, trabajo){
   const extra = nombres.length > 1 ? "  +" + (nombres.length - 1) : "";
   label(p.x, Math.round(p.y + HH - 20) - 7, nombres[0].toUpperCase() + extra,
     { col: algunoCorriendo ? "#f5c542" : "#8b9096", size:7.5, w:"700", box:true,
-      min:LOD.persona });
+      min:LOD.persona, pri:PRI.mecanico, extra: algunoCorriendo ? 0 : 11 });
   if(!algunoCorriendo){
     /* Si esta detenido, el motivo va escrito: "en pausa" y "esperando
        repuestos" se arreglan de maneras muy distintas. */
     label(p.x, Math.round(p.y + HH - 20) + 4, String(trabajo[0].estado).toLowerCase(),
-      { col:"#6f757a", size:7, box:true, min:LOD.codigo });
+      { col:"#6f757a", size:7, box:true, min:LOD.codigo, pri:PRI.mecanico, sigue:true });
   }
 }
 
@@ -1585,9 +1597,10 @@ function zonaTaller(mant){
     const c = w2s(z.x - 0.8, y0 + 0.9);
     label(c.x, c.y, titulo + " \u00b7 " + items.length,
           { col:col, size:10, w:"800", fam:"disp", box:true, al:"right",
-            min:LOD.resumen });
+            min:LOD.resumen, pri:PRI.bloque, extra:13 });
     if(sub) label(c.x, c.y + 11, sub,
-                  { col:"#8b9096", size:8.5, box:true, al:"right", min:LOD.cuenta });
+                  { col:"#8b9096", size:8.5, box:true, al:"right", min:LOD.cuenta,
+                    pri:PRI.bloque, sigue:true });
     return Math.ceil(items.length / 6);
   }
 
@@ -1626,13 +1639,14 @@ function mecanicosSinEquipo(z, y0){
       ctx.drawImage(persona(i % 2 ? "mec2" : "mec"), sx, sy);
     }, { x:sx-2, y:sy-2, w:16, h:24 }, function(){ fichaMecanico(n, sueltas); });
     label(p.x, sy - 7, n.split(" ")[0].toUpperCase(),
-      { col:"#f5c542", size:7, box:true, min:LOD.persona });
+      { col:"#f5c542", size:7, box:true, min:LOD.persona, pri:PRI.mecanico });
   });
   const c = w2s(z.x + z.w/2, y0 - 0.9);
   label(c.x, c.y, "MEC\u00c1NICOS SIN EQUIPO EN EL MAPA \u00b7 " + sueltas.length + " \u00f3rdenes",
-    { col:"#f5a524", size:9, w:"700", fam:"disp", box:true, min:LOD.resumen });
+    { col:"#f5a524", size:9, w:"700", fam:"disp", box:true, min:LOD.resumen,
+      pri:PRI.resumen, extra:13 });
   label(c.x, c.y + 11, "la m\u00e1quina es del cliente, o su registro ya no existe",
-    { col:"#8b9096", size:8, box:true, min:LOD.resumen });
+    { col:"#8b9096", size:8, box:true, min:LOD.resumen, pri:PRI.resumen, sigue:true });
 }
 
 /* --------- ZONA 2: PATIO --------- */
@@ -1667,7 +1681,7 @@ function zonaPatio(mant){
   });
   label(c.x, c.y + (z.w + z.d) * HH / 2 + 16, lista.length + " disponibles · " +
         (mant.total ? Math.round(lista.length/mant.total*100) : 0) + "% de la flota parqueada",
-        { col:"#8b9096", size:9.5, box:true, min:LOD.resumen });
+        { col:"#8b9096", size:9.5, box:true, min:LOD.resumen, pri:PRI.resumen });
 }
 
 /* --------- ZONA 3: INTERNOS --------- */
@@ -1697,7 +1711,7 @@ function zonaInterno(mant){
   const nOtros = (mant.otros || []).length;
   label(c.x, c.y + (z.w + z.d) * HH / 2 + 16,
         lista.length + " internos" + (nOtros ? (" \u00b7 " + nOtros + " en demo/pr\u00e9stamo") : ""),
-        { col:"#8b9096", size:9.5, box:true, min:LOD.resumen });
+        { col:"#8b9096", size:9.5, box:true, min:LOD.resumen, pri:PRI.resumen });
 }
 
 /* --------- ZONA 4: CAMPO / CLIENTES --------- */
@@ -1749,7 +1763,12 @@ function zonaCampo(mant){
      La rejilla del mundo es isometrica, o sea una transformacion lineal: un
      circulo en coordenadas de piso se dibuja como un circulo (aplastado 2:1),
      que es justo como se ve un patio redondo visto de esquina. */
-  const ANCHO_SITIO = 11;
+  /* Cuantas columnas de equipos lleva el sitio (maximo tres) y cuanto mide
+     por eso. Un cliente de un equipo mide 4.7 y no 8.6: ocupar el ancho de
+     tres cuando se tiene uno es lo que hacia crecer el anillo con la CANTIDAD
+     de clientes en vez de con la cantidad de fierro. */
+  const colsDe  = function(g){ return Math.max(1, Math.min(3, g.items.length)); };
+  const anchoDe = function(g){ return 2.0 + colsDe(g) * 2.2; };
   /* CADA SITIO OCUPA EL ARCO QUE MIDE, no un pedazo igual que los demas.
      Repartiendo el circulo en partes iguales, San Juan Textil --que con 27
      equipos mide diez veces mas alto que uno de un equipo-- se le montaba
@@ -1760,11 +1779,30 @@ function zonaCampo(mant){
      El radio tiene dos pisos y gana el mayor:
        · el PERIMETRO, que ahora es la suma de los tamanos y no la cuenta;
        · el CENTRO, para que el anillo no se le venga encima a lo nuestro. */
-  const RADIO_CENTRO = 26 + 14 + 16;
+  /* EL RADIO MINIMO SALE DE LAS ZONAS, NO DE UN NUMERO ESCRITO A MANO.
+     Estaba puesto en 26+14+16, tres medidas de cuando el centro era otro. Al
+     agrandar el taller o agregar el campo de internos habia que acordarse de
+     tocarlo, y nadie se acuerda: el anillo se le venia encima a lo nuestro o
+     quedaba absurdamente lejos. Ahora se mide la esquina mas lejana de las
+     zonas del centro y se le deja aire. */
+  const RADIO_CENTRO = (function(){
+    let r = 0;
+    ZONAS.forEach(function(zz){
+      if(zz.dist !== "equipos" || zz.id === "campo") return;
+      [[zz.x, zz.y], [zz.x+zz.w, zz.y], [zz.x, zz.y+zz.d], [zz.x+zz.w, zz.y+zz.d]]
+        .forEach(function(p){ r = Math.max(r, Math.hypot(p[0], p[1])); });
+    });
+    return r + 10;
+  })();
   const altoDe = function(g){
     return Math.max(3.2, 1.8 + Math.ceil(g.items.length / 3) * 2.2);
   };
-  const tam = grupos.map(function(g){ return Math.max(ANCHO_SITIO, altoDe(g) + 3.5); });
+  /* Lo que ocupa cada sitio de arco. Gana el mayor entre su ancho y su fondo:
+     en un anillo isometrico un sitio profundo le come lugar al vecino igual
+     que uno ancho, segun donde caiga. */
+  const tam = grupos.map(function(g){
+    return Math.max(anchoDe(g) + 1.6, altoDe(g) + 2.0);
+  });
   const suma = tam.reduce(function(a, b){ return a + b; }, 0);
   const R = Math.max(RADIO_CENTRO, suma / (2 * Math.PI));
   /* EL ROTULO DEL ANILLO, AHORA QUE SE CONOCE EL RADIO.
@@ -1776,10 +1814,12 @@ function zonaCampo(mant){
      El punto mas alto del anillo esta en el norte: gx=0, gy=-R. */
   const az = { x: w2s(0, -R).x, y: w2s(0, -R).y - 30 };
   label(az.x, az.y, "CAMPO / CLIENTES",
-        { col:"#4f8fe0", size:12, w:"800", fam:"disp", box:true });
+        { col:"#4f8fe0", size:12, w:"800", fam:"disp", box:true,
+          pri:PRI.zona, extra:16 });
   label(az.x, az.y + 14,
         ing != null ? ("renta del mes · " + usd(ing)) : "renta del mes · sin dato de RADAR",
-        { col: ing != null ? "#4f8fe0" : "#565b5f", size:9, min:LOD.resumen });
+        { col: ing != null ? "#4f8fe0" : "#565b5f", size:9, min:LOD.resumen,
+          pri:PRI.zona, sigue:true });
 
   let angAcum = -Math.PI / 2;
   grupos.forEach(function(g, gi){
@@ -1788,7 +1828,7 @@ function zonaCampo(mant){
     const ang = angAcum + paso / 2;
     angAcum += paso;
     const gx = Math.cos(ang) * R - 4.3, gy = Math.sin(ang) * R - alto / 2;
-    const ox = gx, oy = gy, ancho = 8.6;
+    const ox = gx, oy = gy, ancho = anchoDe(g);
     sitiosCliente[String(g.nombre).toUpperCase()] = { gx: ox + ancho/2, gy: oy + alto/2 };
     const shedW = Math.min(ancho, 6);
     push(ox, oy - 2.2, function(){
@@ -1803,8 +1843,12 @@ function zonaCampo(mant){
        function(){ fichaCliente(g.nombre); });
     /* rotulo del sitio, justo encima del vertice mas alto de la nave */
     const rc = { x: w2s(ox + shedW/2, oy - 1.1).x, y: w2s(ox, oy - 2.2).y - 36 };
+    /* La prioridad sube con el fierro que hay ahi: si dos nombres no caben,
+       el que se ve es el del cliente que mas tiene. */
+    const priSitio = PRI.sitio + g.items.length;
     label(rc.x, rc.y, g.nombre,
-          { col:"#4f8fe0", size:11, w:"700", fam:"disp", box:true, min:LOD.sitio });
+          { col:"#4f8fe0", size:11, w:"700", fam:"disp", box:true, min:LOD.sitio,
+            pri:priSitio, extra:13 });
     /* La cuenta SOLO si hay tres o mas. Con uno o dos se VEN los montacargas y
        el numero no agrega nada: era "1 equipo" escrito treinta veces alrededor
        del anillo, puro ruido con forma de dato. */
@@ -1813,7 +1857,8 @@ function zonaCampo(mant){
             g.sondeado ? (g.items.length + " equipos" +
                           (g.ajenos ? (" · " + g.ajenos + " suyos") : ""))
                        : (g.items.length + " equipos · sin campo de cliente en la base"),
-            { col: g.sondeado ? "#8b9096" : "#565b5f", size:8.5, box:true, min:LOD.cuenta });
+            { col: g.sondeado ? "#8b9096" : "#565b5f", size:8.5, box:true,
+              min:LOD.cuenta, pri:priSitio, sigue:true });
     }
     g.items.forEach(function(it, i){
       const px = ox + 1.4 + (i % 3) * 2.7, py = oy + 0.8 + Math.floor(i/3) * 2.2;
@@ -2550,6 +2595,10 @@ function buildScene(){
   pulsos = [];
 
   scene.items.sort(function(a,b){ return a.d - b.d; });
+  /* Por importancia, que es el orden en que se reparten el lugar en pantalla.
+     El orden tiene que ser ESTABLE: un renglon `sigue` cuelga del rotulo que
+     viene justo antes, y `sort` conserva el orden de los empates. */
+  scene.labels.sort(function(a,b){ return b.pri - a.pri; });
   /* EL PRIMER ENCUADRE, CUANDO YA HAY ALGO QUE ENCUADRAR.
      Al arrancar la camara se ponia en `baseScale()` --3 en una pantalla
      ancha-- y el mundo abria pegado a dos o tres montacargas, con el taller y
@@ -2585,9 +2634,31 @@ function draw(){
   dibujarResaltados();
   drawLabels();
 }
+/* LOS ROTULOS SE REPARTEN EL ESPACIO, NO SE PISAN.
+   ---------------------------------------------------------------------
+   Antes se dibujaban todos, uno encima de otro. Con 34 sitios de cliente el
+   anillo era una sopa de nombres, y el problema crecia solo: cada cliente
+   nuevo agregaba un nombre mas al mismo espacio.
+   Ahora se recorren por importancia --`scene.labels` viene ordenado por
+   `pri`-- y el que no cabe no se dibuja. Asi, de lejos quedan los clientes
+   grandes y los rotulos de zona; al acercarse hay lugar y van apareciendo
+   los chicos. Es un nivel de detalle que se calcula solo, en vez de
+   inventarle a cada rotulo a que zoom aparece.
+   Esto reemplaza a ojo lo que antes se intentaba con `min`, que sigue
+   sirviendo para lo que de lejos no se quiere ver NUNCA. */
+const cajasRotulo = [];
+function chocaRotulo(c){
+  for(let i = 0; i < cajasRotulo.length; i++){
+    const o = cajasRotulo[i];
+    if(c.x0 < o.x1 && c.x1 > o.x0 && c.y0 < o.y1 && c.y1 > o.y0) return true;
+  }
+  return false;
+}
 function drawLabels(){
   ctx.setTransform(DPR,0,0,DPR,0,0);
   ctx.textBaseline = "middle";
+  cajasRotulo.length = 0;
+  let padreOk = false;
   for(const l of scene.labels){
     const s = screenOf(l.x, l.y);
     if(s.x < -160 || s.x > CW+160 || s.y < 44 || s.y > CH-52) continue;
@@ -2598,12 +2669,27 @@ function drawLabels(){
     const size = Math.round(l.size * (cam.scale >= 3 ? 1.15 : 1));
     ctx.font = l.w + " " + size + "px " +
       (l.fam === "disp" ? "'Barlow Condensed',sans-serif" : "'IBM Plex Mono',monospace");
+    const w = ctx.measureText(l.t).width + 10;
+    /* La caja depende de la alineacion. Antes se calculaba como si todo
+       fuera centrado, y los rotulos alineados a la derecha --los bloques del
+       taller-- quedaban con el fondo corrido medio ancho. */
+    const x0 = l.al === "left" ? s.x - 5
+             : l.al === "right" ? s.x - w + 5
+             : s.x - w/2;
+    const y0 = s.y - size/2 - 3;
+    const caja = { x0:x0, y0:y0, x1:x0 + w, y1:y0 + size + 6 + l.extra };
+    if(l.sigue){
+      if(!padreOk) continue;          // el renglon de arriba no cupo
+      cajasRotulo.push(caja);
+    }else{
+      if(chocaRotulo(caja)){ padreOk = false; continue; }
+      cajasRotulo.push(caja);
+      padreOk = true;
+    }
     ctx.textAlign = l.al;
     if(l.box){
-      const w = ctx.measureText(l.t).width + 10;
-      const x = l.al === "left" ? s.x - 5 : s.x - w/2;
       ctx.fillStyle = "rgba(23,25,26,0.85)";
-      ctx.fillRect(Math.round(x), Math.round(s.y - size/2 - 3), Math.round(w), size + 6);
+      ctx.fillRect(Math.round(x0), Math.round(y0), Math.round(w), size + 6);
     }
     ctx.fillStyle = l.col;
     ctx.fillText(l.t, Math.round(s.x), Math.round(s.y));
