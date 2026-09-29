@@ -660,6 +660,7 @@ function evalCached(eq, ultimo){
    ===================================================================== */
 async function cargarFlota(){
   state.equipos = {}; state.preventivos = {}; state.correctivos = {};
+  state.cerradas = {};
   const errores = [];
   /* Las llaves de Firebase solo son unicas DENTRO de su empresa, asi que al
      juntar las dos hay que prefijarlas. Sin esto, dos equipos con la misma
@@ -677,14 +678,22 @@ async function cargarFlota(){
   }
   await Promise.all(EMPRESAS.map(async function(e){
     try{
-      const [eq, pv, cr] = await Promise.all([
+      /* `ordenesCerradas` es el archivo del trabajo TERMINADO, y es el unico
+         nodo de ordenes que no se contradice: las 105 de MT Rental traen
+         `fechaCierre`, las 105. En `preventivos`/`correctivos` hay cuatro
+         campos que dicen "ya cerro" y 98 de 103 no coinciden entre si.
+         Es donde estaba la mitad del historial que este mapa daba por
+         perdido. */
+      const [eq, pv, cr, ce] = await Promise.all([
         getJSON(e.nodo + "/equipos"),
         getJSON(e.nodo + "/preventivos").catch(()=>({})),
-        getJSON(e.nodo + "/correctivos").catch(()=>({}))
+        getJSON(e.nodo + "/correctivos").catch(()=>({})),
+        getJSON(e.nodo + "/ordenesCerradas").catch(()=>({}))
       ]);
       volcar(state.equipos,     e.nodo, eq);
       volcar(state.preventivos, e.nodo, pv);
       volcar(state.correctivos, e.nodo, cr);
+      volcar(state.cerradas,    e.nodo, ce);
     }catch(err){
       console.error("[Mundo] flota " + e.nodo + ":", err.message);
       errores.push(e.nombre + ": " + err.message);
@@ -1239,7 +1248,11 @@ const ZONAS = [
   /* d=32 y no 24: son 56 equipos en seis columnas, o sea diez filas de 2.8,
      que son 28 de fondo mas el respiro de arriba y el de abajo. Con 24 los
      de las ultimas filas se salian del piso y quedaban flotando en negro. */
-  { id:"taller",  nombre:"TALLER",           dist:"equipos", x:-11, y:2,   w:22, d:32, piso:"#2a2d2f", linea:"#34383b" },
+  /* d=28: el taller mas grande hoy es el de MT Rental con 33 maquinas --seis
+     filas, mas el renglon en blanco que separa las que estan en trabajo de
+     las que solo estan paradas, mas la bahia de los mecanicos sin equipo al
+     final--. Era 32 cuando las dos empresas se dibujaban encimadas. */
+  { id:"taller",  nombre:"TALLER",           dist:"equipos", x:-11, y:2,   w:22, d:28, piso:"#2a2d2f", linea:"#34383b" },
   /* AL LADO DE DISPONIBLES, NO ADENTRO. Antes estos colgaban de un bloque
      flotante debajo del patio que se calculaba a mano desde las filas de la
      rejilla; cada vez que el patio cambiaba de tamano se montaban encima de
@@ -1545,17 +1558,52 @@ function zonaTaller(mant){
     label(centroZona(z).x, centroZona(z).y, "TALLER VACÍO", { col:"#3ecf7e", size:11, w:"700", fam:"disp" });
     return;
   }
-  /* el mas urgente primero, arriba a la izquierda */
-  const pos = rejilla(lista.length, 6, z.x+1.6, z.y+1.4, 3.4, 2.8);
-  lista.forEach(function(it, i){
-    const p = pos[i] || { gx:z.x+1.6, gy:z.y+1.4 + i*2.8 };
-    ponerEquipo(p.gx, p.gy, it.eq, it.ev, { barra:true, body:"#e5534b" });
-  });
+  /* EL TALLER SON DOS COSAS DISTINTAS Y HASTA HOY SE VEIAN IGUAL.
+     ---------------------------------------------------------------------
+     Arriba, lo que alguien esta arreglando: hay una orden abierta y, casi
+     siempre, un mecanico al lado. Abajo, lo que solo esta parado -- un
+     estado que alguien puso y que nadie limpio.
+     Hoy son 3 contra 52. En un solo rectangulo rojo con 55 maquinas iguales
+     eso no se veia, y el taller parecia estar reventando de trabajo cuando
+     lo que esta es reventando de maquinas detenidas. */
+  const enTrabajo = lista.filter(function(x){ return !x.sinOrden; });
+  const parados   = lista.filter(function(x){ return x.sinOrden; });
+  let fila = 0;
+
+  function bloque(items, y0, titulo, sub, col){
+    if(!items.length) return 0;
+    const pos = rejilla(items.length, 6, z.x+1.6, y0, 3.4, 2.8);
+    items.forEach(function(it, i){
+      const p = pos[i] || { gx:z.x+1.6, gy:y0 + i*2.8 };
+      ponerEquipo(p.gx, p.gy, it.eq, it.ev, { barra:true, body:"#e5534b" });
+    });
+    /* AL CANTO IZQUIERDO DE SU PRIMERA FILA, no al centro de la zona: en
+       isometrico el centro de la zona es el centro del piso, o sea justo
+       donde estan las maquinas, y el rotulo caia encima de ellas.
+       Desde gx = z.x - 0.8 la etiqueta sale por fuera de la rejilla, que
+       arranca en z.x + 1.6, y alineada a la derecha crece alejandose. */
+    const c = w2s(z.x - 0.8, y0 + 0.9);
+    label(c.x, c.y, titulo + " \u00b7 " + items.length,
+          { col:col, size:10, w:"800", fam:"disp", box:true, al:"right",
+            min:LOD.resumen });
+    if(sub) label(c.x, c.y + 11, sub,
+                  { col:"#8b9096", size:8.5, box:true, al:"right", min:LOD.cuenta });
+    return Math.ceil(items.length / 6);
+  }
+
+  fila += bloque(enTrabajo, z.y + 1.8, "EN TRABAJO",
+                 "con orden abierta", "#3ecf7e");
+  /* El renglon en blanco entre los dos bloques es el que hace que se lean
+     como dos cosas y no como una lista larga. */
+  const y0Par = z.y + 1.8 + fila * 2.8 + (fila ? 2.6 : 0);
+  fila += bloque(parados, y0Par, "PARADOS, SIN ORDEN",
+                 "nadie tiene trabajo abierto sobre ellos", "#e5534b") +
+          (fila ? 1 : 0);
+
   /* Debajo de la ULTIMA fila de equipos, no del borde nominal de la zona:
      con 48 montacargas la rejilla se sale de la zona por abajo, y la bahia
      quedaba plantada en medio de los fierros. */
-  const filas = Math.ceil(lista.length / 6);
-  mecanicosSinEquipo(z, z.y + 1.4 + filas * 2.8 + 1.4);
+  mecanicosSinEquipo(z, z.y + 1.8 + fila * 2.8 + 1.4);
 }
 
 /* La bahia de los que trabajan en algo que el mapa no puede dibujar.
@@ -2306,6 +2354,31 @@ function computeFlotaMundo(){
     });
   });
 
+  /* EL HISTORIAL QUE FALTABA.
+     ---------------------------------------------------------------------
+     `ordenesCerradas` no guarda `equipoId`: guarda `equipo` como texto
+     ("E-01 - GENIE Z-60/37 FE") y `serie`. La serie es mejor llave que el id
+     de todos modos --el nodo `equipos` es un arreglo y sus indices bailan,
+     que es la trampa T2 del repo de la app--, pero hay series repetidas
+     entre las dos empresas, asi que el indice se arma DENTRO de la empresa
+     que se esta mirando y una serie ambigua se descarta en vez de adivinar. */
+  const porSerie = {};
+  Object.values(equipos).forEach(function(eq){
+    if(eq._empresa !== vista) return;
+    const s = String(eq.serie || "").trim().toUpperCase();
+    if(!s || s === "\u2014" || s === "-") return;
+    porSerie[s] = (porSerie[s] === undefined) ? eq.id : null;   // null = repetida
+  });
+  Object.values(state.cerradas || {}).forEach(function(o){
+    if(o._empresa !== vista) return;
+    const id = porSerie[String(o.serie || "").trim().toUpperCase()];
+    if(!id) return;
+    const f = aFecha(o.fechaCierre);
+    if(!f) return;
+    if(!ultimo[id] || f > ultimo[id].fecha)
+      ultimo[id] = { fecha:f, horometro: aNumero(o.horometro) };
+  });
+
   const taller = [], patio = [], otros = [], renta = [], ajenos = [], interno = [];
   Object.values(equipos).forEach(function(eq){
     /* TALLER-SPS y TALLER-CHOLOMA no son maquinas: son perchas donde el
@@ -2314,7 +2387,16 @@ function computeFlotaMundo(){
     if(eq._empresa !== vista) return;        // solo la empresa que se mira
     const ev = evalCached(eq, ultimo[eq.id] || null);
     const b  = zonaDe(eq);
-    const it = { eq:eq, ev:ev, bucket:b, ajeno: esDeCliente(eq) };
+    /* ESTAR EN EL TALLER NO ES ESTAR EN TRABAJO.
+       De las 55 maquinas que la app pone en el taller, 3 tienen una orden
+       abierta. Las otras 52 llevan un estado que nadie limpio: 48 en MAL
+       ESTADO sin que nadie abriera una orden, y 4 pegadas EN MANTENIMIENTO
+       despues de que su orden cerrara (TRAMPAS.md T3: al cerrar desde
+       Gerencia, `equipoADisponible` solo devuelve MAL ESTADO a DISPONIBLE,
+       asi que lo que entro EN MANTENIMIENTO se queda ahi). */
+    const trab = (enCurso.porEquipo || {})[eq._empresa + ":" + (eq.id || "")];
+    const it = { eq:eq, ev:ev, bucket:b, ajeno: esDeCliente(eq),
+                 sinOrden: !(trab && trab.length) };
     if(b === "mant")        taller.push(it);
     else if(b === "disp")   patio.push(it);
     else if(b === "renta")  renta.push(it);
@@ -2367,9 +2449,16 @@ function computeFlotaMundo(){
                ajenos: e[1].filter(function(x){ return x.ajeno; }).length };
     });
 
+  /* En el taller manda el trabajo: primero lo que alguien esta arreglando,
+     despues lo que solo esta parado. Dentro de cada bloque, por codigo, que
+     es lo que mantiene a cada maquina en su casilla entre refrescos. */
+  const tallerOrd = ordenar(taller.filter(function(x){ return !x.sinOrden; }))
+              .concat(ordenar(taller.filter(function(x){ return x.sinOrden; })));
+
   return {
-    taller: ordenar(taller), patio: ordenar(patio), otros: ordenar(otros), campo: campo,
+    taller: tallerOrd, patio: ordenar(patio), otros: ordenar(otros), campo: campo,
     interno: ordenar(interno),
+    tallerConOrden: taller.length - taller.filter(function(x){ return x.sinOrden; }).length,
     total: taller.length + patio.length + otros.length + renta.length +
            ajenos.length + interno.length,
     renta: renta.length,
@@ -3125,10 +3214,26 @@ function renderLeyenda(flota){
                         'en nuestro taller.');
   li(mancha("#5b6165"), '<b>Gris: no se sabe c\u00f3mo est\u00e1.</b> La base no tiene ni fecha de ' +
                         '\u00faltimo mantenimiento ni hor\u00f3metro con qu\u00e9 comparar.');
-  H.push('<div class="nota">En gris hay <b>' + fant + ' de ' + todos.length + '</b>. Son tantos ' +
-         'porque <b>ning\u00fan equipo</b> tiene cargada la fecha de \u00faltimo mantenimiento: los pocos ' +
-         'que no lo est\u00e1n es porque cerraron una orden en la app y de ah\u00ed sale la fecha. ' +
-         'Una orden ABIERTA no cuenta \u2014 el trabajo todav\u00eda no se hizo.</div>');
+  H.push('<div class="nota">En gris hay <b>' + fant + ' de ' + todos.length + '</b>. La fecha ' +
+         'no sale de la ficha del equipo \u2014 el campo <code>ultimoMant</code> est\u00e1 vac\u00edo en ' +
+         'los 215 \u2014 sino de las \u00f3rdenes que YA cerraron, en <code>preventivos</code>, ' +
+         '<code>correctivos</code> y <code>ordenesCerradas</code>. En gris est\u00e1n los que no ' +
+         'tienen ninguna cerrada. Una orden ABIERTA no cuenta: el trabajo todav\u00eda no se hizo.</div>');
+
+  /* Es el numero mas importante del mapa y hasta hoy no estaba en ningun lado. */
+  if(flota.taller.length){
+    const conOrd = flota.tallerConOrden || 0;
+    H.push('<h4>El taller son dos cosas</h4>');
+    li(cuad("#3ecf7e"), '<b>En trabajo: ' + conOrd + '.</b> Hay una orden abierta sobre ' +
+                        'ellos ahora mismo.');
+    li(cuad("#e5534b"), '<b>Parados sin orden: ' + (flota.taller.length - conOrd) + '.</b> ' +
+                        'Llevan un estado que alguien puso y que nadie limpi\u00f3.');
+    H.push('<div class="nota">El estado de un equipo <b>no se limpia solo</b>. MAL ESTADO ' +
+           'se escribe a mano; EN MANTENIMIENTO lo pone la app al abrir una orden y al ' +
+           'cerrarla desde Gerencia no lo devuelve (<b>TRAMPAS.md T3</b> en el repo de la ' +
+           'app). Cada una de estas m\u00e1quinas es una pregunta: \u00bfest\u00e1 rota, o solo ' +
+           'sigue marcada as\u00ed?</div>');
+  }
 
   H.push('<h4>C\u00f3mo lo levanta dice C\u00d3MO est\u00e1</h4>');
   li("", 'Solo en el <b>taller</b>. Cada m\u00e1quina lo cuenta con lo que tiene: el ' +
@@ -3223,6 +3328,24 @@ function fichaEquipo(eq, ev, trabajo){
 
   function fila(k, v){ H.push('<div class="fila"><span>' + esc(k) + '</span><b>' + esc(v) + '</b></div>'); }
 
+  /* Dos avisos distintos porque son dos cosas distintas, y el repo de la app
+     las separa: MAL ESTADO lo pone una persona y ahi se queda; EN
+     MANTENIMIENTO lo pone la app sola y al cerrar desde Gerencia no lo
+     devuelve (TRAMPAS.md T3). */
+  if(b === "mant" && !(trabajo && trabajo.length)){
+    const est = String(eq.estado || "").trim().toUpperCase();
+    if(est === "EN MANTENIMIENTO"){
+      H.push('<div class="aviso">Est\u00e1 <b>EN MANTENIMIENTO sin ninguna orden abierta</b>. ' +
+             'La app pone ese estado sola al abrir una orden, pero al cerrarla desde ' +
+             'Gerencia no lo devuelve: <code>equipoADisponible</code> solo convierte ' +
+             'MAL ESTADO en DISPONIBLE. Est\u00e1 documentado en el repo de la app, ' +
+             '<b>TRAMPAS.md T3</b>. La m\u00e1quina puede estar lista hace meses.</div>');
+    }else{
+      H.push('<div class="aviso">Marcado <b>MAL ESTADO</b>, pero <b>nadie abri\u00f3 una ' +
+             'orden</b>. Ese estado se pone a mano y no se limpia solo. Mientras siga ' +
+             'as\u00ed no se puede rentar y no hay trabajo agendado para repararlo.</div>');
+    }
+  }
   if(esInterno(eq)){
     H.push('<div class="aviso gris">Es <b>interno</b>: no es inventario de renta, es con ' +
            'lo que se mueve el inventario. Por eso no sale en <b>disponibles</b> \u2014 ' +
