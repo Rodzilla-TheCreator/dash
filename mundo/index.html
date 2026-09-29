@@ -2096,8 +2096,26 @@ function computeEnCurso(){
     const reg = state[nodo] || {};
     Object.keys(reg).forEach(function(k){
       const o = reg[k];
+      /* CERRADA SI CUALQUIER SENAL LO DICE.
+         La app guarda "ya termino" en CUATRO campos que no se mantienen
+         juntos: `completado`, `estado`, `fechaCierre` y `fechaCompletado`. De
+         103 ordenes, 98 se contradicen -- tienen alguna senal de cerrada y
+         alguna de abierta. Solo 5 no tienen ninguna.
+
+         Yo miraba `estado` + `fechaCierre` y contaba 33 abiertas. La app de
+         Miguel mira `completado` y le muestra 39. Ninguno de los dos numeros
+         existe: son dos lecturas distintas del mismo lio. Miguel lo noto
+         porque le señalamos un equipo "con preventivo abierto" que en SU
+         pantalla no aparecia, y tenia razon.
+
+         Se toma la lectura conservadora: basta UNA senal de cierre para no
+         decir que esta abierta. Vale mas callar una orden abierta que
+         inventar veintiocho -- eso es lo que hace que nadie le crea al mapa. */
       const est = String(o.estado || "").trim().toLowerCase();
-      const cerrada = !!String(o.fechaCierre || "").trim() || est.indexOf("completad") === 0;
+      const cerrada = o.completado === true
+                   || est.indexOf("completad") === 0
+                   || !!String(o.fechaCierre || "").trim()
+                   || !!String(o.fechaCompletado || "").trim();
       if(cerrada) return;
       const tec = String(o.tecnico || "").split(",")
         .map(function(t){ return t.trim(); }).filter(Boolean);
@@ -2145,9 +2163,16 @@ function computeFlotaMundo(){
          Peor: era circular. Abrirle una orden a un equipo lo ponia al dia.
          Se usa el mismo criterio que en computeEnCurso: hay fecha de cierre,
          o el estado dice Completado. */
+      /* Misma lectura que en computeEnCurso: cerrada si CUALQUIER senal lo
+         dice. Aca el riesgo es al reves --contar como hecho algo que no se
+         hizo-- pero la contradiccion es la misma y conviene una sola regla en
+         todo el archivo, no dos que se parezcan. */
       const est = String(r.estado || "").trim().toLowerCase();
-      const cerrada = !!String(r.fechaCierre || "").trim() || est.indexOf("completad") === 0;
-      if(r.completado === false || !cerrada) return;
+      const cerrada = r.completado === true
+                   || est.indexOf("completad") === 0
+                   || !!String(r.fechaCierre || "").trim()
+                   || !!String(r.fechaCompletado || "").trim();
+      if(!cerrada) return;
       const eqid = primerCampo(r, CAMPOS_MANT_EQUIPOID);
       const f    = aFecha(primerCampo(r, CAMPOS_FECHA));
       if(!eqid || !f) return;
