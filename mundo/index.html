@@ -374,9 +374,10 @@ const COL_INTERNO = "#a9741f";      // ambar: nuestro, pero no se renta
 function esInterno(eq){
   if(!eq || esDeCliente(eq)) return false;
   /* `esVehiculo` esta en la base y marca exactamente estos once. Se mira
-     primero, pero la silueta queda de respaldo porque ese campo se pierde:
-     al reescribir la flota desde Supervision o MONHACO se suben solo 13
-     campos y `esVehiculo` no esta entre ellos (TRAMPAS.md T11). */
+     primero. La silueta queda de respaldo: hasta el 29-sep ese campo se
+     borraba al reescribir la flota desde Supervision o MONHACO (T11 del repo
+     de Nexo, ya arreglada), y un registro que lo perdio entonces no lo
+     recupera solo. */
   if(eq.esVehiculo === true) return true;
   const f = formaDe(eq);
   return f === "pickup" || f === "camion" || f === "grua";
@@ -394,6 +395,36 @@ function esInterno(eq){
    usando sin fallas. Es un estado de servicio, no de inventario.
    Mostrar "DISPONIBLE" a secas hacia pensar que era un dato sin mantener.
    Es un dato de verdad, y ademas el unico que tenemos de esas maquinas. */
+/* LA REGLA DE ESTADOS DE NEXO, DESDE EL 2026-09-30 (CLAUDE.md seccion 5).
+   ---------------------------------------------------------------------
+   Al abrir una orden el equipo pasa a EN MANTENIMIENTO. Al cerrarla la app
+   pregunta "Como quedo el equipo?" y guarda la respuesta en
+   `o.equipoQuedo`: 'operativo' lo devuelve a lo que era, 'falla' lo deja
+   MAL ESTADO. No aplica a equipos de cliente.
+   Eso parte a MAL ESTADO en dos: el que salio de una orden cerrada con
+   'falla' esta BIEN marcado -- alguien lo reviso y sigue roto --, y el que
+   no tiene ninguna orden detras es una marca de antes de la regla, puesta a
+   mano, que nadie reviso. Para quien camina el taller son dos trabajos
+   distintos: uno espera repuesto o reparacion, el otro espera que alguien
+   lo mire. */
+function ordenCerrada(o){
+  const est = String(o.estado || "").trim().toLowerCase();
+  return o.completado === true || est.indexOf("completad") === 0
+      || !!String(o.fechaCierre || "").trim() || !!String(o.fechaCompletado || "").trim();
+}
+function quedoConFalla(eq){
+  if(!eq) return false;
+  let ultima = null, fUlt = null;
+  ["preventivos", "correctivos"].forEach(function(nodo){
+    Object.values(state[nodo] || {}).forEach(function(o){
+      if(o._empresa !== eq._empresa || o.equipoId !== eq.id || !ordenCerrada(o)) return;
+      const f = aFecha(o.fechaCierre || o.fechaCompletado || o.fecha);
+      if(!ultima || (f && (!fUlt || f > fUlt))){ ultima = o; fUlt = f; }
+    });
+  });
+  return !!ultima && String(ultima.equipoQuedo || "").toLowerCase() === "falla";
+}
+
 function estadoTxt(eq){
   const e = String((eq && eq.estado) || "").trim().toUpperCase();
   if(esDeCliente(eq) && e === "DISPONIBLE") return "Sin trabajo activo";
@@ -707,11 +738,11 @@ async function cargarFlota(){
   await Promise.all(EMPRESAS.map(async function(e){
     try{
       /* `ordenesCerradas` es el archivo del trabajo TERMINADO, y es el unico
-         nodo de ordenes que no se contradice: las 105 de MT Rental traen
-         `fechaCierre`, las 105. En `preventivos`/`correctivos` hay cuatro
-         campos que dicen "ya cerro" y 98 de 103 no coinciden entre si.
-         Es donde estaba la mitad del historial que este mapa daba por
-         perdido. */
+         nodo de ordenes que no se contradice: todas traen `fechaCierre`. En
+         `preventivos`/`correctivos` hay cuatro campos que dicen "ya cerro" y
+         en mas de 9 de cada 10 ordenes no coinciden entre si (91 de 100 el
+         1-oct). Es donde estaba la mitad del historial que este mapa daba
+         por perdido. */
       const [eq, pv, cr, ce] = await Promise.all([
         getJSON(e.nodo + "/equipos"),
         getJSON(e.nodo + "/preventivos").catch(()=>({})),
@@ -2430,9 +2461,11 @@ function computeFlotaMundo(){
   /* EL HISTORIAL QUE FALTABA.
      ---------------------------------------------------------------------
      `ordenesCerradas` no guarda `equipoId`: guarda `equipo` como texto
-     ("E-01 - GENIE Z-60/37 FE") y `serie`. La serie es mejor llave que el id
-     de todos modos --el nodo `equipos` es un arreglo y sus indices bailan,
-     que es la trampa T2 del repo de la app--, pero hay series repetidas
+     ("E-01 - GENIE Z-60/37 FE") y `serie`. La serie es mejor llave que la
+     posicion de todos modos --el nodo `equipos` es un arreglo y sus indices
+     se corren cuando se borra uno; desde el 29-sep la app ya no escribe en
+     el equipo equivocado por eso (T2, arreglada), pero la posicion sigue
+     sin ser identidad--. Hay series repetidas
      entre las dos empresas, asi que el indice se arma DENTRO de la empresa
      que se esta mirando y una serie ambigua se descarta en vez de adivinar. */
   const porSerie = {};
@@ -2461,12 +2494,13 @@ function computeFlotaMundo(){
     const ev = evalCached(eq, ultimo[eq.id] || null);
     const b  = zonaDe(eq);
     /* ESTAR EN EL TALLER NO ES ESTAR EN TRABAJO.
-       De las 55 maquinas que la app pone en el taller, 3 tienen una orden
-       abierta. Las otras 52 llevan un estado que nadie limpio: 48 en MAL
-       ESTADO sin que nadie abriera una orden, y 4 pegadas EN MANTENIMIENTO
-       despues de que su orden cerrara (TRAMPAS.md T3: al cerrar desde
-       Gerencia, `equipoADisponible` solo devuelve MAL ESTADO a DISPONIBLE,
-       asi que lo que entro EN MANTENIMIENTO se queda ahi). */
+       Medido el 1-oct: de 54 maquinas en el taller, 7 tienen una orden
+       abierta. Las otras 47 estan MAL ESTADO sin ninguna orden, y las 47 son
+       de antes del 30-sep: marcas puestas a mano que nadie reviso.
+       Aca decia que habia ademas equipos "pegados" EN MANTENIMIENTO por un
+       bug de la app al cerrar (T3). Estaba mal: la nota del arreglo de T3
+       dice que esos 4 se habian cambiado a mano en la ficha. Y T3 esta
+       arreglada desde el 30-sep; ver `quedoConFalla()` para la regla nueva. */
     const trab = (enCurso.porEquipo || {})[eq._empresa + ":" + (eq.id || "")];
     const it = { eq:eq, ev:ev, bucket:b, ajeno: esDeCliente(eq),
                  sinOrden: !(trab && trab.length) };
@@ -3345,13 +3379,25 @@ function renderLeyenda(flota){
     H.push('<h4>El taller son dos cosas</h4>');
     li(cuad("#3ecf7e"), '<b>En trabajo: ' + conOrd + '.</b> Hay una orden abierta sobre ' +
                         'ellos ahora mismo.');
+    const sinOrd = flota.taller.filter(function(x){ return x.sinOrden && !esDeCliente(x.eq); });
+    const conFalla = sinOrd.filter(function(x){ return quedoConFalla(x.eq); }).length;
+    const aMano = sinOrd.filter(function(x){
+      return String(x.eq.estado || "").trim().toUpperCase() === "EN MANTENIMIENTO"; }).length;
+    const viejas = sinOrd.length - conFalla - aMano;
     li(cuad("#e5534b"), '<b>Parados sin orden: ' + (flota.taller.length - conOrd) + '.</b> ' +
-                        'Llevan un estado que alguien puso y que nadie limpi\u00f3.');
-    H.push('<div class="nota">El estado de un equipo <b>no se limpia solo</b>. MAL ESTADO ' +
-           'se escribe a mano; EN MANTENIMIENTO lo pone la app al abrir una orden y al ' +
-           'cerrarla desde Gerencia no lo devuelve (<b>TRAMPAS.md T3</b> en el repo de la ' +
-           'app). Cada una de estas m\u00e1quinas es una pregunta: \u00bfest\u00e1 rota, o solo ' +
-           'sigue marcada as\u00ed?</div>');
+                        'Nadie tiene trabajo abierto sobre ellos.');
+    if(viejas)   li("", '\u00b7 <b>' + viejas + '</b> marcados MAL ESTADO <b>de antes</b> del 30 de ' +
+                        'septiembre, a mano, que nadie revis\u00f3.');
+    if(conFalla) li("", '\u00b7 <b>' + conFalla + '</b> que cerraron su orden diciendo que siguen ' +
+                        'con falla: bien marcados, esperan reparaci\u00f3n.');
+    if(aMano)    li("", '\u00b7 <b>' + aMano + '</b> EN MANTENIMIENTO sin orden: alguien lo cambi\u00f3 ' +
+                        'a mano en la ficha.');
+    H.push('<div class="nota">Desde el 30 de septiembre la app tiene una regla \u00fanica: al ' +
+           'abrir una orden el equipo pasa a mantenimiento, y al cerrarla se pregunta c\u00f3mo ' +
+           'qued\u00f3 \u2014 operativo, o sigue con falla. Lo que est\u00e1 en el taller sin orden ' +
+           'y sin esa respuesta es de antes de la regla. Cada una de esas m\u00e1quinas es una ' +
+           'pregunta que alguien tiene que contestar: \u00bfest\u00e1 rota, o solo sigue marcada ' +
+           'as\u00ed?</div>');
   }
 
   H.push('<h4>C\u00f3mo lo levanta dice C\u00d3MO est\u00e1</h4>');
@@ -3447,22 +3493,26 @@ function fichaEquipo(eq, ev, trabajo){
 
   function fila(k, v){ H.push('<div class="fila"><span>' + esc(k) + '</span><b>' + esc(v) + '</b></div>'); }
 
-  /* Dos avisos distintos porque son dos cosas distintas, y el repo de la app
-     las separa: MAL ESTADO lo pone una persona y ahi se queda; EN
-     MANTENIMIENTO lo pone la app sola y al cerrar desde Gerencia no lo
-     devuelve (TRAMPAS.md T3). */
-  if(b === "mant" && !(trabajo && trabajo.length)){
+  /* Tres casos, porque desde la regla de estados del 30-sep (ver
+     `quedoConFalla`) son tres cosas distintas y cada una pide algo distinto
+     a quien camina el taller. */
+  if(b === "mant" && !(trabajo && trabajo.length) && !esDeCliente(eq)){
     const est = String(eq.estado || "").trim().toUpperCase();
     if(est === "EN MANTENIMIENTO"){
       H.push('<div class="aviso">Est\u00e1 <b>EN MANTENIMIENTO sin ninguna orden abierta</b>. ' +
-             'La app pone ese estado sola al abrir una orden, pero al cerrarla desde ' +
-             'Gerencia no lo devuelve: <code>equipoADisponible</code> solo convierte ' +
-             'MAL ESTADO en DISPONIBLE. Est\u00e1 documentado en el repo de la app, ' +
-             '<b>TRAMPAS.md T3</b>. La m\u00e1quina puede estar lista hace meses.</div>');
+             'Desde el 30 de septiembre la app pone ese estado solo al abrir una orden y lo ' +
+             'saca al cerrarla, as\u00ed que sin orden abierta <b>alguien lo cambi\u00f3 a mano ' +
+             'en la ficha</b>. Hay que ver si se le abre una orden o se devuelve.</div>');
+    }else if(quedoConFalla(eq)){
+      H.push('<div class="aviso gris">Su \u00faltima orden se cerr\u00f3 diciendo que <b>sigue ' +
+             'con falla</b>. Est\u00e1 bien marcado: alguien lo revis\u00f3. Lo que falta es que ' +
+             'se le abra la reparaci\u00f3n.</div>');
     }else{
-      H.push('<div class="aviso">Marcado <b>MAL ESTADO</b>, pero <b>nadie abri\u00f3 una ' +
-             'orden</b>. Ese estado se pone a mano y no se limpia solo. Mientras siga ' +
-             'as\u00ed no se puede rentar y no hay trabajo agendado para repararlo.</div>');
+      H.push('<div class="aviso">Marcado <b>MAL ESTADO</b> y <b>sin ninguna orden</b>. Desde el ' +
+             '30 de septiembre ese estado solo lo pone la app al cerrar una orden diciendo que ' +
+             'el equipo sigue con falla; este es <b>de antes</b>, puesto a mano, y nadie lo ' +
+             'revis\u00f3. Mientras siga as\u00ed no se puede rentar. Hay que decidir: \u00bfse le ' +
+             'abre una orden, o est\u00e1 bueno y solo hay que marcarlo operativo?</div>');
     }
   }
   if(esInterno(eq)){
@@ -3481,8 +3531,9 @@ function fichaEquipo(eq, ev, trabajo){
                (String(eq.estado||"").trim().toUpperCase() === "DISPONIBLE"
                  ? '<br>Que su estado siga diciendo <b>sin trabajo activo</b> no es un error ' +
                    'del mapa: al abrir una orden, la app <b>no le toca el estado a un equipo ' +
-                   'de cliente</b> \u2014 lo excluye a prop\u00f3sito (<code>FLUJO.md</code> ' +
-                   '\u00a72). Ese estado solo cambia si alguien lo pone a mano.'
+                   'de cliente</b> \u2014 la regla de estados lo excluye a prop\u00f3sito ' +
+                   '(<code>CLAUDE.md</code> \u00a75 del repo de Nexo). Ese estado solo cambia si ' +
+                   'alguien lo pone a mano.'
                  : '')
              : 'Su estado es <b>sin trabajo activo</b> \u2014 as\u00ed le llama la app al ' +
                'estado <code>DISPONIBLE</code> cuando la m\u00e1quina es de un cliente. ' +
