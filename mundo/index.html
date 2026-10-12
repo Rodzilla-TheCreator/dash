@@ -71,14 +71,16 @@
     background:rgba(23,25,26,0.95);border:1px solid var(--panel-line);
     backdrop-filter:blur(3px);display:flex;flex-direction:column;
     max-height:calc(100vh - 150px);}
-  #busc-caja{display:flex;align-items:center;gap:6px;padding:7px 9px;
+  #busc-caja,#cli-caja{display:flex;align-items:center;gap:6px;padding:7px 9px;
     background:var(--panel);border-bottom:1px solid var(--panel-line);}
-  #busc-txt{flex:1;min-width:0;background:transparent;border:0;color:var(--ink);
+  #busc-txt,#cli-txt{flex:1;min-width:0;background:transparent;border:0;color:var(--ink);
     font-family:'IBM Plex Mono',monospace;font-size:12px;outline:none;}
-  #busc-txt::placeholder{color:#565b5f;}
-  #busc-x,#busc-ver{background:transparent;border:0;color:var(--ink-dim);font-size:13px;
-    cursor:pointer;padding:2px 3px;}
-  #busc-x:hover,#busc-ver:hover{color:var(--amber);}
+  #busc-txt::placeholder,#cli-txt::placeholder{color:#565b5f;}
+  #busc-x,#busc-ver,#cli-x,#cli-ver{background:transparent;border:0;color:var(--ink-dim);
+    font-size:13px;cursor:pointer;padding:2px 3px;}
+  #busc-x:hover,#busc-ver:hover,#cli-x:hover,#cli-ver:hover{color:var(--amber);}
+  /* con un cliente fijo, la caja lo dice en el azul de los sitios de cliente */
+  #cli-caja.fijo #cli-txt{color:#4f8fe0;font-weight:600;}
   #busc-res{overflow-y:auto;padding:4px 0 6px;}
   /* la lista de una zona (botones de abajo): cabecera con el numero que importa */
   #busc .zcab{padding:7px 10px 7px;border-bottom:1px solid var(--panel-line);margin-bottom:2px;}
@@ -102,9 +104,9 @@
   @media(max-width:760px){ #busc{left:6px;right:6px;width:auto;max-height:46vh;} }
 
   /* ---------- panel del equipo (izquierda) ---------- */
-  #eqp{position:fixed;left:10px;top:120px;z-index:7;width:264px;
+  #eqp{position:fixed;left:10px;top:150px;z-index:7;width:264px;
     background:rgba(23,25,26,0.95);border:1px solid var(--panel-line);
-    backdrop-filter:blur(3px);max-height:calc(100vh - 150px);
+    backdrop-filter:blur(3px);max-height:calc(100vh - 180px);
     display:none;flex-direction:column;}
   #eqp.abierto{display:flex;}
   #eqp-cab{display:flex;align-items:flex-start;gap:8px;padding:9px 10px;
@@ -263,6 +265,12 @@
            placeholder="Buscar equipo: MT-113, baoli, elcatex…" aria-label="Buscar equipo">
     <button id="busc-ver" aria-label="Ver por tipo" title="Ver por tipo">&#9776;</button>
     <button id="busc-x" aria-label="Cerrar">&#10005;</button>
+  </div>
+  <div id="cli-caja">
+    <input id="cli-txt" type="search" autocomplete="off" spellcheck="false"
+           placeholder="Buscar cliente: el jordan, elcatex…" aria-label="Buscar cliente">
+    <button id="cli-ver" aria-label="Ver todos los clientes" title="Ver todos los clientes">&#9776;</button>
+    <button id="cli-x" aria-label="Soltar cliente" title="Soltar cliente">&#10005;</button>
   </div>
   <div id="busc-res"></div>
 </div>
@@ -726,8 +734,13 @@ function evalCached(eq, ultimo){
    se deja vacio y el mundo lo dibuja apagado. NUNCA se inventa relleno.
    ===================================================================== */
 async function cargarFlota(){
-  state.equipos = {}; state.preventivos = {}; state.correctivos = {};
-  state.cerradas = {};
+  /* SE ARMA APARTE Y SE CAMBIA DE GOLPE AL FINAL.
+     Antes esto arrancaba vaciando `state.equipos` y lo iba llenando mientras
+     llegaban las respuestas. Durante ese segundo o dos --cada minuto, en cada
+     refresco-- todo lo que leia el estado lo encontraba vacio: una ficha de
+     cliente abierta ahi decia "no hay equipos con este cliente" con sus
+     maquinas en pantalla, y la busqueda de clientes no encontraba a nadie. */
+  const nuevo = { equipos:{}, preventivos:{}, correctivos:{}, cerradas:{} };
   const errores = [];
   /* Las llaves de Firebase solo son unicas DENTRO de su empresa, asi que al
      juntar las dos hay que prefijarlas. Sin esto, dos equipos con la misma
@@ -757,10 +770,10 @@ async function cargarFlota(){
         getJSON(e.nodo + "/correctivos").catch(()=>({})),
         getJSON(e.nodo + "/ordenesCerradas").catch(()=>({}))
       ]);
-      volcar(state.equipos,     e.nodo, eq);
-      volcar(state.preventivos, e.nodo, pv);
-      volcar(state.correctivos, e.nodo, cr);
-      volcar(state.cerradas,    e.nodo, ce);
+      volcar(nuevo.equipos,     e.nodo, eq);
+      volcar(nuevo.preventivos, e.nodo, pv);
+      volcar(nuevo.correctivos, e.nodo, cr);
+      volcar(nuevo.cerradas,    e.nodo, ce);
     }catch(err){
       console.error("[Mundo] flota " + e.nodo + ":", err.message);
       errores.push(e.nombre + ": " + err.message);
@@ -769,6 +782,8 @@ async function cargarFlota(){
   /* Si UNA de las dos falla, el mundo no se apaga entero: se dibuja lo que
      si llego y el error dice de quien es. Apagarlo todo por una mitad
      esconderia la mitad sana. */
+  state.equipos = nuevo.equipos;   state.preventivos = nuevo.preventivos;
+  state.correctivos = nuevo.correctivos; state.cerradas = nuevo.cerradas;
   state.flotaErr = errores.length ? errores.join(" · ") : null;
   state.flotaParcial = errores.length > 0 && Object.keys(state.equipos).length > 0;
 }
@@ -3037,6 +3052,92 @@ function irAZona(id){
    lo que se escribe en el buscador, y la ficha de un equipo (que usa el
    mismo lado de la pantalla). Al cerrar la ficha, la lista vuelve sola. */
 let zonaLista = null, zonaListaPintada = null;
+
+/* EL CLIENTE FIJO.
+   ---------------------------------------------------------------------
+   `clienteFijo` es el cliente elegido: la camara esta en el y su ficha es
+   la que se ve. `clienteBuscando` dice si la lista de clientes esta
+   desplegada.
+   Con un cliente fijo, tocar "buscar equipo" tapa la caja de clientes y
+   cierra la ficha, pero NO lo suelta: la camara se queda donde estaba. Si
+   se cierra la busqueda de equipos sin elegir un equipo, vuelve su ficha.
+   Lo sueltan: elegir un equipo, abrir la lista de una zona, cambiar de
+   empresa, la X de su caja, o cerrar su ficha a mano. */
+let clienteFijo = null, clienteBuscando = false;
+
+/* Todos los clientes de la empresa que se mira, con cuantos equipos tienen
+   -- tambien los que solo tienen maquinas en nuestro taller y no un sitio
+   en el anillo, como Duracreto con el SNSC FD35. */
+function clientesBuscables(){
+  const m = {};
+  Object.values(state.equipos || {}).forEach(function(eq){
+    if(eq._empresa !== vista || esMarcadorDeTaller(eq)) return;
+    const n = clienteDe(eq);
+    if(!n) return;
+    (m[n] = m[n] || { nombre:n, n:0, pelado:pelar(n) }).n++;
+  });
+  return Object.values(m).sort(function(a, b){ return a.nombre.localeCompare(b.nombre, "es"); });
+}
+
+/* La caja de clientes: se esconde mientras la lista de equipos esta abierta
+   (la tapa en vez de empujarla), y muestra el cliente fijo cuando no se
+   esta escribiendo en ella. */
+function pintarCajaCliente(tapada){
+  const c = document.getElementById("cli-caja"), t = document.getElementById("cli-txt");
+  c.style.display = tapada ? "none" : "";
+  c.classList.toggle("fijo", !!clienteFijo && !clienteBuscando);
+  if(!clienteBuscando) t.value = clienteFijo || "";
+}
+
+function pintarListaClientes(caja){
+  /* Con un cliente fijo la caja trae su nombre: tocarla tiene que mostrar la
+     lista entera, no solo a el. Al escribir, el nombre se reemplaza. */
+  const crudo = document.getElementById("cli-txt").value.trim();
+  const q = (clienteFijo && crudo.toUpperCase() === clienteFijo) ? "" : pelar(crudo);
+  const todos = clientesBuscables();
+  /* LIKE: sin espacios, tildes ni mayusculas. "jordan", "eljordan" y
+     "el jordan" encuentran EL JORDAN. */
+  const hits = q ? todos.filter(function(c){ return c.pelado.indexOf(q) >= 0; }) : todos;
+  const H = [];
+  if(!hits.length){
+    H.push('<div class="vacio">Ning\u00fan cliente calza con \u201c' +
+           esc(document.getElementById("cli-txt").value.trim()) + '\u201d.</div>');
+  }else{
+    H.push('<div class="grupo fijo"><span>' + (q ? "Clientes que calzan" : "Todos los clientes") +
+           '</span><span>' + hits.length + '</span></div>');
+    hits.forEach(function(c){
+      H.push('<div class="it" data-cli="' + esc(c.nombre) + '">' +
+             '<span class="p" style="background:#4f8fe0"></span>' +
+             '<b>' + esc(c.nombre) + '</b><span class="d"></span>' +
+             '<span class="t">' + c.n + (c.n === 1 ? " equipo" : " equipos") + '</span></div>');
+    });
+  }
+  caja.innerHTML = H.join("");
+  [...caja.querySelectorAll(".it[data-cli]")].forEach(function(el){
+    el.onclick = function(){ elegirCliente(el.dataset.cli); };
+  });
+}
+
+function elegirCliente(nombre){
+  clienteBuscando = false;
+  document.getElementById("cli-txt").blur();
+  irACliente(nombre);          // acerca y abre su ficha, que lo deja fijo
+  pintarBusqueda();
+}
+
+function soltarCliente(){
+  const habia = clienteFijo;
+  clienteFijo = null; clienteBuscando = false;
+  document.getElementById("cli-txt").value = "";
+  if(habia && fichaAbierta()) cerrarPanelEquipo();
+  pintarBusqueda();
+}
+
+/* Al cerrar la busqueda de equipos sin haber elegido un equipo: si habia un
+   cliente fijo, vuelve su ficha. */
+function volverAlCliente(){
+  if(clienteFijo && !fichaAbierta()) fichaCliente(clienteFijo);
+}
 function fichaAbierta(){ return document.getElementById("eqp").classList.contains("abierto"); }
 
 /* "MITSUBISHI EDR18N2", sin repetir lo que ya dice el codigo: los equipos de
@@ -3154,7 +3255,16 @@ function enfocarZona(id){
 
 /* Desde la lista de campo: el nombre del cliente lleva a su sitio. */
 function irACliente(nombre){
-  const p = sitiosCliente[String(nombre || "").toUpperCase()];
+  let p = sitiosCliente[String(nombre || "").toUpperCase()];
+  if(!p){
+    /* sin sitio en el anillo: todo lo suyo esta con nosotros (Duracreto y
+       su SNSC FD35 en el taller). Se va a la primera de sus maquinas. */
+    const nom = String(nombre || "").toUpperCase();
+    const eq = Object.values(state.equipos || {}).find(function(e){
+      return e._empresa === vista && clienteDe(e) === nom &&
+             posEnMapa[e._empresa + ":" + (e.id || "")]; });
+    if(eq) p = posEnMapa[eq._empresa + ":" + (eq.id || "")];
+  }
   if(p){
     const q = w2s(p.gx, p.gy);
     cam.ts = Math.max(cam.scale, 1.6);
@@ -3171,6 +3281,7 @@ function abrirListaZona(id){
   }
   irAZona(id);
   zonaLista = id;
+  clienteFijo = null; clienteBuscando = false;   // la camara se va del cliente
   if(fichaAbierta()) cerrarPanelEquipo();     // la lista va en el mismo lugar
   const t = document.getElementById("busc-txt");
   t.value = ""; t.blur();
@@ -3397,6 +3508,15 @@ function pintarBusqueda(){
   const q = sinTildesB(document.getElementById("busc-txt").value.trim());
   const todos = equiposBuscables();
   const H = [];
+  /* QUIEN MANDA EN EL PANEL, en este orden:
+       1. la busqueda de equipos (hay texto, o se toco la caja): tapa la
+          caja de clientes en vez de empujarla para abajo;
+       2. la lista de clientes desplegada;
+       3. la lista de una zona (botones de abajo);
+       4. nada. */
+  const equipoAbierto = !!q || buscListo;
+  pintarCajaCliente(equipoAbierto);
+  if(!equipoAbierto && clienteBuscando){ pintarListaClientes(caja); return; }
   /* La lista de una zona manda sobre el arbol por tipo, pero cede ante lo
      que se escribe y ante la ficha abierta (ver `zonaLista`). */
   if(!q && zonaLista && !fichaAbierta()){
@@ -3511,22 +3631,58 @@ let buscListo = false;      // esta desplegada la lista?
 function cerrarBusqueda(){
   zonaLista = null;
   buscListo = false;
+  /* (al final: si habia un cliente fijo, vuelve su ficha) */
   buscAbierto = {};
   const t = document.getElementById("busc-txt");
   t.value = ""; t.blur();
   pintarBusqueda();
+  volverAlCliente();
 }
 document.getElementById("busc-txt").addEventListener("input", pintarBusqueda);
-document.getElementById("busc-txt").addEventListener("focus", function(){
-  buscListo = true; pintarBusqueda();
-});
+/* Tocar "buscar equipo": su lista se sobrepone. Se cierra la caja y la
+   ficha del cliente fijo, pero el cliente sigue fijo. */
+function abrirBusquedaEquipos(){
+  buscListo = true; zonaLista = null; clienteBuscando = false;
+  if(clienteFijo && fichaAbierta()) cerrarPanelEquipo();
+  pintarBusqueda();
+}
+document.getElementById("busc-txt").addEventListener("focus", abrirBusquedaEquipos);
 document.getElementById("busc-ver").onclick = function(){
-  zonaLista = null;
-  buscListo = !buscListo; pintarBusqueda();
+  if(buscListo && !document.getElementById("busc-txt").value.trim()){
+    buscListo = false; pintarBusqueda(); volverAlCliente();
+  }else{
+    abrirBusquedaEquipos();
+  }
 };
 document.getElementById("busc-x").onclick = cerrarBusqueda;
-/* Escape cierra, que es lo que la mano hace sola. */
-document.addEventListener("keydown", function(e){ if(e.key === "Escape") cerrarBusqueda(); });
+
+/* la caja de clientes */
+const cliTxt = document.getElementById("cli-txt");
+cliTxt.addEventListener("focus", function(){
+  clienteBuscando = true; zonaLista = null;
+  cliTxt.select();             // con un cliente fijo, escribir reemplaza el nombre
+  pintarBusqueda();
+});
+cliTxt.addEventListener("input", function(){ clienteBuscando = true; pintarBusqueda(); });
+cliTxt.addEventListener("keydown", function(e){
+  /* Enter con un solo cliente en la lista lo elige */
+  if(e.key !== "Enter") return;
+  const it = document.querySelectorAll("#busc-res .it[data-cli]");
+  if(it.length === 1) elegirCliente(it[0].dataset.cli);
+});
+document.getElementById("cli-ver").onclick = function(){
+  if(clienteBuscando){ clienteBuscando = false; pintarBusqueda(); }
+  else { clienteBuscando = true; zonaLista = null; cliTxt.value = ""; pintarBusqueda(); }
+};
+document.getElementById("cli-x").onclick = soltarCliente;
+
+/* Escape cierra lo que este abierto: primero la lista de clientes, si no la
+   busqueda de equipos. Es lo que la mano hace sola. */
+document.addEventListener("keydown", function(e){
+  if(e.key !== "Escape") return;
+  if(clienteBuscando){ clienteBuscando = false; cliTxt.blur(); pintarBusqueda(); return; }
+  cerrarBusqueda();
+});
 
 /* =====================================================================
    LA LEYENDA
@@ -3729,12 +3885,20 @@ document.getElementById("leyenda-tit").onclick = function(){
 const sheet = document.getElementById("sheet");
 const sheetBody = document.getElementById("sheet-body");
 document.getElementById("sheet-close").onclick = cerrarFicha;
-document.getElementById("eqp-x").onclick = cerrarPanelEquipo;
+document.getElementById("eqp-x").onclick = function(){
+  clienteFijo = null;          // cerrar la ficha a mano es soltar al cliente
+  cerrarPanelEquipo();
+};
 /* La ficha se abre desde muchos lados (tocar un equipo, la busqueda, la
    lista de una zona). En vez de avisarle al panel desde cada uno, se mira la
    ficha: cuando se abre, la lista de la zona se esconde; cuando se cierra,
    vuelve. */
-new MutationObserver(function(){ pintarBusqueda(); })
+new MutationObserver(function(){
+  /* una ficha que se abre se lleva el arbol por tipo (no lo escrito) */
+  if(fichaAbierta() && buscListo && !document.getElementById("busc-txt").value.trim())
+    buscListo = false;
+  pintarBusqueda();
+})
   .observe(document.getElementById("eqp"), { attributes:true, attributeFilter:["class"] });
 function abrirFicha(html){ sheetBody.innerHTML = html; sheet.classList.add("open"); }
 function cerrarFicha(){ sheet.classList.remove("open"); }
@@ -3747,6 +3911,7 @@ function rows(pairs){
 
 const ETQ_URG = { ok:"al día", warn:"por vencer", crit:"vencido", nodata:"SIN DATOS" };
 function fichaEquipo(eq, ev, trabajo){
+  clienteFijo = null;          // elegir un equipo suelta al cliente fijo
   const b = zonaDe(eq);
   const zonaTxt = { mant:"En el taller", disp:"Disponible", renta:"En cliente",
                     ajeno:"En su planta \u2014 sin trabajo activo",
@@ -3900,8 +4065,12 @@ function fichaEquipo(eq, ev, trabajo){
    antes habia que armar a mano. */
 function fichaCliente(nombre){
   const nom = String(nombre || "").toUpperCase();
+  clienteFijo = nom;           // ver "EL CLIENTE FIJO"
   const mios = [];
   Object.values(state.equipos || {}).forEach(function(eq){
+    /* solo la empresa que se mira: Elcatex existe en las dos, y la ficha
+       mezclaba los equipos de MT Rental con los de Monhaco */
+    if(eq._empresa !== vista) return;
     if(clienteDe(eq) !== nom) return;
     mios.push({ eq: eq, ev: evalCached(eq, null), b: zonaDe(eq) });
   });
@@ -4174,6 +4343,9 @@ async function refrescar(){
 function cambiarVista(cual){
   if(cual !== "montasa" && cual !== "monhaco") return;
   vista = cual;
+  /* el cliente fijo es de la otra empresa: se suelta, y su ficha se cierra */
+  if(clienteFijo){ clienteFijo = null; if(fichaAbierta()) cerrarPanelEquipo(); }
+  clienteBuscando = false;
   [...document.querySelectorAll(".pill")].forEach(function(b){
     const on = b.dataset.vista === cual;
     b.classList.toggle("active", on);
