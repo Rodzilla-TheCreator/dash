@@ -365,13 +365,18 @@ const RADAR_TOKEN = "CjXHIPSe6iJVnDQiF_yweLr7rJ3sQPdi";
 /* ── El cruce taller <-> RADAR, medido a mano y con fecha. ──────────
    De los equipos que RADAR pone en reparacion o mantenimiento, cuantos
    tienen una orden de trabajo abierta en la app del taller (Nexo). Se
-   mueve: el 29-sep eran 55 con 2 ordenes; el 1-oct, 53 con 6. Por eso va
-   aparte y con fecha, y no escrito dentro de la frase del aviso. */
-const CRUCE_TALLER = { fecha:"2026-10-01", parados:53, conOrden:6, sinOrden:47 };
+   mueve: el 29-sep eran 55 con 2 ordenes; el 1-oct, 53 con 6; el 12-oct, 53
+   con 7. Por eso va aparte y con fecha, y no escrito dentro de la frase del
+   aviso. Lo saca `herramientas/corte.py`, junto con el CORTE. */
+const CRUCE_TALLER = { fecha:"2026-10-12", parados:53, conOrden:7, sinOrden:46 };
 
-/* ── El corte con SQL. Fecha visible para que se note si envejece. ── */
+/* ── El corte con SQL. Fecha visible para que se note si envejece. ──
+   Se regenera con `python herramientas/corte.py`: lee RADAR y la base del
+   taller, no escribe nada, e imprime los numeros para pegar aca. Las reglas
+   que explica este comentario son las mismas que aplica ese guion; si se
+   cambia una, se cambia la otra en el mismo commit. */
 const CORTE = {
-  fecha: "2026-09-24",
+  fecha: "2026-10-12",
   /* `id` es el empresa_id literal de la tabla `equipos`, y va a la vista a
      proposito: son OTROS que los del lado comercial.
 
@@ -383,7 +388,7 @@ const CORTE = {
      Cuando termine la migracion, esta fila queda con `mtrental` solo y los
      numeros no cambian. */
   empresas: [
-    { nombre:"MT Rental", id:"mtrental + honduras", renta:23,  disp:16, rep:25, mant:8, total:72  },
+    { nombre:"MT Rental", id:"mtrental + honduras", renta:28,  disp:14, rep:23, mant:7, total:72  },
     { nombre:"Monhaco",   id:"monhaco",             renta:100, disp:6,  rep:23, mant:0, total:129 }
   ],
 
@@ -437,10 +442,10 @@ const CORTE = {
      Los precios de Monhaco se cargaron el 2026-09-22; hasta entonces sus
      129 equipos estaban en cero y el potencial salía cortado a la mitad. */
   plata: [
-    { estado:"En renta (ya entra)",     usd:110760 },
+    { estado:"En renta (ya entra)",     usd:114760 },
     { estado:"Disponible (fácil)",      usd:7480   },
-    { estado:"En reparación (frenado)", usd:54640  },
-    { estado:"En mantenimiento",        usd:12140  }
+    { estado:"En reparación (frenado)", usd:51900  },
+    { estado:"En mantenimiento",        usd:10880  }
   ],
 
   /* De los RENTABLES parados sin precio, de quién son. Fue de 21 a 5 al
@@ -474,8 +479,12 @@ const CORTE = {
    Por reglas de palabras clave, no por un modelo, a propósito: estos
    números los va a ver Omar y alguien va a preguntar por qué tal
    oportunidad cayó en tal casilla. Con reglas se contesta; con un
-   modelo hay que creerle. Las reglas están en el repo de Jarvis, en
-   el guión que armó este corte.
+   modelo hay que creerle. OJO: aca decia que las reglas estaban en el
+   repo de Jarvis. No estan. El guion que armo este corte quedo en una
+   carpeta temporal que ya no existe, asi que esta foto NO se puede
+   regenerar todavia; hay que reconstruir el guion primero (y guardarlo en
+   `herramientas/`, como `corte.py`). Por eso la fecha de esta foto es mas
+   vieja que la del CORTE.
 
    ES UNA FOTO, NO UN VIVO. Igual que CORTE: se consultó con SQL de
    sólo lectura y quedó pegada acá. NO se escribió nada en RADAR ni en
