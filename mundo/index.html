@@ -80,6 +80,14 @@
     cursor:pointer;padding:2px 3px;}
   #busc-x:hover,#busc-ver:hover{color:var(--amber);}
   #busc-res{overflow-y:auto;padding:4px 0 6px;}
+  /* la lista de una zona (botones de abajo): cabecera con el numero que importa */
+  #busc .zcab{padding:7px 10px 7px;border-bottom:1px solid var(--panel-line);margin-bottom:2px;}
+  #busc .zcab b{font-family:'Barlow Condensed',sans-serif;font-size:14px;letter-spacing:.6px;
+    color:var(--amber);font-weight:800;text-transform:uppercase;}
+  #busc .zcab span{display:block;color:var(--ink-dim);font-size:10.5px;margin-top:2px;}
+  #busc .it .t{color:#8b9096;font-size:10px;flex:0 0 auto;margin-left:4px;}
+  #busc .grupo.fijo{cursor:default;}
+  #busc .grupo.fijo:hover{color:#8b9096;}
   #busc .grupo{padding:7px 9px 2px;font-family:'Barlow Condensed',sans-serif;
     font-size:10px;letter-spacing:1.2px;text-transform:uppercase;color:#8b9096;
     font-weight:700;cursor:pointer;display:flex;justify-content:space-between;gap:6px;}
@@ -811,7 +819,7 @@ function w2s(gx, gy){ return { x:(gx-gy)*HW, y:(gx+gy)*HH }; }
 const cv  = document.getElementById("world");
 const ctx = cv.getContext("2d");
 let CW = 0, CH = 0, DPR = 1;
-const cam = { x:0, y:0, scale:2, tx:null, ty:null };   // tx/ty = destino de la animacion
+const cam = { x:0, y:0, scale:2, tx:null, ty:null, ts:null };   // tx/ty/ts = destino de la animacion
 
 function baseScale(){
   const w = window.innerWidth;
@@ -2793,6 +2801,14 @@ function cuadro(){
     }
     dirty = true;
   }
+  /* El zoom tambien se anima, cuando alguien le pone destino (`ts`). Saltar
+     de golpe de un zoom a otro mientras la camara se desliza desorienta:
+     uno pierde de vista de donde venia. */
+  if(cam.ts != null){
+    cam.scale += (cam.ts - cam.scale) * 0.18;
+    if(Math.abs(cam.ts - cam.scale) < 0.004){ cam.scale = cam.ts; cam.ts = null; }
+    dirty = true;
+  }
   /* animacion del papel que cambio de estacion */
   if(animState.t > 0){ animState.t -= 1.4; if(animState.t <= 0){ animState.t = 0; animState.id = null; } dirty = true; }
   if(pulsos.length) dirty = true;      // mientras algo cruza, el mundo late
@@ -2915,6 +2931,7 @@ function escalaMinima(){
   return Math.max(0.28, Math.min(1.2, s));
 }
 function zoom(dir){
+  cam.ts = null;      // el + y el - mandan sobre cualquier zoom animado a medias
   const min = escalaMinima();
   const n = Math.max(min, Math.min(4, cam.scale * (dir > 0 ? 1.25 : 0.8)));
   if(Math.abs(n - cam.scale) < 0.001) return;
@@ -2947,6 +2964,157 @@ function irAZona(id){
     b.classList.toggle("active", b.dataset.zona === id);
   });
 }
+/* LA LISTA DE UNA ZONA.
+   ---------------------------------------------------------------------
+   Los botones de abajo abren, en el panel de la izquierda, todo lo que hay
+   en esa zona: codigo y modelo, corto. Responde lo que el mapa de lejos no
+   puede: "que hay en el patio" sin tener que acercarse equipo por equipo.
+   `zonaLista` es cual esta abierta (o null). La lista cede ante dos cosas:
+   lo que se escribe en el buscador, y la ficha de un equipo (que usa el
+   mismo lado de la pantalla). Al cerrar la ficha, la lista vuelve sola. */
+let zonaLista = null, zonaListaPintada = null;
+function fichaAbierta(){ return document.getElementById("eqp").classList.contains("abierto"); }
+
+/* "MITSUBISHI EDR18N2", sin repetir lo que ya dice el codigo: los equipos de
+   cliente traen marca y modelo en el codigo ("Baoli KBD70"). */
+function modeloCorto(eq, codigo){
+  const marca = String(eq.marca || "").trim(), modelo = String(eq.modelo || "").trim();
+  let t = (marca && modelo && marca.toUpperCase().indexOf(modelo.toUpperCase()) < 0)
+          ? marca + " " + modelo : (marca || modelo);
+  const sinEsp = function(v){ return String(v || "").toUpperCase().replace(/\s+/g, ""); };
+  if(t && sinEsp(codigo).indexOf(sinEsp(t)) >= 0) t = "";
+  return t;
+}
+
+function listaDeZona(id){
+  const f = lastFlota;
+  if(!f) return '<div class="vacio">Cargando\u2026</div>';
+  const H = [];
+  function cab(titulo, sub){
+    H.push('<div class="zcab"><b>' + esc(titulo) + '</b>' + (sub ? '<span>' + esc(sub) + '</span>' : '') + '</div>');
+  }
+  function grupo(t, n, cliente){
+    H.push('<div class="grupo' + (cliente ? '" data-cliente="' + esc(cliente) + '" title="Ver este cliente"' : ' fijo"') +
+           '><span>' + esc(t) + '</span><span>' + n + '</span></div>');
+  }
+  function fila(x, tag){
+    const clave = x.eq._empresa + ":" + (x.eq.id || "");
+    const col = COL_URG[x.ev.color] || "#565b5f";
+    H.push('<div class="it" data-clave="' + esc(clave) + '">' +
+      '<span class="p" style="background:' + col + '"></span>' +
+      '<b>' + esc(x.ev.codigo) + '</b>' +
+      '<span class="d">' + esc(modeloCorto(x.eq, x.ev.codigo)) + '</span>' +
+      (tag ? '<span class="t">' + esc(tag) + '</span>' : '') + '</div>');
+  }
+  function vacio(t){ H.push('<div class="vacio">' + esc(t) + '</div>'); }
+  /* quien lo esta trabajando: el primer nombre basta para ubicarlo */
+  function quien(x){
+    const t = (enCurso.porEquipo || {})[x.eq._empresa + ":" + (x.eq.id || "")] || [];
+    const n = t.reduce(function(a, o){ return a.concat(o.tecnicos || []); }, []);
+    return n.length ? String(n[0]).split(" ")[0] + (n.length > 1 ? " +" + (n.length - 1) : "")
+                    : "sin asignar";
+  }
+
+  if(id === "patio"){
+    cab(f.patio.length + " disponibles", "lo nuestro, sujeto a renta");
+    if(!f.patio.length) vacio("Patio vac\u00edo: todo est\u00e1 afuera.");
+    f.patio.forEach(function(x){ fila(x); });
+  }else if(id === "taller"){
+    const con = f.taller.filter(function(x){ return !x.sinOrden; });
+    const sin = f.taller.filter(function(x){ return x.sinOrden; });
+    cab(f.taller.length + " en el taller",
+        con.length + " en trabajo \u00b7 " + sin.length + " parados sin orden");
+    if(!f.taller.length) vacio("Taller vac\u00edo.");
+    if(con.length){ grupo("En trabajo", con.length);
+      con.forEach(function(x){ fila(x, x.ajeno ? "del cliente" : quien(x)); }); }
+    if(sin.length){ grupo("Parados, sin orden", sin.length);
+      sin.forEach(function(x){ fila(x, x.ajeno ? "del cliente" : ""); }); }
+  }else if(id === "interno"){
+    const n = (f.interno || []).length + (f.otros || []).length;
+    cab(n + " internos", "no se rentan");
+    if(!n) vacio("Sin internos.");
+    if((f.interno || []).length){ grupo("Veh\u00edculos y gr\u00faa", f.interno.length);
+      f.interno.forEach(function(x){ fila(x); }); }
+    if((f.otros || []).length){ grupo("En demo / pr\u00e9stamo", f.otros.length);
+      f.otros.forEach(function(x){ fila(x); }); }
+  }else if(id === "campo"){
+    const total = (f.renta || 0) + (f.ajenos || 0);
+    cab(total + " en clientes",
+        f.campo.length + " clientes \u00b7 " + (f.renta || 0) + " rentados" +
+        (f.ajenos ? " \u00b7 " + f.ajenos + " suyos" : ""));
+    if(!f.campo.length) vacio("Nada en renta.");
+    /* por cliente, en el mismo orden que el anillo: el que mas tiene primero */
+    f.campo.forEach(function(g){
+      grupo(g.nombre, g.items.length, g.nombre);
+      g.items.forEach(function(x){ fila(x, x.ajeno ? "suyo" : ""); });
+    });
+  }
+  return H.join("");
+}
+
+/* Acercarse a una zona, dejandola entera a la vista y del lado DERECHO del
+   panel de la izquierda, que es donde queda abierta la lista. En un
+   telefono el panel tapa casi todo, asi que ahi se centra en la pantalla. */
+function enfocarZona(id){
+  if(id === "campo"){
+    /* el anillo es todo el mapa: se encuadra todo, sin acercarse */
+    const c = cajaVisible();
+    cam.ts = escalaMinima();
+    if(c){ cam.tx = (c.x0 + c.x1) / 2; cam.ty = (c.y0 + c.y1) / 2; }
+    dirty = true;
+    return;
+  }
+  const z = ZONA[id]; if(!z) return;
+  const pts = [w2s(z.x, z.y), w2s(z.x + z.w, z.y), w2s(z.x, z.y + z.d), w2s(z.x + z.w, z.y + z.d)];
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  pts.forEach(function(p){ x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x);
+                           y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y + HH); });
+  y0 -= 70;                                   // el rotulo de la zona, arriba del piso
+  const conPanel = CW >= 700;
+  const izq = conPanel ? 10 + 264 + 20 : 10;  // panel izquierdo y aire
+  /* a la derecha: los botones de zoom, o la leyenda si esta abierta, que
+     en una pantalla chica ocupa casi un cuarto del ancho */
+  const ley = document.getElementById("leyenda");
+  const der = (ley && !ley.classList.contains("cerrada"))
+              ? Math.max(64, CW - ley.getBoundingClientRect().left + 12) : 64;
+  const arriba = 74, abajo = 64;              // barra de arriba y botones de zona
+  const anchoUtil = Math.max(160, CW - izq - der);
+  const altoUtil  = Math.max(160, CH - arriba - abajo);
+  const sc = Math.max(escalaMinima(),
+             Math.min(2.4, anchoUtil / (x1 - x0), altoUtil / (y1 - y0)));
+  cam.ts = sc;
+  cam.tx = (x0 + x1) / 2 - ((izq + anchoUtil / 2) - CW / 2) / sc;
+  cam.ty = (y0 + y1) / 2 - ((arriba + altoUtil / 2) - CH / 2) / sc;
+  dirty = true;
+}
+
+/* Desde la lista de campo: el nombre del cliente lleva a su sitio. */
+function irACliente(nombre){
+  const p = sitiosCliente[String(nombre || "").toUpperCase()];
+  if(p){
+    const q = w2s(p.gx, p.gy);
+    cam.ts = Math.max(cam.scale, 1.6);
+    cam.tx = q.x; cam.ty = q.y;
+    dirty = true;
+  }
+  fichaCliente(nombre);
+}
+
+function abrirListaZona(id){
+  /* el mismo boton otra vez cierra la lista; la zona queda elegida */
+  if(zonaLista === id && !fichaAbierta()){
+    zonaLista = null; pintarBusqueda(); return;
+  }
+  irAZona(id);
+  zonaLista = id;
+  if(fichaAbierta()) cerrarPanelEquipo();     // la lista va en el mismo lugar
+  const t = document.getElementById("busc-txt");
+  t.value = ""; t.blur();
+  buscListo = false; buscAbierto = {};
+  enfocarZona(id);
+  pintarBusqueda();
+}
+
 function renderZoneNav(flota, papeles, bodega){
   const nav = document.getElementById("zones");
   const hayFlota = !(state.flotaErr && !state.flotaParcial);
@@ -2976,7 +3144,7 @@ function renderZoneNav(flota, papeles, bodega){
       '" data-zona="' + z.id + '">' + z.nombre.split(" / ")[0] + ' <b>' + c.n + '</b></button>';
   }).join("");
   [...nav.querySelectorAll(".zbtn")].forEach(function(b){
-    b.onclick = function(){ irAZona(b.dataset.zona); };
+    b.onclick = function(){ abrirListaZona(b.dataset.zona); };
   });
 }
 
@@ -3135,7 +3303,10 @@ function volarA(item){
   cam.scale = Math.max(cam.scale, 1.8);     // lo suficiente para leer el codigo
   equipoResaltado = { clave: item.clave, t: 1 };
   fichaEquipo(item.eq, item.ev, (enCurso.porEquipo || {})[item.clave]);
-  cerrarBusqueda();          // ya encontro lo que buscaba; la lista estorba
+  /* Desde una busqueda, ya encontro lo que buscaba y la lista estorba. Desde
+     la lista de una zona no: la ficha la tapa, y al cerrar la ficha vuelve
+     para seguir recorriendo la zona. */
+  if(!zonaLista) cerrarBusqueda();
   dirty = true;
 }
 
@@ -3162,6 +3333,27 @@ function pintarBusqueda(){
   const q = sinTildesB(document.getElementById("busc-txt").value.trim());
   const todos = equiposBuscables();
   const H = [];
+  /* La lista de una zona manda sobre el arbol por tipo, pero cede ante lo
+     que se escribe y ante la ficha abierta (ver `zonaLista`). */
+  if(!q && zonaLista && !fichaAbierta()){
+    /* El refresco de cada minuto vuelve a pintar la lista: que no la regrese
+       al principio si uno iba bajando por la de campo. */
+    const bajado = (zonaListaPintada === zonaLista) ? caja.scrollTop : 0;
+    caja.innerHTML = listaDeZona(zonaLista);
+    caja.scrollTop = bajado;
+    zonaListaPintada = zonaLista;
+    [...caja.querySelectorAll(".it")].forEach(function(el){
+      el.onclick = function(){
+        const x = todos.find(function(y){ return y.clave === el.dataset.clave; });
+        if(x) volarA(x);
+      };
+    });
+    [...caja.querySelectorAll(".grupo[data-cliente]")].forEach(function(g){
+      g.onclick = function(){ irACliente(g.dataset.cliente); };
+    });
+    return;
+  }
+  zonaListaPintada = null;
   /* EL ARBOL ARRANCA CERRADO Y SE CIERRA SOLO.
      Antes quedaba desplegado ocupando media pantalla aunque uno ya hubiera
      encontrado lo que buscaba. La lista solo existe mientras se busca: hay
@@ -3253,6 +3445,7 @@ function pintarBusqueda(){
 
 let buscListo = false;      // esta desplegada la lista?
 function cerrarBusqueda(){
+  zonaLista = null;
   buscListo = false;
   buscAbierto = {};
   const t = document.getElementById("busc-txt");
@@ -3264,6 +3457,7 @@ document.getElementById("busc-txt").addEventListener("focus", function(){
   buscListo = true; pintarBusqueda();
 });
 document.getElementById("busc-ver").onclick = function(){
+  zonaLista = null;
   buscListo = !buscListo; pintarBusqueda();
 };
 document.getElementById("busc-x").onclick = cerrarBusqueda;
@@ -3470,6 +3664,12 @@ const sheet = document.getElementById("sheet");
 const sheetBody = document.getElementById("sheet-body");
 document.getElementById("sheet-close").onclick = cerrarFicha;
 document.getElementById("eqp-x").onclick = cerrarPanelEquipo;
+/* La ficha se abre desde muchos lados (tocar un equipo, la busqueda, la
+   lista de una zona). En vez de avisarle al panel desde cada uno, se mira la
+   ficha: cuando se abre, la lista de la zona se esconde; cuando se cierra,
+   vuelve. */
+new MutationObserver(function(){ pintarBusqueda(); })
+  .observe(document.getElementById("eqp"), { attributes:true, attributeFilter:["class"] });
 function abrirFicha(html){ sheetBody.innerHTML = html; sheet.classList.add("open"); }
 function cerrarFicha(){ sheet.classList.remove("open"); }
 function esc(s){ return String(s == null ? "—" : s).replace(/[&<>"]/g, function(c){
