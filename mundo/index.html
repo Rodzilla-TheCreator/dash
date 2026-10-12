@@ -2654,16 +2654,17 @@ function computeBodega(){
 
 /* LO NUESTRO, EN FILA: DISPONIBLES, TALLER, INTERNOS.
    ---------------------------------------------------------------------
-   Cada zona mide lo que tiene adentro y se pone al lado de la anterior, de
-   izquierda a derecha en la pantalla, con el centro de las tres a la misma
-   altura. Asi el tamano de una no empuja a la otra: hasta el 12-oct
-   disponibles y taller estaban apilados, y el patio --dimensionado para
-   cuando se veian las dos empresas juntas-- era un piso enorme con cuatro
-   maquinas que parecia que no habia cargado.
+   Cada zona mide lo que tiene adentro y se pone al lado de la anterior, en
+   fila sobre el eje horizontal del PISO (gx), centradas a lo largo de cada
+   cara: disponibles contra la cara de arriba-izquierda del taller, internos
+   contra la de abajo-derecha. Asi el tamano de una no empuja a la otra:
+   hasta el 12-oct disponibles y taller estaban apilados, y el patio
+   --dimensionado para cuando se veian las dos empresas juntas-- era un piso
+   enorme con cuatro maquinas que parecia que no habia cargado.
 
-   En isometrico, "lado a lado en la pantalla" es moverse por la diagonal
-   u = gx - gy; la altura en pantalla es v = gx + gy. Una zona de w x d ocupa
-   w + d de ancho en u. Se reparten en u y se dejan todas en v = 0.
+   Una primera version las ponia en fila sobre la horizontal de la PANTALLA
+   (u = gx - gy), y quedaban tocando las esquinas del taller en vez de sus
+   lados. Rodrigo las queria contra las caras.
 
    El anillo de clientes no se toca: su radio minimo ya se calcula de las
    esquinas de estas zonas (`RADIO_CENTRO`), asi que se corre solo. */
@@ -2699,16 +2700,14 @@ function disponerCentro(f){
   zI.w = Math.max(9, 1.6 + zI.cols * 2.9 + 0.4);
   zI.d = Math.max(7, 1.4 + rI * 2.4 + 1.4);
 
-  /* en fila, centradas en el origen */
-  const G = 8;                                   // aire entre zonas, en u
+  /* en fila sobre gx, centradas en gy = 0 y la fila entera centrada en el
+     origen. G es el aire entre una cara y la siguiente zona. */
+  const G = 6;
   const orden = [zP, zT, zI];
-  const ancho = orden.map(function(z){ return z.w + z.d; });
-  let u = -(ancho.reduce(function(a, b){ return a + b; }, 0) + G * (orden.length - 1)) / 2;
-  orden.forEach(function(z, i){
-    const uc = u + ancho[i] / 2;                 // centro en u, con v = 0
-    const cx = uc / 2, cy = -uc / 2;
-    z.x = cx - z.w / 2; z.y = cy - z.d / 2;
-    u += ancho[i] + G;
+  let x = -(orden.reduce(function(a, z){ return a + z.w; }, 0) + G * (orden.length - 1)) / 2;
+  orden.forEach(function(z){
+    z.x = x; z.y = -z.d / 2;
+    x += z.w + G;
   });
 }
 
