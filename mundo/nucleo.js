@@ -67,8 +67,17 @@ function urlClaude(){ return CLAUDE.apiBase + "/claude"; }
    ===================================================================== */
 const DB_BASE = "https://montasa-app-default-rtdb.firebaseio.com";
 const CC_FB   = DB_BASE + "/bitacora";
+/* LAS RAMAS DE NEXO VAN CON LA SESION DE ACCESO.
+   Desde el 2026-10-13 Miguel cierra `montasa/...`: solo leen los navegadores
+   que el aprobo. `acceso.js` abre la sesion y le pone el permiso a la URL.
+   Si ese archivo no cargo, se lee como antes (sirve mientras la rama este
+   abierta, como `monhaco` y `bitacora`). */
+function nxUrl(ruta, extra){
+  if(window.ACCESO) return window.ACCESO.url(ruta, extra);
+  return Promise.resolve(DB_BASE + "/" + ruta + ".json" + (extra ? "?" + extra : ""));
+}
 async function getJSON(path){
-  const r = await fetch(DB_BASE + "/" + path + ".json?_=" + Date.now(), { cache:"no-store" });
+  const r = await fetch(await nxUrl(path, "_=" + Date.now()), { cache:"no-store" });
   if(!r.ok) throw new Error("HTTP " + r.status + " en " + path);
   return await r.json();
 }
