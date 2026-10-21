@@ -1177,6 +1177,49 @@ function brazo(body, col, nivel){
   return makeSprite(key, FK_W, FK_H, ops);
 }
 
+/* Tractor electrico de arrastre (los ET de Monhaco: EP QDD10 y QDD60TS). No
+   levanta nada: jala carretas con el enganche de atras. Por eso no tiene
+   mastil ni horquillas, y la urgencia la lleva en el GIROFARO, que es lo que
+   un tractor de planta si tiene arriba. El QDD10 se maneja DE PIE, con
+   timon y una baranda atras; el QDD60 es mas grande y va SENTADO. */
+function tractor(body, col, grande){
+  const key = "tr_" + body + "_" + col + "_" + (grande ? 1 : 0);
+  if(SPR[key]) return SPR[key];
+  const bd = shade(body, 0.74), bl = shade(body, 1.16), luz = col || "#f5a524";
+  const ops = grande ? [
+    // chasis largo y bajo, con la bateria al frente
+    [1,11,19,6,bd], [1,11,19,1,bl], [1,16,19,1,C_OUT], [1,11,1,6,C_OUT],
+    [2,9,9,2,bl], [2,9,9,1,shade(bl,1.15)],                 // capo de la bateria
+    [0,13,2,3,C_OUT],                                       // defensa
+    // puesto del operador: volante, asiento y respaldo
+    [11,6,1,5,C_MAST], [9,5,4,2,C_SEAT],                    // columna y volante
+    [13,8,6,3,C_SEAT], [17,4,2,7,C_SEAT],                   // asiento y respaldo
+    [12,2,9,1,C_OUT], [12,2,1,9,C_OUT], [20,2,1,9,C_OUT],   // techito
+    [15,0,2,2,luz], [15,0,2,1,shade(luz,1.3)],              // girofaro
+    // enganche
+    [20,14,3,2,C_CROMO], [22,13,1,4,C_MASTD],
+    // llantas
+    [2,16,5,5,C_TIRE], [3,17,3,3,shade(C_TIRE,2.1)],
+    [13,16,5,5,C_TIRE], [14,17,3,3,shade(C_TIRE,2.1)]
+  ] : [
+    // chasis chico y bajo
+    [3,12,15,5,bd], [3,12,15,1,bl], [3,16,15,1,C_OUT], [3,12,1,5,C_OUT],
+    [4,10,8,2,bl], [4,10,8,1,shade(bl,1.15)],               // tapa de la bateria
+    [1,13,2,3,C_OUT],                                       // defensa
+    // timon y el operador de pie
+    [12,6,1,6,C_MAST], [10,5,4,2,C_SEAT],                   // columna y manubrio
+    [13,14,6,2,C_SEAT],                                     // plataforma de pie
+    [18,5,2,11,C_OUT], [14,5,5,1,C_OUT],                    // baranda de atras
+    [18,2,2,2,luz], [18,2,2,1,shade(luz,1.3)],              // girofaro
+    // enganche
+    [20,14,3,2,C_CROMO], [22,13,1,4,C_MASTD],
+    // llantas
+    [4,17,4,4,C_TIRE], [5,18,2,2,shade(C_TIRE,2.1)],
+    [13,17,4,4,C_TIRE], [14,18,2,2,shade(C_TIRE,2.1)]
+  ];
+  return makeSprite(key, FK_W, FK_H, ops);
+}
+
 /* QUE ES CADA EQUIPO, segun lo que dice la base.
    Se mira primero la descripcion --que es donde la gente escribio "Pick Up",
    "Camion", "Grua"-- y despues el tipo y el codigo. El orden importa: el
@@ -1191,6 +1234,8 @@ function formaDe(eq){
   if(/CAMI\u00d3N|CAMION|PANEL/.test(d) || /^CM-/.test(c)) return "camion";
   if(/PICK ?UP/.test(d) || /^(MTV|C)-/.test(c) || t === "VEH\u00cdCULO" || t === "VEHICULO")
     return "pickup";
+  /* Los ET: Monhaco les puso tipo "ELECTRO TOWER" (tow, de arrastre). */
+  if(/TOWER|TRACTOR|REMOLCADOR/.test(t) || /^ET-/.test(c) || /\bQDD/.test(d)) return "tractor";
   if(t === "ELEVADORA" || t.indexOf("PLATAFORMA") === 0 || /^E-/.test(c)){
     /* Genie nombra las tijeras GS y los brazos articulados Z. */
     return /\bZ-?\d/.test(d) ? "brazo" : "tijera";
@@ -1539,7 +1584,7 @@ function ponerEquipo(gx, gy, eq, ev, opt){
     /* EL COLOR DE LA MAQUINA, no el de la zona: los montacargas amarillos,
        las plataformas Genie azules, los vehiculos blancos. Donde esta y si se
        sabe como esta lo dice la mancha del piso. */
-    const PROPIO = { montacargas:"#e8a317", tijera:"#4f8fe0", brazo:"#4f8fe0",
+    const PROPIO = { montacargas:"#e8a317", tijera:"#4f8fe0", brazo:"#4f8fe0", tractor:"#e0661b",
                      pickup:"#c9ced2", camion:"#c9ced2", grua:"#e8a317" };
     const cuerpo = PROPIO[forma] || body;
     const semaforo = (opt.barra && ev && !fantasma) ? COL_URG[ev.color] : null;
@@ -1550,6 +1595,7 @@ function ponerEquipo(gx, gy, eq, ev, opt){
       : forma === "grua"    ? grua(cuerpo, semaforo)
       : forma === "tijera"  ? tijera(cuerpo, semaforo, nivel)
       : forma === "brazo"   ? brazo(cuerpo, semaforo, nivel)
+      : forma === "tractor" ? tractor(cuerpo, semaforo, /QDD\s*[2-9]\d/i.test(String(eq.modelo || "")))
       : semaforo            ? forkliftUrg(body, semaforo, nivel)
       :                       forklift(cuerpo);
     /* TODAS LAS MAQUINAS SE DIBUJAN ENTERAS Y EN SU COLOR.
@@ -3781,7 +3827,7 @@ function renderLeyenda(flota){
   const formas = {};
   todos.forEach(function(x){ const f = formaDe(x.eq); formas[f] = (formas[f] || 0) + 1; });
   const nombreForma = { montacargas:"Montacargas", tijera:"Plataforma de tijera",
-                        brazo:"Brazo articulado", pickup:"Pick-up",
+                        brazo:"Brazo articulado", tractor:"Tractor de arrastre", pickup:"Pick-up",
                         camion:"Cami\u00f3n", grua:"Gr\u00faa" };
   H.push('<h4>Cada uno con su forma</h4>');
   li("", Object.keys(nombreForma).filter(function(k){ return formas[k]; })
@@ -3842,7 +3888,8 @@ function renderLeyenda(flota){
          'montacargas <b>sube las horquillas</b>, la tijera <b>sube la plataforma</b> y el ' +
          'brazo <b>se empina</b>. Al d\u00eda van abajo y suben mientras se acerca el intervalo (' +
          INTERVALO_DIAS + ' d\u00edas \u00f3 ' + INTERVALO_HORAS + ' horas, lo que llegue primero). ' +
-         'Las que no tienen nada que levantar \u2014pick-up, cami\u00f3n, gr\u00faa\u2014 lo llevan en la cabina.');
+         'Las que no tienen nada que levantar \u2014pick-up, cami\u00f3n, gr\u00faa\u2014 lo llevan en la cabina, ' +
+         'y el tractor de arrastre en el gir\u00f3faro.');
   li(cuad("#3ecf7e"), 'Abajo y verde: al d\u00eda.');
   li(cuad("#f5a524"), 'A media altura y \u00e1mbar: se acerca.');
   li(cuad("#e5534b"), 'Arriba del todo y rojo: pasado.');
