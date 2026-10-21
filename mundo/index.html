@@ -1220,6 +1220,83 @@ function tractor(body, col, grande){
   return makeSprite(key, FK_W, FK_H, ops);
 }
 
+/* Mula = transpaleta electrica (EP EPT20, KPL, RPL). Horquillas largas al
+   ras del piso, la unidad de poder atras y el timon. Levanta solo lo
+   justo para despegar la tarima, asi que la urgencia va en la cabeza del
+   timon, que es donde el operador pone la mano. */
+function mula(body, col){
+  const key = "mu_" + body + "_" + col;
+  if(SPR[key]) return SPR[key];
+  const bd = shade(body, 0.74), bl = shade(body, 1.16), mano = col || C_SEAT;
+  const ops = [
+    // horquillas al ras del piso, con las ruedas de carga en la punta
+    [0,16,13,2,C_FORK], [0,18,13,1,shade(C_FORK,0.6)], [0,15,2,1,C_FORK],
+    [1,19,2,2,C_TIRE], [9,19,2,2,C_TIRE],
+    // unidad de poder
+    [12,10,8,9,bd], [12,10,8,1,bl], [12,10,1,9,C_OUT], [19,10,1,9,C_OUT], [12,18,8,1,C_OUT],
+    [13,12,6,2,shade(bd,0.8)],                              // tapa de la bateria
+    // rueda motriz
+    [14,19,4,3,C_TIRE], [15,20,2,1,shade(C_TIRE,2.1)]
+  ];
+  // timon: sube en diagonal hacia atras y arriba
+  for(let k = 0; k < 7; k++) ops.push([16 + Math.round(k * 0.6), 9 - k, 1, 1, C_MAST]);
+  ops.push([18,1,5,2,mano], [18,1,5,1,shade(mano,1.3)]);  // cabeza del timon
+  return makeSprite(key, FK_W, FK_H, ops);
+}
+
+/* Stacker = apilador (EP ES12/ES16, Baoli ES20). Como un montacargas
+   flaco: mastil y horquillas, pero sin contrapeso, sin asiento y sin techo;
+   se maneja de pie o caminando con timon, y lleva patas largas adelante.
+   Como SI levanta, la urgencia la cuenta igual que el montacargas: subiendo
+   las horquillas. */
+function stacker(body, col, nivel){
+  const paso = Math.max(0, Math.min(10, Math.round((nivel || 0) * 10)));
+  const key = "st_" + body + "_" + col + "_" + paso;
+  if(SPR[key]) return SPR[key];
+  const bd = shade(body, 0.74), bl = shade(body, 1.16), horq = col || C_FORK;
+  const yc = Math.round(14 - (paso / 10) * 13), yf = yc + 4;
+  const ops = [
+    // mastil angosto
+    [6,1,4,17,C_MASTD], [6,1,1,17,C_MAST], [9,1,1,17,C_MAST], [6,0,4,1,C_OUT],
+    // carro y horquillas, a la altura que toca
+    [5,yc,6,2,horq], [0,yf,8,2,horq], [0,yf-1,2,3,horq],
+    // patas de apoyo adelante, al piso
+    [0,20,9,1,C_MASTD], [1,20,2,2,C_TIRE],
+    // unidad de poder, sin contrapeso
+    [10,9,9,10,bd], [10,9,9,1,bl], [10,9,1,10,C_OUT], [18,9,1,10,C_OUT], [10,18,9,1,C_OUT],
+    [11,11,6,3,shade(bd,0.8)],
+    // rueda motriz
+    [12,19,4,3,C_TIRE], [13,20,2,1,shade(C_TIRE,2.1)]
+  ];
+  for(let k = 0; k < 6; k++) ops.push([18 + Math.round(k * 0.5), 8 - k, 1, 1, C_MAST]);
+  ops.push([19,1,5,2,C_SEAT]);
+  return makeSprite(key, FK_W, FK_H, ops);
+}
+
+/* Bar clamp (Cascade) = un ADITAMENTO, no una maquina: se le monta al
+   montacargas para agarrar cajas por los lados. Se dibuja como lo que es,
+   una pieza sobre una tarima: la barra, los dos brazos con sus almohadillas
+   y el cilindro. La urgencia va en el cilindro. */
+function clamp(body, col){
+  const key = "bcl_" + body + "_" + col;
+  if(SPR[key]) return SPR[key];
+  const bd = shade(body, 0.72), bl = shade(body, 1.18), cil = col || C_CROMO;
+  const TAR = "#8a6a3f", TARD = "#5e4729";
+  return makeSprite(key, FK_W, FK_H, [
+    // tarima
+    [1,17,22,2,TAR], [1,17,22,1,shade(TAR,1.2)], [1,19,22,1,TARD],
+    [2,20,3,2,TARD], [10,20,4,2,TARD], [19,20,3,2,TARD],
+    // barra horizontal
+    [3,11,18,3,bd], [3,11,18,1,bl], [3,13,18,1,C_OUT],
+    // cilindro
+    [8,9,8,2,cil], [8,9,8,1,shade(cil,1.3)],
+    // brazos con almohadillas
+    [2,7,3,10,body], [2,7,1,10,bl], [4,7,1,10,C_OUT],
+    [19,7,3,10,body], [19,7,1,10,bl], [21,7,1,10,C_OUT],
+    [1,8,1,8,C_SEAT], [22,8,1,8,C_SEAT]
+  ]);
+}
+
 /* QUE ES CADA EQUIPO, segun lo que dice la base.
    Se mira primero la descripcion --que es donde la gente escribio "Pick Up",
    "Camion", "Grua"-- y despues el tipo y el codigo. El orden importa: el
@@ -1234,6 +1311,11 @@ function formaDe(eq){
   if(/CAMI\u00d3N|CAMION|PANEL/.test(d) || /^CM-/.test(c)) return "camion";
   if(/PICK ?UP/.test(d) || /^(MTV|C)-/.test(c) || t === "VEH\u00cdCULO" || t === "VEHICULO")
     return "pickup";
+  /* Los aditamentos y las maquinas de bodega de Monhaco. Va por tipo, que
+     es como los cargo Monhaco, y por el prefijo del codigo como respaldo. */
+  if(/BAR CLAMP|CLAMP/.test(t) || /^BC-/.test(c)) return "clamp";
+  if(/^MULA/.test(t) || /^M-\d/.test(c) || /\b(EPT|KPL|RPL)\s*\d/.test(d)) return "mula";
+  if(/STACKER|APILADOR/.test(t) || /^ST-/.test(c)) return "stacker";
   /* Los ET: Monhaco les puso tipo "ELECTRO TOWER" (tow, de arrastre). */
   if(/TOWER|TRACTOR|REMOLCADOR/.test(t) || /^ET-/.test(c) || /\bQDD/.test(d)) return "tractor";
   if(t === "ELEVADORA" || t.indexOf("PLATAFORMA") === 0 || /^E-/.test(c)){
@@ -1585,6 +1667,7 @@ function ponerEquipo(gx, gy, eq, ev, opt){
        las plataformas Genie azules, los vehiculos blancos. Donde esta y si se
        sabe como esta lo dice la mancha del piso. */
     const PROPIO = { montacargas:"#e8a317", tijera:"#4f8fe0", brazo:"#4f8fe0", tractor:"#e0661b",
+                     mula:"#e0661b", stacker:"#e0661b", clamp:"#7d858b",
                      pickup:"#c9ced2", camion:"#c9ced2", grua:"#e8a317" };
     const cuerpo = PROPIO[forma] || body;
     const semaforo = (opt.barra && ev && !fantasma) ? COL_URG[ev.color] : null;
@@ -1595,6 +1678,9 @@ function ponerEquipo(gx, gy, eq, ev, opt){
       : forma === "grua"    ? grua(cuerpo, semaforo)
       : forma === "tijera"  ? tijera(cuerpo, semaforo, nivel)
       : forma === "brazo"   ? brazo(cuerpo, semaforo, nivel)
+      : forma === "mula"    ? mula(cuerpo, semaforo)
+      : forma === "stacker" ? stacker(cuerpo, semaforo, nivel)
+      : forma === "clamp"   ? clamp(cuerpo, semaforo)
       : forma === "tractor" ? tractor(cuerpo, semaforo, /QDD\s*[2-9]\d/i.test(String(eq.modelo || "")))
       : semaforo            ? forkliftUrg(body, semaforo, nivel)
       :                       forklift(cuerpo);
@@ -3827,7 +3913,8 @@ function renderLeyenda(flota){
   const formas = {};
   todos.forEach(function(x){ const f = formaDe(x.eq); formas[f] = (formas[f] || 0) + 1; });
   const nombreForma = { montacargas:"Montacargas", tijera:"Plataforma de tijera",
-                        brazo:"Brazo articulado", tractor:"Tractor de arrastre", pickup:"Pick-up",
+                        brazo:"Brazo articulado", tractor:"Tractor de arrastre", mula:"Mula (transpaleta)",
+                        stacker:"Stacker (apilador)", clamp:"Bar clamp (aditamento)", pickup:"Pick-up",
                         camion:"Cami\u00f3n", grua:"Gr\u00faa" };
   H.push('<h4>Cada uno con su forma</h4>');
   li("", Object.keys(nombreForma).filter(function(k){ return formas[k]; })
@@ -3885,11 +3972,12 @@ function renderLeyenda(flota){
 
   H.push('<h4>C\u00f3mo lo levanta dice C\u00d3MO est\u00e1</h4>');
   li("", 'Solo en el <b>taller</b>. Cada m\u00e1quina lo cuenta con lo que tiene: el ' +
-         'montacargas <b>sube las horquillas</b>, la tijera <b>sube la plataforma</b> y el ' +
+         'montacargas y el stacker <b>suben las horquillas</b>, la tijera <b>sube la plataforma</b> y el ' +
          'brazo <b>se empina</b>. Al d\u00eda van abajo y suben mientras se acerca el intervalo (' +
          INTERVALO_DIAS + ' d\u00edas \u00f3 ' + INTERVALO_HORAS + ' horas, lo que llegue primero). ' +
          'Las que no tienen nada que levantar \u2014pick-up, cami\u00f3n, gr\u00faa\u2014 lo llevan en la cabina, ' +
-         'y el tractor de arrastre en el gir\u00f3faro.');
+         'el tractor de arrastre en el gir\u00f3faro, la mula en el tim\u00f3n y el bar clamp en ' +
+         'su cilindro.');
   li(cuad("#3ecf7e"), 'Abajo y verde: al d\u00eda.');
   li(cuad("#f5a524"), 'A media altura y \u00e1mbar: se acerca.');
   li(cuad("#e5534b"), 'Arriba del todo y rojo: pasado.');
