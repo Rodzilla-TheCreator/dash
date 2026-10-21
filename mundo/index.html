@@ -329,6 +329,9 @@ function nxUrl(ruta, extra){
 }
 async function getJSON(path){
   const r = await fetch(await nxUrl(path), { cache: "no-store" });
+  /* 401: la rama esta cerrada y Gerencia todavia no aprobo este navegador.
+     Se dice asi, no como un codigo, porque lo lee Omar, no un programador. */
+  if(r.status === 401) throw new Error("este navegador todavía no tiene permiso (Gerencia lo aprueba en Nexo, Personal → Accesos)");
   if(!r.ok) throw new Error("HTTP " + r.status + " en " + path);
   return await r.json();
 }

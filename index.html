@@ -148,6 +148,8 @@
      linea con tres lineas de explicacion debajo deja de ser un dato de una
      linea, y Omar no viene a leer eso cada vez. Van detras del boton "?"
      del encabezado: quien quiera el detalle lo abre. */
+  .falta-taller{margin:0 0 10px;padding:9px 12px;border-radius:8px;font-size:12px;line-height:1.5;
+    background:var(--ambar-fondo);border:1px solid var(--ambar);color:var(--tinta);}
   .wid-nota{display:none;margin-top:8px;padding-top:8px;
     border-top:1px dashed var(--linea);
     font-size:10.5px;color:var(--tinta-media);line-height:1.5;}
@@ -329,6 +331,7 @@
       <span class="ojo">Las secciones por empresa son Monhaco, Monhagro y Costa Rica — el corte
         <b>comercial</b>. No es el mismo reparto que la tabla de flota de arriba.</span>
     </div>
+    <div class="falta-taller" id="falta-taller" hidden></div>
     <div class="rejilla" id="widgets"></div>
   </section>
 </div>
@@ -1133,12 +1136,19 @@ const viaticos = lista => (lista || T.ords).map(viaticosDe).filter(Boolean);
    Honduras y el campo no trae moneda. Ver la tabla de MONEDAS arriba. */
 const lps = n => dinero(n, "HNL");
 
+/* LAS EMPRESAS QUE NO SE PUDIERON LEER.
+   Desde que Miguel cerro `montasa/...` (2026-10-13), un navegador que Gerencia
+   todavia no aprobo recibe "sin permiso" en MT Rental y SI lee Monhaco. Antes
+   eso se tragaba en silencio y los indicadores del taller mostraban solo
+   Monhaco como si fuera el total. Ahora se anota y se avisa arriba. */
 async function cargarTaller(){
+  const faltan = new Set();
   const hoja = async (h) => {
     const out = [];
     for(const { nodo } of NODOS_FB){
       try{
         const r = await fetch(await nxUrl(nodo + "/" + h, "_=" + Date.now()), { cache:"no-store" });
+        if(!r.ok){ faltan.add(nodo); continue; }
         const d = await r.json();
         Object.entries(d || {}).forEach(([k,v])=>{
           if(v && typeof v === "object") out.push(Object.assign({ _emp:nodo, _nodo:h, _id:nodo+":"+k }, v));
@@ -1150,7 +1160,8 @@ async function cargarTaller(){
   const [eq, corr, prev, cerr, sol, rep] = await Promise.all(
     ["equipos","correctivos","preventivos","ordenesCerradas","solicitudes","repuestos"].map(hoja));
   T = { equipos:eq, correctivos:corr, preventivos:prev, cerradas:cerr, solicitudes:sol,
-        repuestos:rep, ords:corr.concat(prev, cerr) };
+        repuestos:rep, ords:corr.concat(prev, cerr),
+        faltan: NODOS_FB.filter(n => faltan.has(n.nodo)) };
 }
 
 /* Igual que porEmpresa pero para el taller: dos nodos, no cuatro cortes. */
@@ -1963,6 +1974,18 @@ function pintarWidgets(){
     g.items.filter(([id])=>elegidos.has(id)).map(([id,et])=>({ id, et })));
 
   zona.hidden = ids.length === 0;
+
+  const aviso = document.getElementById("falta-taller");
+  const hayTaller = ids.some(({ id }) => id.startsWith("T"));
+  const faltan = (T && T.faltan) || [];
+  aviso.hidden = !(hayTaller && faltan.length);
+  if(!aviso.hidden){
+    const quien = faltan.map(n => n.nodo === "montasa" ? "MT Rental" : n.nombre).join(" y ");
+    aviso.innerHTML = `⚠️ <b>Los indicadores del taller no incluyen ${quien}.</b> `
+      + `Este navegador todavía no tiene permiso para leer esa parte de la base: `
+      + `Gerencia lo aprueba en Nexo, <b>Personal → 📱 Accesos</b>. Lo que ves abajo es solo `
+      + NODOS_FB.filter(n => !faltan.includes(n)).map(n => n.nombre).join(" y ") + ".";
+  }
 
   caja.innerHTML = ids.map(({ id, et })=>{
     let { cuerpo, hueco } = evaluar(id);
