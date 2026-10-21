@@ -3,7 +3,8 @@
    ---------------------------------------------------------------------
    Desde el 2026-10-13 Miguel cierra `montasa/...` en la base: solo leen los
    telefonos que el aprobo en Gerencia (Personal -> 📱 Accesos). Estas paginas
-   entran IGUAL que un telefono de Nexo (ver ACCESO.md en el repo de la app):
+   entran IGUAL que un telefono de Nexo (el plan es ACCESO.md, que desde el
+   2026-10-20 Miguel lleva en sus notas privadas, fuera del repo publico):
 
      1. abren una sesion anonima de Firebase (sin usuario ni contrasena);
      2. la primera vez piden nombre y apellido y se registran en
@@ -154,7 +155,7 @@
       var a = ov.querySelector("#nx-acc-ape").value.replace(/\s+/g, " ").trim();
       if(!n || !a){ alert("Escribí tu nombre y tu apellido."); return; }
       var ahora = Date.now();
-      /* misma forma que el registro de las apps de Nexo (ACCESO.md §3) */
+      /* misma forma que el registro de las apps de Nexo */
       var reg = { nombre:n, apellido:a, app:"Mundo y Tablero (dash)", empresa:"montasa",
                   area:"Mundo y Tablero", dispositivo: dispositivo(),
                   creado:ahora, ultimaVez:ahora, estado:"pendiente" };
