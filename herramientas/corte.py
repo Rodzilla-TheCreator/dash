@@ -47,11 +47,23 @@ def radar(sql):
     return json.loads(m.group(0))
 
 
+class SinPermiso(Exception):
+    pass
+
+
 def fb(ruta, campos):
-    out = subprocess.run([sys.executable, FB, ruta, "--limite", "999", "--campos", campos],
-                         capture_output=True, text=True, encoding="utf-8", env=ENV).stdout
+    """Una rama de Nexo. Si la base no la deja leer, NO devuelve lista vacia:
+    desde el 2026-10-13 `montasa/` esta cerrada y una lista vacia hacia que el
+    cruce saliera "0 con orden" como si fuera cierto."""
+    r = subprocess.run([sys.executable, FB, ruta, "--limite", "999", "--campos", campos],
+                       capture_output=True, text=True, encoding="utf-8", env=ENV)
+    out = r.stdout
+    if "rechazo la lectura" in (out + r.stderr) or "permiso" in r.stderr.lower():
+        raise SinPermiso(ruta)
     m = re.search(r"\{.*\}", out, re.S)
     if not m:
+        if r.returncode:
+            raise SinPermiso(ruta)
         return []
     d = json.loads(m.group(0))
     return [r for r in (d.values() if isinstance(d, dict) else d) if isinstance(r, dict)]
@@ -101,14 +113,17 @@ def cerrada(o):
             or bool(str(o.get("fechaCierre") or "").strip())
             or bool(str(o.get("fechaCompletado") or "").strip()))
 
-abiertas = set()
+abiertas, sin_permiso = set(), []
 for raiz in ("montasa", "monhaco"):
-    cod = {e.get("id"): str(e.get("codigo") or "").strip().upper()
-           for e in fb(raiz + "/equipos", "id,codigo")}
-    for nodo in ("preventivos", "correctivos"):
-        for o in fb(raiz + "/" + nodo, "equipoId,estado,completado,fechaCierre,fechaCompletado"):
-            if not cerrada(o) and cod.get(o.get("equipoId")):
-                abiertas.add(cod[o.get("equipoId")])
+    try:
+        cod = {e.get("id"): str(e.get("codigo") or "").strip().upper()
+               for e in fb(raiz + "/equipos", "id,codigo")}
+        for nodo in ("preventivos", "correctivos"):
+            for o in fb(raiz + "/" + nodo, "equipoId,estado,completado,fechaCierre,fechaCompletado"):
+                if not cerrada(o) and cod.get(o.get("equipoId")):
+                    abiertas.add(cod[o.get("equipoId")])
+    except SinPermiso as e:
+        sin_permiso.append(str(e))
 parados = [str(r["codigo"]).strip().upper() for r in radar(f"""
   select codigo from equipos
   where org_id = '{ORG}' and estado in ('reparacion','mantenimiento')
@@ -124,15 +139,19 @@ def p(k):
     return plata.get(k, {}).get("usd", 0)
 
 
-print("const CRUCE_TALLER = { fecha:\"%s\", parados:%d, conOrden:%d, sinOrden:%d };"
-      % (hoy, len(parados), con_orden, len(parados) - con_orden))
+if sin_permiso:
+    print("CRUCE_TALLER: NO se actualiza. La base no dejo leer %s; dejar el de la fecha"
+          " anterior. Hace falta la sesion de Jarvis aprobada en Nexo." % ", ".join(sin_permiso))
+else:
+    print("const CRUCE_TALLER = { fecha:\"%s\", parados:%d, conOrden:%d, sinOrden:%d };"
+          % (hoy, len(parados), con_orden, len(parados) - con_orden))
 print()
 print("CORTE.fecha:", hoy)
 for nom, e in (("MT Rental", mt), ("Monhaco", mh)):
     print('    { nombre:"%s", ... renta:%d, disp:%d, rep:%d, mant:%d, total:%d }'
           % (nom, e.get("renta", 0), e.get("disp", 0), e.get("rep", 0), e.get("mant", 0),
              e.get("total", 0)))
-print("  plata: en_renta %d · disponible %d · reparacion %d · mantenimiento %d"
+print("  plata: en_renta %d / disponible %d / reparacion %d / mantenimiento %d"
       % (p("en_renta"), p("disponible"), p("reparacion"), p("mantenimiento")))
 print("  potencial parado: %d" % (p("disponible") + p("reparacion") + p("mantenimiento")))
 print("  paradosSinPrecio:", {"MT Rental": sin_precio.get("MT Rental", 0),

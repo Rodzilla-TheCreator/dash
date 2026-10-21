@@ -454,6 +454,10 @@ function quedoConFalla(eq){
   return !!ultima && String(ultima.equipoQuedo || "").toLowerCase() === "falla";
 }
 
+function tipoOrden(nodo){
+  return nodo === "correctivos" ? "Correctivo" : nodo === "soldaduras" ? "Soldadura / pintura" : "Preventivo";
+}
+
 function estadoTxt(eq){
   const e = String((eq && eq.estado) || "").trim().toUpperCase();
   if(esDeCliente(eq) && e === "DISPONIBLE") return "Sin trabajo activo";
@@ -726,7 +730,7 @@ function estacionDe(estado){
    `buscablesDeLaOtra()`. */
 let vista = "montasa";
 const state = {
-  equipos:{}, preventivos:{}, correctivos:{},
+  equipos:{}, preventivos:{}, correctivos:{}, soldaduras:{},
   caja:null, viajes:null, almacen:null,     // null = sin cargar, "error" = fallo
   radar:null, fxHNL:null, conn:false,
   encargos:[], mejoras:[],                   // lo que cruza el edificio
@@ -753,7 +757,7 @@ async function cargarFlota(){
      refresco-- todo lo que leia el estado lo encontraba vacio: una ficha de
      cliente abierta ahi decia "no hay equipos con este cliente" con sus
      maquinas en pantalla, y la busqueda de clientes no encontraba a nadie. */
-  const nuevo = { equipos:{}, preventivos:{}, correctivos:{}, cerradas:{} };
+  const nuevo = { equipos:{}, preventivos:{}, correctivos:{}, soldaduras:{}, cerradas:{} };
   const errores = [];
   /* Las llaves de Firebase solo son unicas DENTRO de su empresa, asi que al
      juntar las dos hay que prefijarlas. Sin esto, dos equipos con la misma
@@ -777,16 +781,22 @@ async function cargarFlota(){
          en mas de 9 de cada 10 ordenes no coinciden entre si (91 de 100 el
          1-oct). Es donde estaba la mitad del historial que este mapa daba
          por perdido. */
-      const [eq, pv, cr, ce] = await Promise.all([
+      /* `soldaduras` (Soldadura / Pintura, SP-0001…) existe desde el
+         2026-10-14. Es trabajo del taller sobre un equipo, igual que un
+         correctivo, y Nexo lo cuenta como mantenimiento en su Dashboard. NO
+         cambia el estado del equipo al abrirse: por eso se mira aca. */
+      const [eq, pv, cr, ce, sp] = await Promise.all([
         getJSON(e.nodo + "/equipos"),
         getJSON(e.nodo + "/preventivos").catch(()=>({})),
         getJSON(e.nodo + "/correctivos").catch(()=>({})),
-        getJSON(e.nodo + "/ordenesCerradas").catch(()=>({}))
+        getJSON(e.nodo + "/ordenesCerradas").catch(()=>({})),
+        getJSON(e.nodo + "/soldaduras").catch(()=>({}))
       ]);
       volcar(nuevo.equipos,     e.nodo, eq);
       volcar(nuevo.preventivos, e.nodo, pv);
       volcar(nuevo.correctivos, e.nodo, cr);
       volcar(nuevo.cerradas,    e.nodo, ce);
+      volcar(nuevo.soldaduras,  e.nodo, sp);
     }catch(err){
       console.error("[Mundo] flota " + e.nodo + ":", err.message);
       errores.push(e.nombre + ": " + err.message);
@@ -797,6 +807,7 @@ async function cargarFlota(){
      esconderia la mitad sana. */
   state.equipos = nuevo.equipos;   state.preventivos = nuevo.preventivos;
   state.correctivos = nuevo.correctivos; state.cerradas = nuevo.cerradas;
+  state.soldaduras = nuevo.soldaduras;
   state.flotaErr = errores.length ? errores.join(" · ") : null;
   state.flotaParcial = errores.length > 0 && Object.keys(state.equipos).length > 0;
 }
@@ -2401,7 +2412,7 @@ function computeEnCurso(){
     const cod = String(eq.codigo || "").trim().toUpperCase();
     if(cod) porCodigo[eq._empresa + "|" + cod] = clave;
   });
-  ["correctivos","preventivos"].forEach(function(nodo){
+  ["correctivos","preventivos","soldaduras"].forEach(function(nodo){
     const reg = state[nodo] || {};
     Object.keys(reg).forEach(function(k){
       const o = reg[k];
@@ -4012,7 +4023,7 @@ function fichaEquipo(eq, ev, trabajo){
                   : "no dice si vino o fuimos";
       H.push('<div class="orden">' +
         '<div class="q">' + esc(t.correlativo) + ' \u00b7 ' +
-          esc(t.nodo === "correctivos" ? "Correctivo" : "Preventivo") + '</div>' +
+          esc(tipoOrden(t.nodo)) + '</div>' +
         '<div>' + esc(t.estado) + (t.sistema ? ' \u00b7 ' + esc(t.sistema) : '') + '</div>' +
         '<div class="m' + (t.corriendo && t.tecnicos.length ? '' : ' quieto') + '">' +
           esc(quienes) + '</div>' +
@@ -4178,7 +4189,7 @@ function fichaMecanico(nombre, trabajo){
   const mias = (trabajo || []).filter(function(t){
     return fantasma ? !t.tecnicos.length : t.tecnicos.indexOf(nombre) >= 0; });
   const pares = mias.map(function(t){
-    return [t.correlativo + " · " + (t.nodo === "correctivos" ? "Correctivo" : "Preventivo"),
+    return [t.correlativo + " · " + tipoOrden(t.nodo),
             [t.estado, t.sistema].filter(Boolean).join(" · ") || "—"];
   });
   const acomp = [];

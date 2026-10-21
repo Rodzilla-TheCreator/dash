@@ -371,7 +371,11 @@ const RADAR_TOKEN = "CjXHIPSe6iJVnDQiF_yweLr7rJ3sQPdi";
    tienen una orden de trabajo abierta en la app del taller (Nexo). Se
    mueve: el 29-sep eran 55 con 2 ordenes; el 1-oct, 53 con 6; el 12-oct, 53
    con 7. Por eso va aparte y con fecha, y no escrito dentro de la frase del
-   aviso. Lo saca `herramientas/corte.py`, junto con el CORTE. */
+   aviso. Lo saca `herramientas/corte.py`, junto con el CORTE.
+   OJO: el 2026-10-21 el CORTE se actualizo y ESTE NO. Desde el 13-oct
+   `montasa/` esta cerrada y Jarvis (que es quien lee) no tiene su sesion de
+   Nexo aprobada; sin MT Rental el guion contaba "0 con orden". Ahora se niega
+   a imprimirlo y este queda con su fecha vieja hasta que haya permiso. */
 const CRUCE_TALLER = { fecha:"2026-10-12", parados:53, conOrden:7, sinOrden:46 };
 
 /* ── El corte con SQL. Fecha visible para que se note si envejece. ──
@@ -380,7 +384,7 @@ const CRUCE_TALLER = { fecha:"2026-10-12", parados:53, conOrden:7, sinOrden:46 }
    que explica este comentario son las mismas que aplica ese guion; si se
    cambia una, se cambia la otra en el mismo commit. */
 const CORTE = {
-  fecha: "2026-10-12",
+  fecha: "2026-10-21",
   /* `id` es el empresa_id literal de la tabla `equipos`, y va a la vista a
      proposito: son OTROS que los del lado comercial.
 
@@ -392,7 +396,7 @@ const CORTE = {
      Cuando termine la migracion, esta fila queda con `mtrental` solo y los
      numeros no cambian. */
   empresas: [
-    { nombre:"MT Rental", id:"mtrental + honduras", renta:28,  disp:14, rep:23, mant:7, total:72  },
+    { nombre:"MT Rental", id:"mtrental + honduras", renta:25,  disp:17, rep:22, mant:7, total:71  },
     { nombre:"Monhaco",   id:"monhaco",             renta:100, disp:6,  rep:23, mant:0, total:129 }
   ],
 
@@ -446,10 +450,10 @@ const CORTE = {
      Los precios de Monhaco se cargaron el 2026-09-22; hasta entonces sus
      129 equipos estaban en cero y el potencial salía cortado a la mitad. */
   plata: [
-    { estado:"En renta (ya entra)",     usd:114760 },
-    { estado:"Disponible (fácil)",      usd:7480   },
+    { estado:"En renta (ya entra)",     usd:112460 },
+    { estado:"Disponible (fácil)",      usd:9740   },
     { estado:"En reparación (frenado)", usd:51900  },
-    { estado:"En mantenimiento",        usd:10880  }
+    { estado:"En mantenimiento",        usd:10920  }
   ],
 
   /* De los RENTABLES parados sin precio, de quién son. Fue de 21 a 5 al
@@ -483,19 +487,19 @@ const CORTE = {
    Por reglas de palabras clave, no por un modelo, a propósito: estos
    números los va a ver Omar y alguien va a preguntar por qué tal
    oportunidad cayó en tal casilla. Con reglas se contesta; con un
-   modelo hay que creerle. OJO: aca decia que las reglas estaban en el
-   repo de Jarvis. No estan. El guion que armo este corte quedo en una
-   carpeta temporal que ya no existe, asi que esta foto NO se puede
-   regenerar todavia; hay que reconstruir el guion primero (y guardarlo en
-   `herramientas/`, como `corte.py`). Por eso la fecha de esta foto es mas
-   vieja que la del CORTE.
+   modelo hay que creerle. Las reglas viven en `herramientas/lectura.py`
+   (reconstruido el 2026-10-21: el primero se perdio en una carpeta
+   temporal). Se regenera con `python herramientas/lectura.py`, y con una
+   fecha (`... lectura.py 2026-09-24`) da como estaba ese dia, para
+   comparar. Contra la foto vieja da exacto en los motivos que no se
+   movieron; el resto difiere porque esas oportunidades cambiaron de etapa.
 
    ES UNA FOTO, NO UN VIVO. Igual que CORTE: se consultó con SQL de
    sólo lectura y quedó pegada acá. NO se escribió nada en RADAR ni en
    la app del taller. Si envejece, se nota por la fecha.
    ═══════════════════════════════════════════════════════════════════ */
 const LECTURA = {
-  fecha: "2026-09-24",
+  fecha: "2026-10-21",
 
   /* LAS 869 PERDIDAS DEL 2026-04-11 NO SE CUENTAN, Y ES EL AJUSTE MAS
      IMPORTANTE DE TODO ESTE BLOQUE.
@@ -506,33 +510,34 @@ const LECTURA = {
      $6.1M de los $9.5M. Contarlas hacia parecer que el 55% de las perdidas
      no decia por que; sacandolas, el 85% si lo dice. */
   perdidas: {
-    total: 542, conMotivo: 461, sinMotivo: 81, migracion: 869,
+    total: 557, conMotivo: 481, sinMotivo: 76, migracion: 869,
+    migracionUsd: 6122022, todasUsd: 9308354,
     residuo: ["Otro"],
     motivos: [
-      ["Cliente postergó la decisión",          133,  779206],
-      ["Proyecto cancelado",                     87, 1037906],
-      ["Presupuesto insuficiente del cliente",   59,  642657],
-      ["Falta de inventario / disponibilidad",   52,   65957],
-      ["Otro",                                   44,  192881],
-      ["Necesidades no alineadas",               34,   63782],
-      ["Precio muy alto",                        27,  233365],
-      ["Se fue con la competencia",              22,   75790],
-      ["Falta de seguimiento",                    3,     269]
+      ["Cliente postergó la decisión",            137,   787292],
+      ["Proyecto cancelado",                       89,  1041419],
+      ["Presupuesto insuficiente del cliente",     64,   653525],
+      ["Otro",                                     53,   204545],
+      ["Falta de inventario / disponibilidad",     52,    65957],
+      ["Necesidades no alineadas",                 34,    63745],
+      ["Precio muy alto",                          27,   233365],
+      ["Se fue con la competencia",                22,    75790],
+      ["Falta de seguimiento",                      3,      269]
     ]
   },
 
   frenado: {
-    total: 1115, valor: 7293819, quietas30: 726, quietas90: 164, valor90: 2021033,
+    total: 1214, valor: 6969699, quietas30: 965, quietas90: 383, valor90: 3673543,
     residuo: ["Sin una sola nota escrita", "No se entiende qué dice"],
     causas: [
-      ["Sin una sola nota escrita",      777, 5297872],
-      ["Nos toca mover a nosotros",      113,  796238],
-      ["No se entiende qué dice",         60,  185138],
-      ["Esperando decisión del cliente",  55,  399381],
-      ["Dice «pendiente» y nada más",     41,   95311],
-      ["El cliente no responde",          22,  130006],
-      ["Sin canal para contactarlo",      15,   19229],
-      ["Postergado a una fecha",          14,  311477]
+      ["Sin una sola nota escrita",         904,  5764755],
+      ["Nos toca mover a nosotros",         111,   365252],
+      ["No se entiende qué dice",            59,   128790],
+      ["Esperando decisión del cliente",     55,   398835],
+      ["Dice «pendiente» y nada más",        40,    94904],
+      ["El cliente no responde",             21,   113144],
+      ["Sin canal para contactarlo",         15,    19230],
+      ["Postergado a una fecha",              9,    84789]
     ]
   },
 
@@ -550,16 +555,16 @@ const LECTURA = {
      tasa de cierre se calcula, no se guarda, para que no pueda quedar
      desfasada de los conteos de al lado. */
   demanda: {
-    perdidasSinLinea: 127, fueraDelCatalogo: 5, fueraUsd: 294658,
+    perdidasSinLinea: 128, fueraDelCatalogo: 0, fueraUsd: 0,
     lineas: [
-      ["Renta y Leasing Operativo", 124, 340500,  43, 94],
-      ["Repuestos y Suministros",    87,  79772,  37, 36],
-      ["Venta de Equipo",            76,1446890,   8, 86],
-      ["Renta por Hora",             51, 624524,  40, 17],
-      ["Certificación de Operador",  38,  14295,  19, 91],
-      ["Mano de Obra",               24,  25355,  42, 33],
-      ["Revisiones IHTT",             5,  95500,  14,  4],
-      ["Fletes",                      5,   2741,   1,  3]
+      ["Renta y Leasing Operativo",  132,   358603,   44,  103],
+      ["Repuestos y Suministros",     90,    82832,   40,   41],
+      ["Venta de Equipo",             80,  1452634,    8,  100],
+      ["Renta por Hora",              51,   624524,   41,   20],
+      ["Certificación de Operador",   40,    17809,   19,   96],
+      ["Mano de Obra",                26,    28855,   40,   34],
+      ["Revisiones IHTT",              5,    95500,   16,    5],
+      ["Fletes",                       5,     2741,    3,    2]
     ]
   }
 };
@@ -1159,10 +1164,13 @@ async function cargarTaller(){
     }
     return out;
   };
-  const [eq, corr, prev, cerr, sol, rep] = await Promise.all(
-    ["equipos","correctivos","preventivos","ordenesCerradas","solicitudes","repuestos"].map(hoja));
+  /* `soldaduras` (Soldadura / Pintura, desde el 2026-10-14) suma a las
+     ordenes del taller: tiene tecnicos, estado, inicio y cierre como un
+     correctivo, y Nexo la cuenta como mantenimiento en su propio Dashboard. */
+  const [eq, corr, prev, cerr, sol, rep, sold] = await Promise.all(
+    ["equipos","correctivos","preventivos","ordenesCerradas","solicitudes","repuestos","soldaduras"].map(hoja));
   T = { equipos:eq, correctivos:corr, preventivos:prev, cerradas:cerr, solicitudes:sol,
-        repuestos:rep, ords:corr.concat(prev, cerr),
+        repuestos:rep, soldaduras:sold, ords:corr.concat(prev, cerr, sold),
         faltan: NODOS_FB.filter(n => faltan.has(n.nodo)) };
 }
 
@@ -1257,8 +1265,9 @@ const MAPA = {
          ${fmt(rn)} más quedaron en "Otro" (${usd(rv)})</div>`
       + `<div class="wid-nota"><b>No se cuentan las ${fmt(p.migracion)} pérdidas del 2026-04-11</b>,
          que se crearon todas el mismo día y son una migración: líneas de renta mensual,
-         renovaciones y cobros que entraron marcados como perdidos. Valían $6.1M de los $9.5M, y
-         contarlas hacía parecer que el 55% no decía por qué. Sin ellas, el 85% sí lo dice y solo
+         renovaciones y cobros que entraron marcados como perdidos. Valían ${usd(p.migracionUsd)} de
+         los ${usd(p.todasUsd)}, y contarlas hacía parecer que más de la mitad no decía por qué.
+         Sin ellas, el ${Math.round(100*p.conMotivo/p.total)}% sí lo dice y solo
          ${fmt(p.sinMotivo)} quedan sin motivo. Foto del ${LECTURA.fecha}.</div>`;
   },
   "A2": ()=>{
@@ -1293,14 +1302,20 @@ const MAPA = {
       filas.map(([c,v,t,a])=>[`${c} · ${t===null?"—":t+"% cierre"}`, v]))
       + `<div class="wid-tot">${fmt(d.lineas.reduce((s,x)=>s+x[1],0))} perdidas con línea ·
          ${fmt(d.lineas.reduce((s,x)=>s+x[4],0))} siguen abiertas</div>`
-      + `<div class="wid-nota"><b>Venta de Equipo cierra ${
-           Math.round(100*8/(8+76))}% y es donde más plata se pierde</b>: ${usd(1446890)} en 76
-         oportunidades, con 86 todavía abiertas. Se rearmó sobre <code>linea_negocio</code> y no
-         sobre <code>descripcion</code>, que sólo está llena en el 20% y sólo en las perdidas —
-         sin nada ganado contra qué comparar. Quedan fuera ${fmt(d.perdidasSinLinea)} perdidas sin
-         línea y ${fmt(d.fueraDelCatalogo)} con un valor que no es ninguna de las ocho
-         (${usd(d.fueraUsd)}): alguien escribió "Montacargas" o "Plataformas aereas" en un campo
-         que debería ser catálogo. Foto del ${LECTURA.fecha}.</div>`;
+      + (()=>{
+          /* Venta de Equipo se nombra porque es la peor; los numeros salen
+             del dato para que no queden viejos al regenerar la foto. */
+          const ve = d.lineas.find(x=>x[0] === "Venta de Equipo") || ["",0,0,0,0];
+          const tasa = (ve[1] + ve[3]) ? Math.round(100*ve[3]/(ve[1]+ve[3])) : 0;
+          return `<div class="wid-nota"><b>Venta de Equipo cierra ${tasa}% y es donde más plata
+         se pierde</b>: ${usd(ve[2])} en ${fmt(ve[1])} oportunidades, con ${fmt(ve[4])} todavía
+         abiertas. Se rearmó sobre <code>linea_negocio</code> y no sobre <code>descripcion</code>,
+         que sólo está llena en el 20% y sólo en las perdidas — sin nada ganado contra qué
+         comparar. Quedan fuera ${fmt(d.perdidasSinLinea)} perdidas sin línea`
+         + (d.fueraDelCatalogo ? ` y ${fmt(d.fueraDelCatalogo)} con un valor que no es ninguna de
+         las ocho (${usd(d.fueraUsd)})` : "")
+         + `. Foto del ${LECTURA.fecha}.</div>`;
+        })();
   },
 
   /* ── 1 · Ventas ──────────────────────────────────────────────── */
