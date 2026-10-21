@@ -1,7 +1,7 @@
 # Auditoría de indicadores — 2026-09-18
 
 > **Segunda pasada, 18 de septiembre.** A los cuatro rojos del principio se les sumaron
-> siete hallazgos más (12 a 18) al revisar los 78 indicadores del tablero de Cristian uno por
+> siete hallazgos más (12 a 18) al revisar los 78 indicadores del Tablero de Flota uno por
 > uno y contra datos vivos. Cada uno lleva ✅ o ⚠️ con lo que da ahora.
 >
 > **El más caro no estaba en el tablero nuevo sino en el de Oficina:** la renta del año se
@@ -9,11 +9,11 @@
 > comprobaciones independientes. El 19 arregla la condición que lo permitió: que la pantalla
 > no decía de qué moneda era nada.
 
-Revisión de los tres tableros (**Oficina**, **Taller**, **Cristian**) contra los datos vivos
+Revisión de los tres tableros (**Oficina**, **Taller**, **Flota**) contra los datos vivos
 de RADAR y de la base de Miguel. No es una lista de ideas: cada punto se comprobó
 consultando la fuente, y dice cómo.
 
-**Resumen:** de los 78 del tablero de Cristian, **63 dan dato** y **15 salen como hueco con
+**Resumen:** de los 78 del Tablero de Flota, **63 dan dato** y **15 salen como hueco con
 el motivo escrito**. Ninguno sale con el texto genérico de "todavía no conectado", que era
 mentira en seis de ellos: RADAR sí explica qué le falta y ahora se muestra su explicación.
 
@@ -117,14 +117,14 @@ con Miguel.
 
 ## 🟡 El número es correcto pero la etiqueta miente
 
-### 5. `5.2` Utilización de flota: **58% en Oficina, 67.6% en el de Cristian**
+### 5. `5.2` Utilización de flota: **58% en Oficina, 67.6% en el de Flota**
 
 El mismo indicador, dos números, porque cada tablero usa otra fuente:
 
 | | fuente | rentados | total | utilización |
 |---|---|---|---|---|
 | Oficina | Firebase (app de Miguel) | 123 | **212** | **58%** |
-| Cristian | RADAR `/api/dashboard` | 123 | **182** | **67.6%** |
+| Flota | RADAR `/api/dashboard` | 123 | **182** | **67.6%** |
 
 Coinciden en los rentados. Difieren en el denominador: RADAR **excluye** 107 no rentables y
 21 vendidos; Firebase los cuenta todos.
@@ -164,9 +164,9 @@ Es el único de los 37 de RADAR que devuelve `null`, y por un motivo legítimo: 
 *"No hay metas cargadas para este mes"*. Pero el badge sigue diciendo `live`, así que promete
 un dato que no hay hasta que se hace clic.
 
-En el tablero de Cristian esto **ya está bien**: muestra hueco con la nota de RADAR.
+En el Tablero de Flota esto **ya está bien**: muestra hueco con la nota de RADAR.
 
-### 11. `1.3` `1.4` `2.6` `10.1` en el de Cristian — cuatro listas que no leen nada
+### 11. `1.3` `1.4` `2.6` `10.1` en el de Flota — cuatro listas que no leen nada
 
 Los cuatro pedían un campo **que no existe en el payload**: `facturado` (el real es `mes`)
 y `razon` (el real es `motivo`). `topLista` no se cae con eso: `undefined` sale como `—` y la
@@ -284,7 +284,7 @@ escrito el motivo en la tarjeta, con el número comprobado. Ninguno se parte "po
 
 ### 15. 🔴 `T8.3` decía **0 equipos sin horómetro** y son **186 de 212**
 
-Un bug de una línea, en el tablero nuevo de Cristian. La función que lee números hacía
+Un bug de una línea, en el Tablero de Flota nuevo. La función que lee números hacía
 `Number(String(v))`, y `Number("")` es **0**, no `NaN`. Así que un horómetro en blanco no
 contaba como "falta el dato" sino como **cero horas**, y el indicador de calidad de datos
 reportaba calidad perfecta.
@@ -494,7 +494,7 @@ dice `fix`. Tener una tercera palabra daba `falta fix`, que no se lee.
 - **Los cuatro cortes por empresa** (`?empresa=honduras|montasa|monhagro|costarica`) se
   bajaron y se sumaron contra `?empresa=all`, métrica por métrica. Es lo que separó los 28
   que se pueden partir de los 15 que no.
-- **Los 78 del tablero de Cristian** se renderizaron en el navegador con los payloads reales
+- **Los 78 del Tablero de Flota** se renderizaron en el navegador con los payloads reales
   y se leyó el texto de cada tarjeta. Así salieron el `T8.3` en cero (hallazgo 15), los ids
   opacos del `T4.2` y el `null` que imprimía el `2.6`.
 

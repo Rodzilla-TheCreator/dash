@@ -12,7 +12,7 @@ librerías, sin build, sin npm). Se sirve igual que el resto del repo desde
 GitHub Pages. Se abre en `mundo/`.
 
 > **Ya no hay botón en el dash.** El dash de la raíz es ahora el Tablero de
-> Flota de Cristian, y no se le agregó nada que no pidiera — incluido ese
+> Flota, y no se le agregó nada que no pidiera — incluido ese
 > botón. Al Mundo se entra por su URL.
 
 ## Dos vistas, no tres empresas

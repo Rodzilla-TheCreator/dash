@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Tablero de Flota · Cristian</title>
+<title>Tablero de Flota</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -339,7 +339,7 @@
 <script src="acceso.js"></script>
 <script>
 /* =====================================================================
-   TABLERO DE FLOTA — para Cristian
+   TABLERO DE FLOTA
    ---------------------------------------------------------------------
    Dos orígenes distintos, y la diferencia importa tanto que está escrita
    en la pantalla y no solo acá:
@@ -792,7 +792,9 @@ const TEXTO = [
    ("falta") daba "falta fix", que no se lee. */
 const ETIQUETA = { fb:"taller", radar:"radar", gap:"radar", texto:"texto" };
 
-let elegidos = (()=>{ try{ const s=JSON.parse(localStorage.getItem("cristian_kpis"));
+/* "tablero_kpis" antes se llamaba "cristian_kpis": se lee la vieja si la nueva
+   no existe, para que nadie pierda los indicadores que ya tenia marcados. */
+let elegidos = (()=>{ try{ const s=JSON.parse(localStorage.getItem("tablero_kpis") || localStorage.getItem("cristian_kpis"));
   return new Set(Array.isArray(s)?s:[]); }catch(e){ return new Set(); } })();
 
 function pintarCatalogo(){
@@ -846,7 +848,7 @@ function pintarCatalogo(){
 /* Un solo lugar donde se escribe la selección, para que la casilla suelta y los
    dos botones de arriba no puedan quedar desincronizados. */
 function guardarSeleccion(){
-  try{ localStorage.setItem("cristian_kpis", JSON.stringify([...elegidos])); }catch(e){}
+  try{ localStorage.setItem("tablero_kpis", JSON.stringify([...elegidos])); }catch(e){}
 }
 const TODOS_LOS_IDS = () => [...OFICINA, ...TALLER].flatMap(g=>g.items.map(i=>i[0]));
 

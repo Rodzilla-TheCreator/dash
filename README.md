@@ -1,6 +1,6 @@
 # Dash
 
-El tablero de la raíz es el **Tablero de Flota** que pidió Cristian: cuántos equipos
+El tablero de la raíz es el **Tablero de Flota**: cuántos equipos
 hay, cuáles generan renta, cuáles están parados y cuánta plata representan. Página
 autocontenida (un solo `index.html` con CSS y JS adentro).
 
@@ -12,7 +12,7 @@ autocontenida (un solo `index.html` con CSS y JS adentro).
 Se despliega con GitHub Pages.
 
 > **Hubo otro dash acá y ya no está.** Era el de Omar, con tiles de KPIs, caja chica
-> y el botón de MUNDO. Se quitó el 25 de septiembre de 2026: el tablero de Cristian
+> y el botón de MUNDO. Se quitó el 25 de septiembre de 2026: el Tablero de Flota
 > lo reemplazó en la raíz y **no se le mezcló nada** de aquel, a propósito. Lo que
 > Omar necesitaba ver quedó en el reporte que se le mandó aparte.
 >
@@ -21,7 +21,7 @@ Se despliega con GitHub Pages.
 
 ## Módulos
 
-- `index.html` — el Tablero de Flota (el de Cristian).
+- `index.html` — el Tablero de Flota.
 - `cristian/` — **solo un cartel que redirige a la raíz.** El tablero vivía ahí y el
   link viejo anda repartido en WhatsApp y en pantallas de inicio; un 404 no le explica
   nada a nadie.

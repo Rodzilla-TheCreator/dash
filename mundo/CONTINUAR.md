@@ -24,7 +24,7 @@ del repo. Respetala.
 
 ```
 dash/
-  index.html                  el Tablero de Flota de Cristian (ya no hay botón MUNDO)
+  index.html                  el Tablero de Flota (ya no hay botón MUNDO)
   README.md
   bitacora/                   app SGI de control interno (fork de la de Christian)
     docs/ESQUEMA-BASE-DE-DATOS.md   ← el esquema real, confirmado
