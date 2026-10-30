@@ -370,13 +370,12 @@ const RADAR_TOKEN = "CjXHIPSe6iJVnDQiF_yweLr7rJ3sQPdi";
    De los equipos que RADAR pone en reparacion o mantenimiento, cuantos
    tienen una orden de trabajo abierta en la app del taller (Nexo). Se
    mueve: el 29-sep eran 55 con 2 ordenes; el 1-oct, 53 con 6; el 12-oct, 53
-   con 7. Por eso va aparte y con fecha, y no escrito dentro de la frase del
+   con 7; el 30-oct, 52 con 6. Por eso va aparte y con fecha, y no escrito dentro de la frase del
    aviso. Lo saca `herramientas/corte.py`, junto con el CORTE.
-   OJO: el 2026-10-21 el CORTE se actualizo y ESTE NO. Desde el 13-oct
-   `montasa/` esta cerrada y Jarvis (que es quien lee) no tiene su sesion de
-   Nexo aprobada; sin MT Rental el guion contaba "0 con orden". Ahora se niega
-   a imprimirlo y este queda con su fecha vieja hasta que haya permiso. */
-const CRUCE_TALLER = { fecha:"2026-10-12", parados:53, conOrden:7, sinOrden:46 };
+   Desde el 13-oct `montasa/` esta cerrada: el guion lee con la sesion de
+   Jarvis en Nexo (aprobada antes del 30-oct). Sin ella contaba "0 con orden"
+   y por eso ahora se niega a imprimir el cruce si no lee las dos empresas. */
+const CRUCE_TALLER = { fecha:"2026-10-30", parados:52, conOrden:6, sinOrden:46 };
 
 /* ── El corte con SQL. Fecha visible para que se note si envejece. ──
    Se regenera con `python herramientas/corte.py`: lee RADAR y la base del
@@ -384,7 +383,7 @@ const CRUCE_TALLER = { fecha:"2026-10-12", parados:53, conOrden:7, sinOrden:46 }
    que explica este comentario son las mismas que aplica ese guion; si se
    cambia una, se cambia la otra en el mismo commit. */
 const CORTE = {
-  fecha: "2026-10-21",
+  fecha: "2026-10-30",
   /* `id` es el empresa_id literal de la tabla `equipos`, y va a la vista a
      proposito: son OTROS que los del lado comercial.
 
@@ -397,7 +396,7 @@ const CORTE = {
      numeros no cambian. */
   empresas: [
     { nombre:"MT Rental", id:"mtrental + honduras", renta:25,  disp:17, rep:22, mant:7, total:71  },
-    { nombre:"Monhaco",   id:"monhaco",             renta:100, disp:6,  rep:23, mant:0, total:129 }
+    { nombre:"Monhaco",   id:"monhaco",             renta:101, disp:6,  rep:23, mant:0, total:130 }
   ],
 
   /* LA TABLA DE ARRIBA CUENTA TODA LA FLOTA; ESTA SOLO LO RENTABLE.
