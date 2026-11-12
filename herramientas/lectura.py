@@ -36,7 +36,9 @@ import unicodedata
 from collections import defaultdict
 
 HOME = os.path.expanduser("~")
-RADAR = os.path.join(HOME, "jarvis", "bin", "radar-sql")
+# En la nube (Railway) las herramientas de Jarvis viven en /app/bin, no en ~/jarvis/bin.
+BIN = os.environ.get("JARVIS_BIN") or os.path.join(HOME, "jarvis", "bin")
+RADAR = os.path.join(BIN, "radar-sql")
 ENV = dict(os.environ, PYTHONIOENCODING="utf-8")
 ORG = "11111111-1111-4111-8111-111111111111"
 MIGRACION = "2026-04-11"
