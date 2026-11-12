@@ -2293,7 +2293,10 @@ function contenidoDepto(d, datos){
   else if(d.muestra === "radar"){
     const rd = state.radar;
     const ok = rd && typeof rd === "object";
-    filas.push([ok ? "RADAR responde" : "RADAR sin conectar", ok ? "#3ecf7e" : "#e5534b"]);
+    /* null = todavia no contesto (se dibuja sin esperarlo): no es un error */
+    filas.push(ok ? ["RADAR responde", "#3ecf7e"]
+               : rd === null ? ["RADAR cargando…", "#8b9096"]
+               : ["RADAR sin conectar", "#e5534b"]);
     if(ok && rd.cache_edad_seg != null) filas.push(["caché de " + rd.cache_edad_seg + " s", "#8b9096"]);
     isoBoxDepto(d, 0.9, 0.9, 3.4, 1.8, 14, "#3a3f43");
     isoBoxDepto(d, 5.0, 0.9, 2.0, 1.8, 22, "#2b3033");
@@ -4486,24 +4489,33 @@ async function refrescar(){
   cargando = true;
   try{
     state.stamp++; evalCache.clear();
-    const [ , caja, viajes, almacen ] = await Promise.all([
+    /* RADAR SE PIDE AL MISMO TIEMPO Y NO SE ESPERA PARA DIBUJAR.
+       Medido el 2026-11-12 en el navegador de Rodrigo: los 15 nodos de Nexo y
+       la bitacora llegan en 0.1-0.4 s, y `api/dashboard` tarda 4-5 s (0.2 s
+       solo cuando le toca su cache). Antes se esperaba a RADAR y al tipo de
+       cambio para dibujar, asi que el mundo quedaba en blanco esos 4-5 s
+       aunque la flota ya estuviera. Ahora se dibuja con Nexo apenas llega y
+       se vuelve a dibujar cuando contesta RADAR. Lo de RADAR ya aguanta no
+       estar (cada uso pregunta `rd && typeof rd === "object"`). */
+    const radarListo = cargarRadar();
+    const fxListo = state.fxHNL ? Promise.resolve() : cargarFx();
+    const [ , caja, viajes, almacen, enc, mej ] = await Promise.all([
       cargarFlota(),
       cargarBitacora("data-cajachica"),
       cargarBitacora("data-viajes"),
-      cargarBitacora("data-almacen")
+      cargarBitacora("data-almacen"),
+      /* lo que cruza el edificio sale de acá; si falla, no cruza nada */
+      cargarBitacora("mundo-encargos"),
+      cargarBitacora("mundo-mejoras")
     ]);
     state.caja = caja; state.viajes = viajes; state.almacen = almacen;
-    /* lo que cruza el edificio sale de acá; si falla, no cruza nada */
-    const [enc, mej] = await Promise.all([
-      cargarBitacora("mundo-encargos"), cargarBitacora("mundo-mejoras")
-    ]);
     state.encargos = comoLista(enc);
     state.mejoras  = comoLista(mej);
-    await cargarRadar();
-    if(!state.fxHNL) await cargarFx();
     const hayAlgo = (!state.flotaErr) || caja !== "error";
     setConn(hayAlgo);
     document.getElementById("hint").style.display = "none";
+    buildScene();
+    await Promise.all([radarListo, fxListo]);
     buildScene();
   }catch(e){
     console.error("[Mundo] refresco:", e.message);
