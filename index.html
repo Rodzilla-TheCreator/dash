@@ -375,7 +375,7 @@ const RADAR_TOKEN = "CjXHIPSe6iJVnDQiF_yweLr7rJ3sQPdi";
    Desde el 13-oct `montasa/` esta cerrada: el guion lee con la sesion de
    Jarvis en Nexo (aprobada antes del 30-oct). Sin ella contaba "0 con orden"
    y por eso ahora se niega a imprimir el cruce si no lee las dos empresas. */
-const CRUCE_TALLER = { fecha:"2026-11-12", parados:55, conOrden:8, sinOrden:47 };
+const CRUCE_TALLER = { fecha:"2026-11-13", parados:55, conOrden:7, sinOrden:48 };
 
 /* ── El corte con SQL. Fecha visible para que se note si envejece. ──
    Se regenera con `python herramientas/corte.py`: lee RADAR y la base del
@@ -383,7 +383,7 @@ const CRUCE_TALLER = { fecha:"2026-11-12", parados:55, conOrden:8, sinOrden:47 }
    que explica este comentario son las mismas que aplica ese guion; si se
    cambia una, se cambia la otra en el mismo commit. */
 const CORTE = {
-  fecha: "2026-11-12",
+  fecha: "2026-11-13",
   /* `id` es el empresa_id literal de la tabla `equipos`, y va a la vista a
      proposito: son OTROS que los del lado comercial.
 
@@ -498,7 +498,7 @@ const CORTE = {
    la app del taller. Si envejece, se nota por la fecha.
    ═══════════════════════════════════════════════════════════════════ */
 const LECTURA = {
-  fecha: "2026-11-12",
+  fecha: "2026-11-13",
 
   /* LAS 869 PERDIDAS DEL 2026-04-11 NO SE CUENTAN, Y ES EL AJUSTE MAS
      IMPORTANTE DE TODO ESTE BLOQUE.
@@ -526,10 +526,10 @@ const LECTURA = {
   },
 
   frenado: {
-    total: 1318, valor: 7083238, quietas30: 1137, quietas90: 635, valor90: 4276770,
+    total: 1320, valor: 7083229, quietas30: 1147, quietas90: 648, valor90: 4300546,
     residuo: ["Sin una sola nota escrita", "No se entiende qué dice"],
     causas: [
-      ["Sin una sola nota escrita",         973,  5849359],
+      ["Sin una sola nota escrita",         975,  5849350],
       ["Nos toca mover a nosotros",         125,   395509],
       ["No se entiende qué dice",            73,   127467],
       ["Esperando decisión del cliente",     58,   398835],
