@@ -375,7 +375,7 @@ const RADAR_TOKEN = "CjXHIPSe6iJVnDQiF_yweLr7rJ3sQPdi";
    Desde el 13-oct `montasa/` esta cerrada: el guion lee con la sesion de
    Jarvis en Nexo (aprobada antes del 30-oct). Sin ella contaba "0 con orden"
    y por eso ahora se niega a imprimir el cruce si no lee las dos empresas. */
-const CRUCE_TALLER = { fecha:"2026-11-13", parados:55, conOrden:7, sinOrden:48 };
+const CRUCE_TALLER = { fecha:"2026-11-14", parados:56, conOrden:8, sinOrden:48 };
 
 /* ── El corte con SQL. Fecha visible para que se note si envejece. ──
    Se regenera con `python herramientas/corte.py`: lee RADAR y la base del
@@ -383,7 +383,7 @@ const CRUCE_TALLER = { fecha:"2026-11-13", parados:55, conOrden:7, sinOrden:48 }
    que explica este comentario son las mismas que aplica ese guion; si se
    cambia una, se cambia la otra en el mismo commit. */
 const CORTE = {
-  fecha: "2026-11-13",
+  fecha: "2026-11-14",
   /* `id` es el empresa_id literal de la tabla `equipos`, y va a la vista a
      proposito: son OTROS que los del lado comercial.
 
@@ -395,8 +395,8 @@ const CORTE = {
      Cuando termine la migracion, esta fila queda con `mtrental` solo y los
      numeros no cambian. */
   empresas: [
-    { nombre:"MT Rental", id:"mtrental + honduras", renta:19,  disp:17, rep:22, mant:7, total:65  },
-    { nombre:"Monhaco",   id:"monhaco",             renta:106, disp:5,  rep:23, mant:3, total:137 }
+    { nombre:"MT Rental", id:"mtrental + honduras", renta:17,  disp:17, rep:22, mant:7, total:63  },
+    { nombre:"Monhaco",   id:"monhaco",             renta:108, disp:5,  rep:23, mant:4, total:140 }
   ],
 
   /* LA TABLA DE ARRIBA CUENTA TODA LA FLOTA; ESTA SOLO LO RENTABLE.
@@ -449,10 +449,10 @@ const CORTE = {
      Los precios de Monhaco se cargaron el 2026-09-22; hasta entonces sus
      129 equipos estaban en cero y el potencial salía cortado a la mitad. */
   plata: [
-    { estado:"En renta (ya entra)",     usd:110760 },
+    { estado:"En renta (ya entra)",     usd:108680 },
     { estado:"Disponible (fácil)",      usd:9740   },
     { estado:"En reparación (frenado)", usd:51900  },
-    { estado:"En mantenimiento",        usd:12620  }
+    { estado:"En mantenimiento",        usd:14700  }
   ],
 
   /* De los RENTABLES parados sin precio, de quién son. Fue de 21 a 5 al
@@ -498,7 +498,7 @@ const CORTE = {
    la app del taller. Si envejece, se nota por la fecha.
    ═══════════════════════════════════════════════════════════════════ */
 const LECTURA = {
-  fecha: "2026-11-13",
+  fecha: "2026-11-14",
 
   /* LAS 869 PERDIDAS DEL 2026-04-11 NO SE CUENTAN, Y ES EL AJUSTE MAS
      IMPORTANTE DE TODO ESTE BLOQUE.
@@ -518,7 +518,7 @@ const LECTURA = {
       ["Presupuesto insuficiente del cliente",     65,   653469],
       ["Otro",                                     58,   206382],
       ["Falta de inventario / disponibilidad",     56,    68291],
-      ["Necesidades no alineadas",                 38,    63936],
+      ["Necesidades no alineadas",                 38,    63937],
       ["Precio muy alto",                          31,   233365],
       ["Se fue con la competencia",                23,    75996],
       ["Falta de seguimiento",                      3,      269]
@@ -526,11 +526,11 @@ const LECTURA = {
   },
 
   frenado: {
-    total: 1320, valor: 7083229, quietas30: 1147, quietas90: 648, valor90: 4300546,
+    total: 1325, valor: 7102284, quietas30: 1157, quietas90: 648, valor90: 4300546,
     residuo: ["Sin una sola nota escrita", "No se entiende qué dice"],
     causas: [
-      ["Sin una sola nota escrita",         975,  5849350],
-      ["Nos toca mover a nosotros",         125,   395509],
+      ["Sin una sola nota escrita",         980,  5868384],
+      ["Nos toca mover a nosotros",         125,   395530],
       ["No se entiende qué dice",            73,   127467],
       ["Esperando decisión del cliente",     58,   398835],
       ["Dice «pendiente» y nada más",        43,    94904],
@@ -556,9 +556,9 @@ const LECTURA = {
   demanda: {
     perdidasSinLinea: 137, fueraDelCatalogo: 0, fueraUsd: 0,
     lineas: [
-      ["Renta y Leasing Operativo",  136,   369330,   49,  120],
-      ["Repuestos y Suministros",     94,    85604,   44,   51],
-      ["Venta de Equipo",             83,  1630908,    9,  108],
+      ["Renta y Leasing Operativo",  136,   369330,   49,  122],
+      ["Repuestos y Suministros",     94,    85604,   44,   52],
+      ["Venta de Equipo",             83,  1630908,    9,  109],
       ["Renta por Hora",              53,   624525,   41,   22],
       ["Certificación de Operador",   44,    17943,   21,  115],
       ["Mano de Obra",                26,    28855,   40,   36],
