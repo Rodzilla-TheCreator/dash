@@ -8,6 +8,8 @@ Toca SOLO los bloques de datos que esos dos scripts generan:
   - CRUCE_TALLER (si la base del taller dejó leer; si no, queda el de la fecha anterior)
   - CORTE.fecha, CORTE.empresas (los números), CORTE.plata (los usd), CORTE.paradosSinPrecio
   - LECTURA.fecha y sus bloques perdidas / frenado / demanda
+  - ALERTAS_RADAR: cuántas alertas abiertas tiene RADAR por tipo, y cuántas rentas tienen fecha de
+    fin (para «Para atender hoy»). Solo cuentas: el repo es público
 Los comentarios que explican cada número no se tocan: si una regla cambia, se cambia a mano
 en corte.py/lectura.py Y en el comentario.
 
@@ -31,6 +33,41 @@ def correr(script):
     if r.returncode != 0:
         raise SystemExit(f"{script} falló:\n{r.stderr[-1500:]}")
     return r.stdout
+
+
+TIPOS_ALERTA = ("actividad_vencida", "cotiz_sin_seguimiento", "cron_caido", "cuenta_estancada",
+                "forecast_sin_presentar", "lead_sin_asignar", "lead_sin_respuesta")
+
+
+def radar(sql):
+    """Una consulta de solo lectura con el mismo guion que usa corte.py. None si falla."""
+    bin_ = os.environ.get("JARVIS_BIN") or os.path.join(os.path.expanduser("~"), "jarvis", "bin")
+    try:
+        r = subprocess.run([sys.executable, os.path.join(bin_, "radar-sql"), sql], capture_output=True,
+                           text=True, encoding="utf-8", env=ENV, timeout=90)
+        d = json.loads(r.stdout)
+        return d if isinstance(d, list) else None
+    except Exception:
+        return None
+
+
+def alertas_radar():
+    """La línea `const ALERTAS_RADAR = {...};` con las cuentas de hoy, o None.
+    Solo números: nada de clientes, vendedores ni montos."""
+    lista = ",".join("'%s'" % t for t in TIPOS_ALERTA)
+    filas = radar("select tipo, count(*) filter (where estado='abierta') abiertas, "
+                  "count(*) filter (where estado='abierta' and creada_at > now()-interval '7 days') nuevas "
+                  f"from alertas_operacion where tipo in ({lista}) group by tipo")
+    rentas = radar("select count(*) total, count(fecha_fin) con_fin, "
+                   "(now() at time zone 'America/Tegucigalpa')::date::text hoy from rentas")
+    if not filas or not rentas:
+        return None
+    tipos = {t: [0, 0] for t in TIPOS_ALERTA}
+    for f in filas:
+        tipos[f["tipo"]] = [int(f["abiertas"]), int(f["nuevas"])]
+    r = rentas[0]
+    return ('const ALERTAS_RADAR = { fecha:"%s", tipos:%s, rentas:{total:%d, conFin:%d} };'
+            % (r["hoy"], json.dumps(tipos, separators=(",", ":")), int(r["total"]), int(r["con_fin"])))
 
 
 def cambiar(s, patron, nuevo, que, flags=0):
@@ -81,6 +118,13 @@ def main():
                 "paradosSinPrecio")
     if "OJO:" in corte:
         avisos.append(corte[corte.index("OJO:"):].splitlines()[0])
+
+    # ── ALERTAS_RADAR (solo cuentas: el repo es público) ────────────
+    al = alertas_radar()
+    if al:
+        s = cambiar(s, r"^const ALERTAS_RADAR = \{.*\};$", al, "ALERTAS_RADAR", re.M)
+    else:
+        avisos.append("ALERTAS_RADAR queda viejo: RADAR no contestó la consulta de alertas.")
 
     # ── LECTURA ─────────────────────────────────────────────────────
     f = re.search(r'^LECTURA\.fecha: "([^"]+)"', lectura, re.M).group(1)

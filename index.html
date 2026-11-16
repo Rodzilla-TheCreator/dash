@@ -44,6 +44,22 @@
   .cifra .n{font-size:38px;font-weight:700;color:var(--verde);line-height:1;font-variant-numeric:tabular-nums;}
   .cifra .t{font-size:12.5px;color:var(--tinta-media);margin-top:8px;}
 
+  /* ── para atender hoy ─────────────────────────────────────────── */
+  .hoy{margin-bottom:30px;}
+  .hoy-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;}
+  .alerta{background:var(--tarjeta);border-radius:10px;padding:14px 16px;border-left:3px solid var(--linea);min-width:0;}
+  .alerta.rojo{border-left-color:var(--rojo);}
+  .alerta.ambar{border-left-color:var(--ambar);}
+  .alerta.verde{border-left-color:var(--verde);}
+  .alerta h3{font-size:12.5px;font-weight:600;color:var(--tinta-media);margin:0 0 6px;}
+  .alerta .n{font-size:26px;font-weight:700;line-height:1.1;font-variant-numeric:tabular-nums;}
+  .alerta .det{font-size:12px;color:var(--tinta-media);margin-top:6px;line-height:1.5;}
+  .alerta .cods{font-size:11.5px;color:var(--tinta);margin-top:6px;line-height:1.6;word-break:break-word;}
+  .alerta .cods b{font-weight:600;color:var(--tinta-media);}
+  .alerta table{font-size:12px;margin-top:4px;}
+  .alerta tbody td{padding:4px 0;}
+  .alerta .accion{font-size:11.5px;color:var(--tinta-suave);margin-top:8px;}
+
   /* ── tablas ───────────────────────────────────────────────────── */
   .dos{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:32px;}
   h2{font-size:14.5px;font-weight:600;margin:0 0 12px;}
@@ -289,6 +305,13 @@
     <div class="cifra"><div class="n" id="c-parados">—</div><div class="t" id="t-parados">parados en taller</div></div>
   </div>
 
+  <!-- Lo que alguien tiene que mover hoy. Va arriba de las tablas porque es lo
+       único de la página que pide una acción, no una lectura. -->
+  <section class="hoy" id="hoy">
+    <h2>Para atender hoy</h2>
+    <div class="hoy-grid" id="hoy-grid"></div>
+  </section>
+
   <div class="dos">
     <section>
       <h2>Composición por empresa</h2>
@@ -376,6 +399,14 @@ const RADAR_TOKEN = "CjXHIPSe6iJVnDQiF_yweLr7rJ3sQPdi";
    Jarvis en Nexo (aprobada antes del 30-oct). Sin ella contaba "0 con orden"
    y por eso ahora se niega a imprimir el cruce si no lee las dos empresas. */
 const CRUCE_TALLER = { fecha:"2026-11-16", parados:56, conOrden:8, sinOrden:48 };
+
+/* ── Alertas comerciales que RADAR ya levanta (tabla alertas_operacion) ──
+   Solo CUENTAS, sin nombres de cliente ni montos: este repo es público. El
+   detalle se le pide a Jarvis. Lo pone al día `herramientas/actualizar.py`
+   cada mañana; [abiertas, nuevas en los últimos 7 días]. `rentas` dice
+   cuántas rentas traen fecha de fin, que es lo que haría falta para avisar
+   de las que vencen. */
+const ALERTAS_RADAR = { fecha:"2026-11-16", tipos:{"actividad_vencida":[506,38],"cotiz_sin_seguimiento":[544,1],"cron_caido":[0,0],"cuenta_estancada":[433,32],"forecast_sin_presentar":[25,4],"lead_sin_asignar":[423,7],"lead_sin_respuesta":[80,3]}, rentas:{total:96, conFin:1} };
 
 /* ── El corte con SQL. Fecha visible para que se note si envejece. ──
    Se regenera con `python herramientas/corte.py`: lee RADAR y la base del
@@ -2056,13 +2087,141 @@ async function cargarCaja(){
   }catch(_){}
 }
 
+/* =====================================================================
+   PARA ATENDER HOY
+   ---------------------------------------------------------------------
+   Lo del taller se calcula en vivo con la misma base que ya lee el tablero
+   (nada guardado en el repo). Lo comercial son las cuentas que RADAR ya
+   levanta, puestas al día cada mañana (ALERTAS_RADAR). Lo que no se puede
+   calcular se dice, no se dibuja como cero.
+   ===================================================================== */
+const escH = s => String(s == null ? "" : s).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+/* `fechaCompletado`/`fechaCierre` vienen como 2026-06-12 (a veces con hora).
+   Solo importa el día. */
+const diaDe = t => { const m = String(t||"").match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? new Date(+m[1], +m[2]-1, +m[3]) : null; };
+const ESTADO = e => String(e.estado||"").trim().toUpperCase();
+
+function pintarHoy(){
+  const caja = document.getElementById("hoy-grid"); if(!caja) return;
+  const tarjetas = [];
+  const tarjeta = (luz, titulo, n, det, cods, accion) => tarjetas.push(
+    `<div class="alerta ${luz}"><h3>${titulo}</h3><div class="n">${n}</div>`
+    + (det ? `<div class="det">${det}</div>` : "")
+    + (cods ? `<div class="cods">${cods}</div>` : "")
+    + (accion ? `<div class="accion">${accion}</div>` : "") + `</div>`);
+  const listaPorEmpresa = (eqs) => NODOS_FB.map(({nodo,nombre})=>{
+    const c = eqs.filter(e=>e._emp===nodo).map(e=>escH(e.codigo||e.id))
+      .sort((a,b)=>a.localeCompare(b,"es",{numeric:true}));
+    return c.length ? `<b>${nombre} (${c.length}):</b> ${c.join(", ")}` : "";
+  }).filter(Boolean).join("<br>");
+
+  if(!T){
+    tarjeta("", "Taller", "…", "Esperando la base del taller.");
+  } else {
+    /* Cada orden apunta a su equipo por `equipoId`; las cerradas solo traen el
+       texto "MT-34 — MITSUBISHI", así que de ahí se toma el código. */
+    const porId = {}, porCod = {};
+    T.equipos.forEach(e=>{ porId[e._emp+":"+e.id] = e;
+      porCod[e._emp+":"+String(e.codigo||"").trim().toUpperCase()] = e; });
+    const eqDeOrden = o => porId[o._emp+":"+o.equipoId]
+      || porCod[o._emp+":"+String(o.equipo||"").trim().split(/\s/)[0].toUpperCase()];
+    const conAbierta = new Set(), ultPrev = {};
+    let desde = null;
+    T.ords.forEach(o=>{
+      const e = eqDeOrden(o); if(!e) return;
+      const k = e._emp+":"+e.id;
+      if(!cerrada(o)) conAbierta.add(k);
+      const f = diaDe(o.fechaCompletado || o.fechaCierre || o.fechaFin || o.fecha);
+      if(f && (!desde || f < desde)) desde = f;
+      const prev = o._nodo === "preventivos" || o.tipo === "Preventivo";
+      if(prev && cerrada(o) && f && (!ultPrev[k] || f > ultPrev[k])) ultPrev[k] = f;
+    });
+
+    /* 1 · Parados sin orden */
+    const parados = T.equipos.filter(e=>["MAL ESTADO","EN MANTENIMIENTO"].includes(ESTADO(e))
+      && !conAbierta.has(e._emp+":"+e.id));
+    tarjeta(parados.length ? "rojo" : "verde", "Equipos parados sin orden abierta", fmt(parados.length),
+      "En mal estado o en mantenimiento según Nexo, y sin ninguna orden abierta.",
+      listaPorEmpresa(parados),
+      parados.length ? "En cada uno: abrirle orden, o si está bueno marcarlo operativo." : "");
+
+    /* 2 · Preventivos: por fecha, porque el horómetro solo se anota en cada orden
+       y no hay lectura de hoy para saber si ya pasó de las 250 h. */
+    const hoy = new Date(); hoy.setHours(0,0,0,0);
+    const vencidos = [], nunca = [];
+    T.equipos.forEach(e=>{
+      const meses = aNum(e.intervaloMantMeses);
+      if(!meses || !["EN RENTA","DISPONIBLE","DEMO/PRESTAMO"].includes(ESTADO(e))) return;
+      const u = ultPrev[e._emp+":"+e.id];
+      if(!u){ nunca.push(e); return; }
+      const toca = new Date(u); toca.setMonth(toca.getMonth() + meses);
+      if(toca < hoy) vencidos.push(Object.assign({ _dias: Math.round((hoy-toca)/86400000) }, e));
+    });
+    const desdeTxt = desde ? desde.toLocaleDateString("es-HN",{day:"numeric",month:"short",year:"numeric"}) : "—";
+    const nuncaPorEmp = NODOS_FB.map(({nodo,nombre})=>{
+      const n = nunca.filter(e=>e._emp===nodo).length;
+      const de = T.equipos.filter(e=>e._emp===nodo && aNum(e.intervaloMantMeses)).length;
+      return n ? `${nombre}: ${n} de ${de}` : ""; }).filter(Boolean).join(" · ");
+    tarjeta(vencidos.length ? "rojo" : (nunca.length ? "ambar" : "verde"),
+      "Preventivos vencidos", fmt(vencidos.length),
+      `Según el intervalo en meses de cada equipo. Además, <b>${fmt(nunca.length)}</b> equipos con
+       intervalo no tienen ningún preventivo cerrado en Nexo (registros desde ${desdeTxt})`
+       + (nuncaPorEmp ? `: ${nuncaPorEmp}.` : "."),
+      vencidos.length ? vencidos.sort((a,b)=>b._dias-a._dias)
+        .map(e=>`${escH(e.codigo)} <span class="ojo">(+${e._dias} d)</span>`).join(", ") : "",
+      nunca.length ? "Si esos preventivos se hacen y no se anotan, el aviso no los ve: hay que cargarlos en Nexo." : "");
+
+    /* 3 · Órdenes abiertas hace más de 7 días */
+    const viejas = T.ords.filter(o=>!cerrada(o)).map(o=>({ o, d: momento(o.fecha) || diaDe(o.fecha) }))
+      .filter(x=>x.d && (Date.now()-x.d)/86400000 > 7);
+    const viejasEq = viejas.map(x=>eqDeOrden(x.o)).filter(Boolean);
+    tarjeta(viejas.length > 5 ? "rojo" : (viejas.length ? "ambar" : "verde"),
+      "Órdenes abiertas hace más de 7 días", fmt(viejas.length),
+      "Trabajo largo de verdad, u órdenes que se olvidaron de cerrar.",
+      viejasEq.length ? listaPorEmpresa(viejasEq) : "", "");
+
+    if(T.faltan && T.faltan.length)
+      tarjeta("ambar", "Taller incompleto", "—",
+        `No se pudo leer ${T.faltan.map(n=>n.nombre).join(" y ")}: los números de arriba se quedan cortos.`);
+  }
+
+  /* 4 · Comercial (RADAR) */
+  const A = ALERTAS_RADAR, t = A.tipos || {};
+  const filasCom = [
+    ["cotiz_sin_seguimiento","Cotizaciones sin seguimiento"],
+    ["cuenta_estancada","Oportunidades estancadas (+15 días hábiles)"],
+    ["actividad_vencida","Actividades vencidas"],
+    ["lead_sin_asignar","Leads sin vendedor"],
+    ["lead_sin_respuesta","Leads sin respuesta"],
+    ["forecast_sin_presentar","Forecasts sin presentar"]
+  ].filter(([k])=>t[k]);
+  const nuevas = filasCom.reduce((a,[k])=>a+t[k][1],0);
+  tarjeta(nuevas ? "ambar" : "verde", "Comercial: alertas abiertas en RADAR", fmt(nuevas) + " nuevas esta semana",
+    `<table><tbody>` + filasCom.map(([k,et])=>`<tr><td>${et}</td><td class="num">${fmt(t[k][0])}</td>
+      <td class="num">${t[k][1] ? "+"+fmt(t[k][1]) : ""}</td></tr>`).join("") + `</tbody></table>`,
+    "", `Conteo del ${A.fecha}. Los nombres y montos no se publican aquí: pídele el detalle a Jarvis.`);
+  if(t.cron_caido && t.cron_caido[0])
+    tarjeta("rojo", "RADAR: un proceso automático está caído", fmt(t.cron_caido[0]),
+      "Mientras siga abierto, algunos datos de RADAR pueden estar viejos.");
+
+  /* 5 · Rentas por vencer: no se inventa. */
+  const r = A.rentas || {};
+  tarjeta("", "Rentas por vencer", "Sin dato",
+    `RADAR tiene fecha de fin en <b>${fmt(r.conFin)}</b> de ${fmt(r.total)} rentas. Sin la fecha
+     del contrato no se puede avisar cuáles vencen.`, "", "Se arregla cargando el fin de cada contrato.");
+
+  caja.innerHTML = tarjetas.join("");
+}
+
 pintarCorte();
+pintarHoy();
 pintarCatalogo();
 pintarWidgets();
 /* Cada fuente repinta en cuanto llega: el tablero no espera a la mas lenta.
    Y de paso vuelve a revisar cuales dan dato, que es lo que decide si la
    insignia del panel dice "radar" o "radar fix". */
-const alLlegar = () => { pintarWidgets(); revisarVivos(); };
+const alLlegar = () => { pintarHoy(); pintarWidgets(); revisarVivos(); };
 cargarVivo().then(alLlegar);
 cargarEmpresas().then(alLlegar);
 cargarTaller().then(alLlegar);
