@@ -398,7 +398,7 @@ const RADAR_TOKEN = "CjXHIPSe6iJVnDQiF_yweLr7rJ3sQPdi";
    Desde el 13-oct `montasa/` esta cerrada: el guion lee con la sesion de
    Jarvis en Nexo (aprobada antes del 30-oct). Sin ella contaba "0 con orden"
    y por eso ahora se niega a imprimir el cruce si no lee las dos empresas. */
-const CRUCE_TALLER = { fecha:"2026-11-17", parados:56, conOrden:8, sinOrden:48 };
+const CRUCE_TALLER = { fecha:"2026-11-18", parados:57, conOrden:8, sinOrden:49 };
 
 /* ── Alertas comerciales que RADAR ya levanta (tabla alertas_operacion) ──
    Solo CUENTAS, sin nombres de cliente ni montos: este repo es público. El
@@ -406,7 +406,7 @@ const CRUCE_TALLER = { fecha:"2026-11-17", parados:56, conOrden:8, sinOrden:48 }
    cada mañana; [abiertas, nuevas en los últimos 7 días]. `rentas` dice
    cuántas rentas traen fecha de fin, que es lo que haría falta para avisar
    de las que vencen. */
-const ALERTAS_RADAR = { fecha:"2026-11-17", tipos:{"actividad_vencida":[506,38],"cotiz_sin_seguimiento":[544,1],"cron_caido":[0,0],"cuenta_estancada":[433,32],"forecast_sin_presentar":[25,4],"lead_sin_asignar":[423,7],"lead_sin_respuesta":[80,3]}, rentas:{total:96, conFin:1} };
+const ALERTAS_RADAR = { fecha:"2026-11-18", tipos:{"actividad_vencida":[512,38],"cotiz_sin_seguimiento":[542,1],"cron_caido":[0,0],"cuenta_estancada":[432,28],"forecast_sin_presentar":[25,4],"lead_sin_asignar":[425,8],"lead_sin_respuesta":[82,5]}, rentas:{total:96, conFin:1} };
 
 /* ── El corte con SQL. Fecha visible para que se note si envejece. ──
    Se regenera con `python herramientas/corte.py`: lee RADAR y la base del
@@ -414,7 +414,7 @@ const ALERTAS_RADAR = { fecha:"2026-11-17", tipos:{"actividad_vencida":[506,38],
    que explica este comentario son las mismas que aplica ese guion; si se
    cambia una, se cambia la otra en el mismo commit. */
 const CORTE = {
-  fecha: "2026-11-17",
+  fecha: "2026-11-18",
   /* `id` es el empresa_id literal de la tabla `equipos`, y va a la vista a
      proposito: son OTROS que los del lado comercial.
 
@@ -426,8 +426,8 @@ const CORTE = {
      Cuando termine la migracion, esta fila queda con `mtrental` solo y los
      numeros no cambian. */
   empresas: [
-    { nombre:"MT Rental", id:"mtrental + honduras", renta:17,  disp:17, rep:22, mant:7, total:63  },
-    { nombre:"Monhaco",   id:"monhaco",             renta:109, disp:5,  rep:23, mant:4, total:141 }
+    { nombre:"MT Rental", id:"mtrental + honduras", renta:16,  disp:17, rep:22, mant:7, total:62  },
+    { nombre:"Monhaco",   id:"monhaco",             renta:109, disp:5,  rep:23, mant:5, total:142 }
   ],
 
   /* LA TABLA DE ARRIBA CUENTA TODA LA FLOTA; ESTA SOLO LO RENTABLE.
@@ -492,7 +492,7 @@ const CORTE = {
      ST-15 y TH-02, y Fabri dijo que esos ni van en la lista. Se deja el
      renglón y no se borra porque el semáforo tiene que poder volver a
      ponerse en ámbar solo si alguien mete flota nueva sin precio. */
-  paradosSinPrecio: { "MT Rental":0, "Monhaco":0 }
+  paradosSinPrecio: { "MT Rental":0, "Monhaco":1 }
 };
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -529,7 +529,7 @@ const CORTE = {
    la app del taller. Si envejece, se nota por la fecha.
    ═══════════════════════════════════════════════════════════════════ */
 const LECTURA = {
-  fecha: "2026-11-17",
+  fecha: "2026-11-18",
 
   /* LAS 869 PERDIDAS DEL 2026-04-11 NO SE CUENTAN, Y ES EL AJUSTE MAS
      IMPORTANTE DE TODO ESTE BLOQUE.
@@ -540,16 +540,16 @@ const LECTURA = {
      $6.1M de los $9.5M. Contarlas hacia parecer que el 55% de las perdidas
      no decia por que; sacandolas, el 85% si lo dice. */
   perdidas: {
-    total: 603, conMotivo: 527, sinMotivo: 76, migracion: 869,
-    migracionUsd: 6122022, todasUsd: 9502059,
+    total: 612, conMotivo: 536, sinMotivo: 76, migracion: 869,
+    migracionUsd: 6122022, todasUsd: 9512290,
     residuo: ["Otro"],
     motivos: [
-      ["Cliente postergó la decisión",            144,   969539],
-      ["Proyecto cancelado",                       91,  1048364],
+      ["Cliente postergó la decisión",            146,   971718],
+      ["Proyecto cancelado",                       92,  1050516],
       ["Presupuesto insuficiente del cliente",     68,   653469],
       ["Falta de inventario / disponibilidad",     67,    68291],
-      ["Otro",                                     62,   206382],
-      ["Necesidades no alineadas",                 38,    63936],
+      ["Otro",                                     65,   208441],
+      ["Necesidades no alineadas",                 41,    67778],
       ["Precio muy alto",                          31,   233365],
       ["Se fue con la competencia",                23,    75996],
       ["Falta de seguimiento",                      3,      269]
@@ -557,14 +557,14 @@ const LECTURA = {
   },
 
   frenado: {
-    total: 1305, valor: 7102531, quietas30: 1148, quietas90: 655, valor90: 4302953,
+    total: 1300, valor: 7093459, quietas30: 1142, quietas90: 657, valor90: 4304907,
     residuo: ["Sin una sola nota escrita", "No se entiende qué dice"],
     causas: [
-      ["Sin una sola nota escrita",         943,  5870871],
-      ["Nos toca mover a nosotros",         141,   393290],
+      ["Sin una sola nota escrita",         941,  5867851],
+      ["Nos toca mover a nosotros",         140,   392513],
       ["No se entiende qué dice",            74,   127467],
-      ["Esperando decisión del cliente",     58,   398835],
-      ["Dice «pendiente» y nada más",        43,    94904],
+      ["Esperando decisión del cliente",     57,   395712],
+      ["Dice «pendiente» y nada más",        42,    92752],
       ["El cliente no responde",             22,   113144],
       ["Sin canal para contactarlo",         15,    19230],
       ["Postergado a una fecha",              9,    84789]
@@ -587,14 +587,14 @@ const LECTURA = {
   demanda: {
     perdidasSinLinea: 143, fueraDelCatalogo: 0, fueraUsd: 0,
     lineas: [
-      ["Renta y Leasing Operativo",  142,   369330,   49,  121],
-      ["Repuestos y Suministros",    100,    85604,   45,   51],
-      ["Venta de Equipo",             84,  1630908,    9,  110],
+      ["Renta y Leasing Operativo",  144,   371329,   49,  122],
+      ["Repuestos y Suministros",    101,    88727,   45,   50],
+      ["Venta de Equipo",             86,  1633106,    9,  109],
       ["Renta por Hora",              54,   624525,   41,   22],
       ["Certificación de Operador",   44,    17943,   21,  117],
-      ["Mano de Obra",                26,    28855,   40,   36],
-      ["Revisiones IHTT",              5,    95500,   16,    5],
-      ["Fletes",                       5,     2741,    3,    3]
+      ["Mano de Obra",                27,    31007,   40,   35],
+      ["Fletes",                       8,     3499,    3,    1],
+      ["Revisiones IHTT",              5,    95500,   16,    5]
     ]
   }
 };
