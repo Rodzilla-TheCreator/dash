@@ -398,7 +398,7 @@ const RADAR_TOKEN = "CjXHIPSe6iJVnDQiF_yweLr7rJ3sQPdi";
    Desde el 13-oct `montasa/` esta cerrada: el guion lee con la sesion de
    Jarvis en Nexo (aprobada antes del 30-oct). Sin ella contaba "0 con orden"
    y por eso ahora se niega a imprimir el cruce si no lee las dos empresas. */
-const CRUCE_TALLER = { fecha:"2026-11-20", parados:56, conOrden:8, sinOrden:48 };
+const CRUCE_TALLER = { fecha:"2026-11-21", parados:57, conOrden:8, sinOrden:49 };
 
 /* ── Alertas comerciales que RADAR ya levanta (tabla alertas_operacion) ──
    Solo CUENTAS, sin nombres de cliente ni montos: este repo es público. El
@@ -406,7 +406,7 @@ const CRUCE_TALLER = { fecha:"2026-11-20", parados:56, conOrden:8, sinOrden:48 }
    cada mañana; [abiertas, nuevas en los últimos 7 días]. `rentas` dice
    cuántas rentas traen fecha de fin, que es lo que haría falta para avisar
    de las que vencen. */
-const ALERTAS_RADAR = { fecha:"2026-11-20", tipos:{"actividad_vencida":[524,38],"cotiz_sin_seguimiento":[548,6],"cron_caido":[0,0],"cuenta_estancada":[443,24],"forecast_sin_presentar":[25,4],"lead_sin_asignar":[426,6],"lead_sin_respuesta":[83,5]}, rentas:{total:96, conFin:1} };
+const ALERTAS_RADAR = { fecha:"2026-11-21", tipos:{"actividad_vencida":[530,38],"cotiz_sin_seguimiento":[551,9],"cron_caido":[0,0],"cuenta_estancada":[442,16],"forecast_sin_presentar":[25,4],"lead_sin_asignar":[430,10],"lead_sin_respuesta":[85,7]}, rentas:{total:96, conFin:1} };
 
 /* ── El corte con SQL. Fecha visible para que se note si envejece. ──
    Se regenera con `python herramientas/corte.py`: lee RADAR y la base del
@@ -414,7 +414,7 @@ const ALERTAS_RADAR = { fecha:"2026-11-20", tipos:{"actividad_vencida":[524,38],
    que explica este comentario son las mismas que aplica ese guion; si se
    cambia una, se cambia la otra en el mismo commit. */
 const CORTE = {
-  fecha: "2026-11-20",
+  fecha: "2026-11-21",
   /* `id` es el empresa_id literal de la tabla `equipos`, y va a la vista a
      proposito: son OTROS que los del lado comercial.
 
@@ -427,7 +427,7 @@ const CORTE = {
      numeros no cambian. */
   empresas: [
     { nombre:"MT Rental", id:"mtrental + honduras", renta:16,  disp:17, rep:22, mant:7, total:62  },
-    { nombre:"Monhaco",   id:"monhaco",             renta:110, disp:6,  rep:23, mant:4, total:143 }
+    { nombre:"Monhaco",   id:"monhaco",             renta:109, disp:6,  rep:23, mant:5, total:143 }
   ],
 
   /* LA TABLA DE ARRIBA CUENTA TODA LA FLOTA; ESTA SOLO LO RENTABLE.
@@ -480,10 +480,10 @@ const CORTE = {
      Los precios de Monhaco se cargaron el 2026-09-22; hasta entonces sus
      129 equipos estaban en cero y el potencial salía cortado a la mitad. */
   plata: [
-    { estado:"En renta (ya entra)",     usd:108680 },
+    { estado:"En renta (ya entra)",     usd:106940 },
     { estado:"Disponible (fácil)",      usd:9740   },
     { estado:"En reparación (frenado)", usd:51900  },
-    { estado:"En mantenimiento",        usd:14700  }
+    { estado:"En mantenimiento",        usd:16440  }
   ],
 
   /* De los RENTABLES parados sin precio, de quién son. Fue de 21 a 5 al
@@ -529,7 +529,7 @@ const CORTE = {
    la app del taller. Si envejece, se nota por la fecha.
    ═══════════════════════════════════════════════════════════════════ */
 const LECTURA = {
-  fecha: "2026-11-20",
+  fecha: "2026-11-21",
 
   /* LAS 869 PERDIDAS DEL 2026-04-11 NO SE CUENTAN, Y ES EL AJUSTE MAS
      IMPORTANTE DE TODO ESTE BLOQUE.
@@ -548,7 +548,7 @@ const LECTURA = {
       ["Proyecto cancelado",                       92,  1050516],
       ["Presupuesto insuficiente del cliente",     68,   653469],
       ["Falta de inventario / disponibilidad",     67,    68291],
-      ["Otro",                                     65,   208444],
+      ["Otro",                                     65,   208445],
       ["Necesidades no alineadas",                 41,    67778],
       ["Precio muy alto",                          31,   233365],
       ["Se fue con la competencia",                23,    75996],
@@ -557,11 +557,11 @@ const LECTURA = {
   },
 
   frenado: {
-    total: 1306, valor: 7301400, quietas30: 1153, quietas90: 666, valor90: 4384697,
+    total: 1311, valor: 7302516, quietas30: 1166, quietas90: 669, valor90: 4438471,
     residuo: ["Sin una sola nota escrita", "No se entiende qué dice"],
     causas: [
-      ["Sin una sola nota escrita",         942,  6073769],
-      ["Nos toca mover a nosotros",         141,   392582],
+      ["Sin una sola nota escrita",         947,  6074873],
+      ["Nos toca mover a nosotros",         141,   392593],
       ["No se entiende qué dice",            75,   129422],
       ["Esperando decisión del cliente",     60,   395712],
       ["Dice «pendiente» y nada más",        42,    92752],
@@ -587,9 +587,9 @@ const LECTURA = {
   demanda: {
     perdidasSinLinea: 143, fueraDelCatalogo: 0, fueraUsd: 0,
     lineas: [
-      ["Renta y Leasing Operativo",  144,   371333,   49,  122],
-      ["Repuestos y Suministros",    101,    88727,   45,   50],
-      ["Venta de Equipo",             86,  1633106,    9,  110],
+      ["Renta y Leasing Operativo",  144,   371334,   49,  122],
+      ["Repuestos y Suministros",    101,    88727,   45,   51],
+      ["Venta de Equipo",             86,  1633106,    9,  111],
       ["Renta por Hora",              54,   624525,   41,   23],
       ["Certificación de Operador",   44,    17943,   21,  120],
       ["Mano de Obra",                27,    31007,   40,   35],
