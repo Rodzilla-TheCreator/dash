@@ -398,7 +398,7 @@ const RADAR_TOKEN = "CjXHIPSe6iJVnDQiF_yweLr7rJ3sQPdi";
    Desde el 13-oct `montasa/` esta cerrada: el guion lee con la sesion de
    Jarvis en Nexo (aprobada antes del 30-oct). Sin ella contaba "0 con orden"
    y por eso ahora se niega a imprimir el cruce si no lee las dos empresas. */
-const CRUCE_TALLER = { fecha:"2026-11-25", parados:57, conOrden:8, sinOrden:49 };
+const CRUCE_TALLER = { fecha:"2026-11-26", parados:57, conOrden:7, sinOrden:50 };
 
 /* ── Alertas comerciales que RADAR ya levanta (tabla alertas_operacion) ──
    Solo CUENTAS, sin nombres de cliente ni montos: este repo es público. El
@@ -406,7 +406,7 @@ const CRUCE_TALLER = { fecha:"2026-11-25", parados:57, conOrden:8, sinOrden:49 }
    cada mañana; [abiertas, nuevas en los últimos 7 días]. `rentas` dice
    cuántas rentas traen fecha de fin, que es lo que haría falta para avisar
    de las que vencen. */
-const ALERTAS_RADAR = { fecha:"2026-11-25", tipos:{"actividad_vencida":[548,36],"cotiz_sin_seguimiento":[546,10],"cron_caido":[0,0],"cuenta_estancada":[437,12],"forecast_sin_presentar":[29,4],"lead_sin_asignar":[443,18],"lead_sin_respuesta":[94,13]}, rentas:{total:96, conFin:1} };
+const ALERTAS_RADAR = { fecha:"2026-11-26", tipos:{"actividad_vencida":[554,36],"cotiz_sin_seguimiento":[547,8],"cron_caido":[0,0],"cuenta_estancada":[437,7],"forecast_sin_presentar":[29,4],"lead_sin_asignar":[451,25],"lead_sin_respuesta":[94,12]}, rentas:{total:96, conFin:1} };
 
 /* ── El corte con SQL. Fecha visible para que se note si envejece. ──
    Se regenera con `python herramientas/corte.py`: lee RADAR y la base del
@@ -414,7 +414,7 @@ const ALERTAS_RADAR = { fecha:"2026-11-25", tipos:{"actividad_vencida":[548,36],
    que explica este comentario son las mismas que aplica ese guion; si se
    cambia una, se cambia la otra en el mismo commit. */
 const CORTE = {
-  fecha: "2026-11-25",
+  fecha: "2026-11-26",
   /* `id` es el empresa_id literal de la tabla `equipos`, y va a la vista a
      proposito: son OTROS que los del lado comercial.
 
@@ -427,7 +427,7 @@ const CORTE = {
      numeros no cambian. */
   empresas: [
     { nombre:"MT Rental", id:"mtrental + honduras", renta:16,  disp:17, rep:22, mant:7, total:62  },
-    { nombre:"Monhaco",   id:"monhaco",             renta:109, disp:6,  rep:23, mant:5, total:143 }
+    { nombre:"Monhaco",   id:"monhaco",             renta:109, disp:7,  rep:23, mant:5, total:144 }
   ],
 
   /* LA TABLA DE ARRIBA CUENTA TODA LA FLOTA; ESTA SOLO LO RENTABLE.
@@ -492,7 +492,7 @@ const CORTE = {
      ST-15 y TH-02, y Fabri dijo que esos ni van en la lista. Se deja el
      renglón y no se borra porque el semáforo tiene que poder volver a
      ponerse en ámbar solo si alguien mete flota nueva sin precio. */
-  paradosSinPrecio: { "MT Rental":0, "Monhaco":1 }
+  paradosSinPrecio: { "MT Rental":0, "Monhaco":2 }
 };
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -529,7 +529,7 @@ const CORTE = {
    la app del taller. Si envejece, se nota por la fecha.
    ═══════════════════════════════════════════════════════════════════ */
 const LECTURA = {
-  fecha: "2026-11-25",
+  fecha: "2026-11-26",
 
   /* LAS 869 PERDIDAS DEL 2026-04-11 NO SE CUENTAN, Y ES EL AJUSTE MAS
      IMPORTANTE DE TODO ESTE BLOQUE.
@@ -557,10 +557,10 @@ const LECTURA = {
   },
 
   frenado: {
-    total: 1311, valor: 7309418, quietas30: 1191, quietas90: 691, valor90: 4612203,
+    total: 1315, valor: 7309464, quietas30: 1197, quietas90: 701, valor90: 4665605,
     residuo: ["Sin una sola nota escrita", "No se entiende qué dice"],
     causas: [
-      ["Sin una sola nota escrita",         931,  6066583],
+      ["Sin una sola nota escrita",         935,  6066629],
       ["Nos toca mover a nosotros",         144,   392487],
       ["No se entiende qué dice",            81,   135871],
       ["Esperando decisión del cliente",     63,   395712],
